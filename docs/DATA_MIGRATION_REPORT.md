@@ -9,9 +9,9 @@
 - 新增字段：16；删除/重命名字段：0；旧表删除：0。
 - 记录现状：User 1、Person 44、Organization 24、Membership 2、RawIntelligence 1、IntelligenceProduct 20、历史 Resource 8、历史 Offering 1、MarketResource 22、Opportunity 11、FollowUp 4、CollaborationTask 4。
 - 确定映射：6。
-- 冲突：1 条历史资源/供给记录无法唯一匹配，已写入 `platform_migration_conflicts`，状态 `pending`。
+- 冲突：1 条历史资源/供给记录无法唯一匹配，已写入 `platform_migration_conflicts`，状态 `pending`，已登记到 `docs/manual_review/P1_RESOURCE_CONFLICT_REVIEW.md`。
 - 未迁移：1；未静默覆盖。
-- 原有孤立外键：`v06_timeline_entries` 5 条，迁移前后未增加，待人工修复。
+- 原有孤立外键：`v06_timeline_entries` 12 条（引用不存在的 opportunity_id 1、12、13），迁移前后未增加，已分析并保留待人工处理。
 
 ## 备份与回滚
 

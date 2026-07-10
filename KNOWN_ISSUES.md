@@ -7,4 +7,5 @@
 | KI-003 | 审计与性能记录 | API 冒烟直接针对正式库会改变数据库哈希 | 高 | 验证改用临时副本 | `scripts/verify_p0_baseline.py` | 是，若验证仍直连正式库 |
 | KI-004 | 领域迁移 | 旧表到正式模型存在待人工确认的冲突与空外键 | 中 | P1 迁移仅 dry-run/副本验证 | `scripts/verify_domain_consolidation_v1.py` | 否 |
 
-| KI-005 | `v06_timeline_entries` | 5 条历史记录引用不存在的机会 | 高 | 待人工核对，不自动修复 | `PRAGMA foreign_key_check` | 否，迁移未增加 |
+| KI-005 | `v06_timeline_entries` | 12 条历史记录引用不存在的机会（ID 1、12、13） | 高 | 待人工核对，不自动修复 | `PRAGMA foreign_key_check` | 否，迁移未增加 |
+| KI-006 | 俱乐部板块 | 某页面进入统一错误页（500） | 中 | 待定位根因 | 人工验收 | 否 |
