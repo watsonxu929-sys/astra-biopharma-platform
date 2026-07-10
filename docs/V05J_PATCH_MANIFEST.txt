@@ -1,0 +1,48 @@
+v0.5J 专题研究、企业对比、招商研判与全站中文化治理
+
+新增/修改范围：
+- app/i18n/
+- app/services/research/
+- app/api/v1/research.py
+- app/api/v1/investment_assessments.py
+- app/api/v1/router.py
+- app/v05j_research.py
+- app/templates/v05j_research.html
+- app/templates/v05e_signals.html
+- app/templates/v05e_watchlists.html
+- app/templates/v05h_reports.html
+- app/templates/v05i_pipeline.html
+- app/main.py
+- app/navigation.py
+- app/security.py
+- scripts/migrate_v05j.py
+- scripts/verify_v05j.py
+- scripts/check_user_visible_english.py
+- scripts/migrate_all.py
+- scripts/verify_all.py
+- migrate_v05j_windows.bat
+- verify_v05j_windows.bat
+- project_tools_windows.bat
+- docs/V05J_RESEARCH_I18N_INVESTMENT.md
+- docs/V05J_PATCH_INSTALL.md
+- docs/V05J_PATCH_MANIFEST.txt
+- docs/API_V1_GUIDE.md
+
+不包含：
+- data/app.db
+- data/backups/
+- data/uploads/
+- logs/
+- .venv/
+- venv/
+- .git/
+- __pycache__/
+- 真实凭证、真实 Cookie、历史补丁包
+
+数据保护：
+- 不修改已有英文枚举值
+- 不复制主体、事件、关系或信号原始数据
+- 不建立第二套报告体系
+- 不建立第二套招商线索体系
+- 不自动批准招商评级
+- 不自动创建行动任务

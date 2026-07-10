@@ -1,0 +1,7 @@
+﻿{% extends "base.html" %}
+{% block title %}企业/机构详情{% endblock %}
+{% block content %}
+<section class="page-head action-head"><div><p class="eyebrow">企业/机构档案</p><h1>{{ item.standard_name }}</h1><p>{{ item.org_type or '类型待补充' }} · {{ item.region or '地区待补充' }}</p></div><div class="actions"><a class="button secondary" href="/subjects/organization/{{ item.external_id }}">统一档案</a><a class="button secondary" href="/manage/organizations/{{ item.id }}/edit">编辑</a></div></section>
+{% include '_review_status.html' ignore missing %}
+<section class="profile-sections"><article class="panel"><h2>基础信息</h2><dl class="info-list"><dt>系统编号</dt><dd>{{ item.external_id }}</dd><dt>标签</dt><dd>{{ item.industry_tags or '暂无' }}</dd><dt>资源</dt><dd>{{ item.resources or '暂无' }}</dd><dt>需求</dt><dd>{{ item.needs or '暂无' }}</dd><dt>状态</dt><dd>{{ item.verification_status or '待核验' }}</dd></dl></article><article class="panel"><h2>关联人物</h2>{% for row in related_people|default([]) %}<a class="record-row" href="{{ row.source.url or '#' }}"><div><strong>{{ row.source.label }}</strong><p>{{ row.relation.relation_type }}</p></div></a>{% else %}<div class="empty">暂无关联人物</div>{% endfor %}</article></section>
+{% endblock %}

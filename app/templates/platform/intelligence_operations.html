@@ -1,0 +1,142 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}情报运营中心{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/admin/platform">管理控制台</a><span class="sep">/</span><span class="current">情报运营</span></span>{% endblock %}
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-top">
+    <h1>情报运营中心</h1>
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/collection/sources">管理数据源</a>
+      <a class="btn" href="/processing/jobs">处理队列</a>
+      <a class="btn" href="/admin/intelligence">审核发布</a>
+    </div>
+  </div>
+  <p class="page-desc">情报从采集到发布的完整工作流：数据源 → 自动采集 → 原始内容 → 数据处理 → 候选匹配 → 人工审核 → 产业信号 → 发布与报告。</p>
+</section>
+{% endblock %}
+{% block platform_content %}
+
+<section class="stats-bar stats-bar-4">
+  <a class="stat-card" href="/collection/sources"><span class="stat-value">{{ counts.enabled_sources or 0 }}</span><span class="stat-label">启用数据源</span></a>
+  <a class="stat-card" href="/collection/jobs"><span class="stat-value">{{ counts.jobs_today or 0 }}</span><span class="stat-label">今日采集任务</span></a>
+  <a class="stat-card" href="/processing/candidates"><span class="stat-value">{{ counts.pending_candidates or 0 }}</span><span class="stat-label">待审核候选</span></a>
+  <a class="stat-card" href="/signals"><span class="stat-value">{{ counts.signals or 0 }}</span><span class="stat-label">产业信号</span></a>
+</section>
+
+<section class="platform-card" style="padding:0;overflow:hidden;">
+  <div style="padding:20px 20px 0;"><h3 style="font-size:15px;font-weight:600;margin:0 0 16px;">情报处理工作流</h3></div>
+  <div style="display:flex;gap:0;overflow-x:auto;padding:0 20px 20px;">
+    {% set workflow = [
+      ("数据源", "/collection/sources", counts.enabled_sources or 0, counts.paused_sources or 0),
+      ("自动采集", "/collection/jobs", counts.jobs_today or 0, counts.failed_jobs or 0),
+      ("原始情报", "/collection/items", counts.queued_items or 0, counts.failed_items or 0),
+      ("数据处理", "/processing/jobs", counts.processing_jobs or 0, 0),
+      ("候选审核", "/processing/candidates", counts.pending_candidates or 0, counts.needs_review or 0),
+      ("情报审核", "/admin/intelligence", counts.pending_review or 0, 0),
+      ("产业信号", "/signals", counts.signals or 0, 0),
+      ("报告中心", "/reports", counts.reports or 0, 0)
+    ] %}
+    {% for label, url, count, warn in workflow %}
+    <div style="flex:1;min-width:120px;text-align:center;padding:16px 12px;border-right:1px solid var(--color-border);">
+      <a href="{{ url }}" style="text-decoration:none;color:var(--color-text);display:block;">
+        <div style="font-size:20px;font-weight:700;color:var(--color-primary);">{{ count }}</div>
+        <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px;">{{ label }}</div>
+      </a>
+      {% if warn > 0 %}<div style="font-size:11px;color:var(--color-danger);margin-top:4px;">{{ warn }} 异常</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="dashboard-grid-2" style="margin-top:20px;">
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>最近采集任务</h3>
+      <a href="/collection/jobs" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for job in latest_jobs|default([]) %}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+        <span><a href="/collection/jobs/{{ job.id }}">{{ job.source_name or job.run_no }}</a></span>
+        <span class="badge badge-{{ job.status }}">{{ job.status|status_label }}</span>
+      </div>
+      {% else %}
+      <p class="text-muted" style="font-size:13px;color:var(--color-text-muted);">暂无采集任务。</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>最近原始情报</h3>
+      <a href="/collection/items" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for item in latest_items|default([]) %}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+        <span><a href="/collection/items/{{ item.id }}">{{ item.title or item.item_no }}</a></span>
+        <span class="badge badge-{{ item.processing_status }}">{{ item.processing_status|status_label }}</span>
+      </div>
+      {% else %}
+      <p class="text-muted" style="font-size:13px;color:var(--color-text-muted);">暂无原始情报。</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>最近候选数据</h3>
+      <a href="/processing/candidates" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for c in latest_candidates|default([]) %}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+        <span><a href="/processing/candidates/{{ c.id }}">{{ c.subject_label or c.normalized_value or c.candidate_no }}</a></span>
+        <span class="badge badge-{{ c.review_status }}">{{ c.review_status|status_label }}</span>
+      </div>
+      {% else %}
+      <p class="text-muted" style="font-size:13px;color:var(--color-text-muted);">暂无候选数据。</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>快捷操作</h3>
+    </div>
+    <div class="platform-card-body" style="display:flex;flex-direction:column;gap:8px;">
+      <a class="btn" href="/collection/sources" style="text-align:left;">+ 新增数据源</a>
+      <a class="btn" href="/collection/jobs" style="text-align:left;">查看采集任务</a>
+      <a class="btn" href="/processing/jobs" style="text-align:left;">查看处理任务</a>
+      <a class="btn" href="/processing/candidates" style="text-align:left;">处理候选</a>
+      <a class="btn" href="/admin/intelligence" style="text-align:left;">审核情报</a>
+      <a class="btn" href="/signals" style="text-align:left;">查看信号</a>
+      <a class="btn" href="/reports" style="text-align:left;">生成报告</a>
+    </div>
+  </section>
+</div>
+
+{% if records %}
+<section class="platform-card mt-16">
+  <h3>数据预览</h3>
+  {% if records["items"] %}
+  <table class="data-table">
+    <thead><tr><th>编号</th><th>标题</th><th>处理状态</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for item in records["items"][:10] %}
+      <tr>
+        <td><span style="font-size:12px;color:var(--color-text-muted);">{{ item.item_no }}</span></td>
+        <td><a href="/collection/items/{{ item.id }}">{{ item.title or '未命名' }}</a></td>
+        <td><span class="badge badge-{{ item.processing_status }}">{{ item.processing_status|status_label }}</span></td>
+        <td class="actions">
+          {% if item.id %}<form method="post" action="/admin/intelligence/collection/{{ item.id }}/publish" style="display:inline;"><button class="btn btn-sm" type="submit">发布到前台</button></form>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endif %}
+
+{% endblock %}

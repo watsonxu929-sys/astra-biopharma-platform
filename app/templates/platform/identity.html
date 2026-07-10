@@ -1,0 +1,100 @@
+{% extends "platform/base.html" %}
+{% set active_nav = "workspace" %}
+{% set active_subnav = "workspace.overview" %}
+{% block platform_title %}??????{% endblock %}
+{% block platform_content %}
+<div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
+  <h1 class="page-title">我的产业身份中心</h1>
+  <p class="page-subtitle">管理您的产业身份、会员身份、组织身份和个人画像</p>
+
+  <!-- Section 1: Login Account -->
+  <div class="profile-section platform-card">
+    <h3>登录账号</h3>
+    <div class="profile-grid">
+      <div class="profile-field"><div class="field-label">登录账号</div><div class="field-value">{{ sec.get('user', {}).get('username', '') }}</div></div>
+      <div class="profile-field"><div class="field-label">账号状态</div><div class="field-value"><span class="badge badge-success">正常</span></div></div>
+      <div class="profile-field"><div class="field-label">系统角色</div><div class="field-value">{{ sec.get('role_label', '') }}</div></div>
+      <div class="profile-field"><div class="field-label">权限概览</div><div class="field-value">{{ sec.get('permissions', [])|join(', ') or '基础权限' }}</div></div>
+    </div>
+  </div>
+
+  <!-- Section 2: Person Profile -->
+  <div class="profile-section platform-card">
+    <h3>自然人档案</h3>
+    {% if linked %}
+    <form method="post" action="/me/industry-profile/update" class="platform-form">
+      <input type="hidden" name="person_id" value="{{ linked[0].id }}">
+      <div class="form-group"><label>姓名</label><input name="name" value="{{ linked[0].name }}"></div>
+      <div class="form-group"><label>职务</label><input name="public_role" value="{{ linked[0].public_role or '' }}"></div>
+      <div class="form-group"><label>所属机构</label><input name="organization_network" value="{{ linked[0].organization_network or '' }}" readonly></div>
+      <div class="form-group"><label>职称</label><input name="title" value="{{ person_data.profile.title or '' if person_data.profile else '' }}"></div>
+      <div class="form-group"><label>所在地区</label><input name="province" value="{{ person_data.profile.province or '' if person_data.profile else '' }}"></div>
+      <div class="form-group"><label>个人简介</label><textarea name="bio">{{ person_data.profile.bio or '' if person_data.profile else '' }}</textarea></div>
+      <div class="form-group"><label>专业方向</label><input name="ability_tags" value="{{ linked[0].ability_tags or '' }}"></div>
+      <div class="form-group"><label>合作偏好</label><input name="cooperation_preferences" value="{{ person_data.profile.cooperation_preferences or '' if person_data.profile else '' }}"></div>
+      <div class="form-group">
+        <label>联系方式可见级别</label>
+        <select name="contact_visibility">
+          <option value="private" {% if person_data.profile and person_data.profile.contact_visibility == 'private' %}selected{% endif %}>仅本人</option>
+          <option value="organization" {% if person_data.profile and person_data.profile.contact_visibility == 'organization' %}selected{% endif %}>同组织成员</option>
+          <option value="connected" {% if person_data.profile and person_data.profile.contact_visibility == 'connected' %}selected{% endif %}>已接受联系的用户</option>
+          <option value="members" {% if person_data.profile and person_data.profile.contact_visibility == 'members' %}selected{% endif %}>有效会员</option>
+          <option value="public" {% if person_data.profile and person_data.profile.contact_visibility == 'public' %}selected{% endif %}>公开</option>
+        </select>
+      </div>
+      <div class="form-group"><label>联系邮箱</label><input name="contact_email" value="{{ person_data.profile.contact_email or '' if person_data.profile else '' }}"></div>
+      <div class="form-group"><label>联系电话</label><input name="contact_phone" value="{{ person_data.profile.contact_phone or '' if person_data.profile else '' }}"></div>
+      <div class="form-group"><label>微信</label><input name="contact_wechat" value="{{ person_data.profile.contact_wechat or '' if person_data.profile else '' }}"></div>
+      <div class="form-group">
+        <label>产业画像标签</label>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">
+          {% set my_tag_ids = my_tags|map(attribute='id')|list %}
+          {% for t in all_tags %}
+          <label style="font-weight:normal;font-size:12px;cursor:pointer;padding:2px 8px;border-radius:4px;border:1px solid var(--color-border);{% if t.id in my_tag_ids %}background:#eff6ff;border-color:#2563eb;{% endif %}">
+            <input type="checkbox" name="tag_ids" value="{{ t.id }}" {% if t.id in my_tag_ids %}checked{% endif %} style="margin-right:4px;">{{ t.label }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">保存产业画像</button>
+    </form>
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">&#x1f464;</div>
+      <h3>尚未关联自然人档案</h3>
+      <p>请先在身份关联页面将您的账号与人物记录关联。</p>
+      <a href="/me/identity" class="btn btn-primary mt-16">前往身份关联</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Section 3: Membership -->
+  <div class="profile-section platform-card">
+    <h3>会员身份</h3>
+    {% if memberships %}
+    <div class="profile-grid">
+      {% for m in memberships %}
+      <div class="profile-field"><div class="field-label">会员编号</div><div class="field-value">{{ m.member_no }}</div></div>
+      <div class="profile-field"><div class="field-label">会员名称</div><div class="field-value">{{ m.get('member_type', '') }}</div></div>
+      <div class="profile-field"><div class="field-label">会员状态</div><div class="field-value"><span class="badge badge-success">{{ m.status|status_label }}</span></div></div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><p>暂无会员身份</p></div>
+    {% endif %}
+  </div>
+
+  <!-- Section 4: Organization -->
+  <div class="profile-section platform-card">
+    <h3>组织身份</h3>
+    {% if linked and linked[0].organization_network %}
+    <div class="profile-field"><div class="field-label">当前组织</div><div class="field-value font-bold">{{ linked[0].organization_network }}</div></div>
+    {% else %}
+    <div class="empty-state"><p>暂无组织关联</p></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/entity_smart_paste.js"></script>
+{% endblock %}

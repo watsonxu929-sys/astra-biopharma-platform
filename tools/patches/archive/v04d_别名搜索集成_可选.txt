@@ -1,0 +1,44 @@
+文件：app\v04d_structuring.py
+
+目的：让 v0.4D-A 工作台的“主体快速查找”同时识别 v0.4E-A 别名。
+
+找到函数 search_subjects(...) 中：
+
+    subject_type = _text(subject_type).lower()
+    mapping = SUBJECT_TABLES.get(subject_type)
+
+在两行之间加入：
+
+    if q:
+        try:
+            from app.v04e_entity_resolution import search_entities as search_v04e_entities
+            alias_matches = search_v04e_entities(
+                subject_type,
+                q,
+                limit=limit,
+                db_path=db_path,
+            )
+            if alias_matches:
+                return alias_matches
+        except Exception:
+            pass
+
+修改后结构：
+
+    subject_type = _text(subject_type).lower()
+    if q:
+        try:
+            from app.v04e_entity_resolution import search_entities as search_v04e_entities
+            alias_matches = search_v04e_entities(
+                subject_type,
+                q,
+                limit=limit,
+                db_path=db_path,
+            )
+            if alias_matches:
+                return alias_matches
+        except Exception:
+            pass
+    mapping = SUBJECT_TABLES.get(subject_type)
+
+这是可选增强。不修改也不影响 v0.4E-A 独立使用。

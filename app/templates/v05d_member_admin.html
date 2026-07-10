@@ -1,0 +1,11 @@
+﻿{% extends "base.html" %}
+{% block title %}Q-BAY会员管理{% endblock %}
+{% block content %}
+<section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>会员管理</h1><p>管理会员档案、账号、入会申请和俱乐部通知。</p></div></section>
+{% if message %}<div class="alert success">{{ message }}</div>{% endif %}
+{% if invite_link %}<div class="alert warning">邀请链接：<code>{{ invite_link }}</code></div>{% endif %}
+<section class="panel"><h2>会员列表</h2>{% if members %}<div class="table-scroll"><table><thead><tr><th>会员编号</th><th>姓名</th><th>状态</th><th>操作</th></tr></thead><tbody>{% for m in members %}<tr><td>{{ m.member_no }}</td><td>{{ m.person_name or m.display_name or '未命名' }}</td><td><span class="badge">{{ m.status_label or m.status }}</span></td><td><a class="btn secondary" href="/club/members/{{ m.id }}">查看</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">暂无会员记录。</div>{% endif %}</section>
+<section class="panel"><h2>账号列表</h2>{% if accounts %}<div class="table-scroll"><table><thead><tr><th>账号</th><th>会员</th><th>角色</th><th>状态</th></tr></thead><tbody>{% for a in accounts %}<tr><td>{{ a.username }}</td><td>{{ a.member_no or '未绑定' }}</td><td>{{ a.role_label or a.role }}</td><td>{{ a.status_label or a.status }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">暂无账号记录。</div>{% endif %}</section>
+<section class="panel"><h2>待审核申请</h2>{% if candidates %}<div class="table-scroll"><table><thead><tr><th>编号</th><th>姓名</th><th>来源</th><th>状态</th></tr></thead><tbody>{% for c in candidates %}<tr><td>{{ c.candidate_no }}</td><td>{{ c.person_name or c.name }}</td><td>{{ c.source or '手动录入' }}</td><td>{{ c.status_label or c.status }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">暂无待审核申请。</div>{% endif %}</section>
+<section class="panel"><h2>俱乐部通知</h2>{% if announcements %}{% for a in announcements %}<div class="record-row"><div><strong>{{ a.title }}</strong><p>{{ a.body }}</p><p class="muted">{{ a.status_label or a.status }} · {{ a.target_type }} {{ a.target_value or '' }}</p></div></div>{% endfor %}{% else %}<div class="empty">暂无通知。</div>{% endif %}</section>
+{% endblock %}

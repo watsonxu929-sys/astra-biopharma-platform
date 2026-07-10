@@ -1,0 +1,114 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}人物库管理{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/admin/platform">管理控制台</a><span class="sep">/</span><span class="current">人物库</span></span>{% endblock %}
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-top">
+    <h1>人物库</h1>
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/admin/people/new">新增人物</a>
+      <a class="btn" href="/club/import">批量导入</a>
+    </div>
+  </div>
+  <p class="page-desc">管理产业人物主数据，支持标签、机构关系和维护历史。</p>
+</section>
+{% endblock %}
+{% block platform_content %}
+<section class="filter-row">
+  <form method="get" action="/admin/people" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索姓名、机构、标签" style="min-width:220px;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:13px;">
+    <button class="btn btn-sm" type="submit">搜索</button>
+    {% if q %}<a class="btn btn-sm" href="/admin/people" style="color:var(--color-text-muted);">清除</a>{% endif %}
+  </form>
+  <span style="font-size:12px;color:var(--color-text-muted);">共 {{ people|default([])|length }} 人</span>
+</section>
+
+<section class="platform-card" style="padding:0;overflow:hidden;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>姓名</th>
+        <th>职务</th>
+        <th>所属机构</th>
+        <th>标签</th>
+        <th>状态</th>
+        <th>更新时间</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in people|default([]) %}
+      <tr>
+        <td><a href="/admin/people/{{ p.id }}" style="font-weight:500;color:var(--color-text);text-decoration:none;">{{ p.name }}</a></td>
+        <td>{{ p.public_role or '' }}</td>
+        <td>{{ p.organization_network or '' }}</td>
+        <td>{% for tag in (p.ability_tags or '').split(',')[:3] %}<span class="tag tag-blue">{{ tag.strip() }}</span>{% endfor %}</td>
+        <td><span class="badge {{ 'badge-active' if p.is_active else 'badge-inactive' }}">{{ '启用' if p.is_active else '停用' }}</span></td>
+        <td style="font-size:12px;color:var(--color-text-muted);">{{ p.updated_at or '' }}</td>
+        <td class="actions">
+          <a href="/admin/people/{{ p.id }}">编辑</a>
+          <a href="/network/people/{{ p.id }}">详情</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">暂无人物数据。<a href="/admin/people/new">新增第一个人物</a>。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if not person %}
+<section class="platform-card mt-16">
+  <h3>新增人物</h3>
+  <form method="post" action="/admin/people" class="platform-form">
+    <div class="grid-2">
+      <label>姓名<input name="name" required style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+      <label>公开身份<input name="public_role" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+    </div>
+    <div class="grid-2">
+      <label>机构关系<input name="organization_network" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+      <label>能力/标签<input name="ability_tags" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+    </div>
+    <label>价值与合作偏好<textarea name="value_provided" rows="3" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></textarea></label>
+    <div class="grid-2">
+      <label>可见性<input name="visibility" value="内部" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+      <label>核验状态<input name="verification_status" value="待核验" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="is_active" value="1" checked> 启用</label>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-primary" type="submit">保存人物</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% if person %}
+<section class="platform-card mt-16">
+  <div class="platform-card-header">
+    <h3>编辑人物：{{ person.name }}</h3>
+  </div>
+  <form method="post" action="/admin/people/{{ person.id }}/update" class="platform-form">
+    <div class="grid-2">
+      <label>姓名<input name="name" required value="{{ person.name }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+      <label>公开身份<input name="public_role" value="{{ person.public_role or '' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+    </div>
+    <div class="grid-2">
+      <label>机构关系<input name="organization_network" value="{{ person.organization_network or '' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+      <label>能力/标签<input name="ability_tags" value="{{ person.ability_tags or '' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+    </div>
+    <label>价值与合作偏好<textarea name="value_provided" rows="3" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;">{{ person.value_provided or '' }}</textarea></label>
+    <div class="grid-2">
+      <label>可见性<input name="visibility" value="{{ person.visibility or '内部' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+      <label>核验状态<input name="verification_status" value="{{ person.verification_status or '待核验' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="is_active" value="1" {% if person.is_active %}checked{% endif %}> 启用</label>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-primary" type="submit">保存人物</button>
+      <a class="btn" href="/network/people/{{ person.id }}">查看前台详情</a>
+      <a class="btn" href="/admin/people" style="color:var(--color-text-muted);">返回列表</a>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% endblock %}

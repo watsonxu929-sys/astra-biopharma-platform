@@ -1,0 +1,3 @@
+interface:
+  display_name: "Patch Delivery"
+  short_description: "Prepare manual patch packages and replacement instructions."

@@ -1,0 +1,7 @@
+文件：app\templates\v04d_structuring.html
+
+在页面顶部按钮区增加：
+
+<a class="d-btn secondary" href="/review/prestructure">智能预结构化</a>
+
+该修改是可选项。公共导航已经可以进入 v0.4D-B 页面。

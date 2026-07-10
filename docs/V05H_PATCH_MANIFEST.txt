@@ -1,0 +1,50 @@
+v0.5H patch manifest
+
+Core files:
+- app/navigation.py
+- app/api/v1/navigation.py
+- app/api/v1/reports.py
+- app/api/v1/signals.py
+- app/api/v1/router.py
+- app/main.py
+- app/security.py
+- app/v05e_intelligence.py
+- app/v05h_reports.py
+- app/services/signals/
+- app/services/reports/
+- app/templates/base.html
+- app/templates/v05e_signals.html
+- app/templates/v05h_reports.html
+- app/static/style.css
+
+Migration and verification:
+- scripts/migrate_v05h.py
+- scripts/verify_v05h.py
+- scripts/migrate_all.py
+- scripts/verify_all.py
+
+Workers and Windows entries:
+- scripts/run_signal_worker.py
+- scripts/run_report_worker.py
+- scripts/generate_historical_signals.py
+- start_windows.bat
+- run_windows.bat
+- migrate_v05h_windows.bat
+- verify_v05h_windows.bat
+- run_signal_once_windows.bat
+- run_report_once_windows.bat
+- project_tools_windows.bat
+
+Documentation:
+- docs/V05H_REPORTS_SIGNALS_NAVIGATION.md
+- docs/V05H_PATCH_INSTALL.md
+- docs/V05H_PATCH_MANIFEST.txt
+- docs/API_V1_GUIDE.md
+
+Excluded from patch package:
+- .git/
+- .venv/
+- data/
+- logs/
+- __pycache__/
+- *.pyc

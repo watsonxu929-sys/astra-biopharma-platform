@@ -1,0 +1,131 @@
+pilot_mode: true
+limits:
+  max_items_per_source: 20
+  per_domain_concurrency: 1
+  min_interval_seconds: 2
+  download_attachments: false
+  auto_approve_candidates: false
+  auto_apply_subjects: false
+  auto_create_actions: false
+  auto_publish_reports: false
+sources:
+  - key: company_news_column
+    name: Enterprise news column example
+    url: https://example.com/news
+    source_type: list_page
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 10
+    max_pages: 1
+    robots_required: true
+    expected_structure: news_column
+    allow_real_run: false
+    note: Replace with a public company news column before confirmed pilot.
+  - key: company_single_news
+    name: Enterprise single news example
+    url: https://example.com/news/example
+    source_type: webpage
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 1
+    max_pages: 1
+    robots_required: true
+    expected_structure: article
+    allow_real_run: false
+    note: Single public article.
+  - key: management_team_page
+    name: Management team page example
+    url: https://example.com/team
+    source_type: webpage
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 1
+    max_pages: 1
+    robots_required: true
+    expected_structure: team_page
+    allow_real_run: false
+    note: Must not auto-overwrite people.
+  - key: product_pipeline_page
+    name: Product pipeline page example
+    url: https://example.com/pipeline
+    source_type: webpage
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 1
+    max_pages: 1
+    robots_required: true
+    expected_structure: product_pipeline
+    allow_real_run: false
+    note: Preserve phase and indication evidence.
+  - key: recruitment_page
+    name: Recruitment page example
+    url: https://example.com/careers
+    source_type: webpage
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 5
+    max_pages: 1
+    robots_required: true
+    expected_structure: recruitment
+    allow_real_run: false
+    note: Public jobs only.
+  - key: government_park_news
+    name: Government or park news example
+    url: https://example.com/park-news
+    source_type: list_page
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 10
+    max_pages: 1
+    robots_required: true
+    expected_structure: policy_or_attraction_news
+    allow_real_run: false
+    note: Multi-company pages stay separated.
+  - key: industry_association
+    name: Industry association example
+    url: https://example.com/association
+    source_type: list_page
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 10
+    max_pages: 1
+    robots_required: true
+    expected_structure: association_news
+    allow_real_run: false
+    note: Public association pages.
+  - key: rss_feed
+    name: RSS feed example
+    url: https://example.com/feed.xml
+    source_type: rss
+    collection_mode: rss
+    allowed_domains: example.com
+    max_links: 10
+    max_pages: 1
+    robots_required: true
+    expected_structure: rss
+    allow_real_run: false
+    note: GUID/link dedupe.
+  - key: paged_static_column
+    name: Static paged column example
+    url: https://example.com/news/page/1
+    source_type: list_page
+    collection_mode: http
+    allowed_domains: example.com
+    max_links: 10
+    max_pages: 2
+    robots_required: true
+    expected_structure: paged_list
+    allow_real_run: false
+    note: Conservative pagination.
+  - key: dynamic_public_page
+    name: Dynamic public page example
+    url: https://example.com/dynamic-news
+    source_type: dynamic_page
+    collection_mode: playwright
+    allowed_domains: example.com
+    max_links: 5
+    max_pages: 1
+    robots_required: true
+    expected_structure: dynamic_page
+    allow_real_run: false
+    note: Playwright only when explicitly configured and confirmed.

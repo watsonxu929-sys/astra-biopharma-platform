@@ -1,0 +1,34 @@
+﻿{% extends "base.html" %}
+{% block title %}Q-BAY会员申请{% endblock %}
+{% block content %}
+<section class="page-head action-head">
+  <div>
+    <p class="eyebrow">Q-BAY俱乐部</p>
+    <h1>会员申请</h1>
+    <p>提交基础资料后，运营团队会进行人工审核和主体匹配。</p>
+  </div>
+  <a class="button secondary" href="/club">返回俱乐部</a>
+</section>
+{% if submitted %}<div class="success-box">申请已提交，编号：{{ submitted }}</div>{% endif %}
+{% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
+<section class="panel">
+  <form method="post" action="/club/apply" class="grid-2">
+    <label>姓名<input name="applicant_name" required></label>
+    <label>职务<input name="title"></label>
+    <label>手机<input name="mobile"></label>
+    <label>邮箱<input name="email" type="email"></label>
+    <label>微信<input name="wechat"></label>
+    <label>企业/机构<input name="organization_name"></label>
+    <label>城市<input name="city"></label>
+    <label>行业赛道<input name="industry_tags" placeholder="例如：创新药；医疗器械"></label>
+    <label class="grid-span">能力标签<textarea name="expertise_tags" placeholder="例如：融资；BD；临床资源"></textarea></label>
+    <label class="grid-span">可提供资源<textarea name="offered_resources"></textarea></label>
+    <label class="grid-span">合作需求<textarea name="cooperation_needs"></textarea></label>
+    <label>联系偏好<input name="preferred_contact_method" placeholder="手机、邮箱或微信"></label>
+    <label class="checkbox-line"><input type="checkbox" name="consent_to_store" value="1" required> 同意保存申请资料用于会员审核</label>
+    <label class="checkbox-line"><input type="checkbox" name="consent_to_contact" value="1" required> 同意运营团队后续联系</label>
+    <input type="hidden" name="website" value="">
+    <button class="button primary" type="submit">提交申请</button>
+  </form>
+</section>
+{% endblock %}

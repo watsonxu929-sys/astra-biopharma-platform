@@ -1,0 +1,23 @@
+﻿{% extends "platform/base.html" %}
+{% block platform_title %}{{ item.title }}{% endblock %}
+{% block platform_content %}
+{% set sec = request.scope.get('security_context', {}) %}
+{% set perms = sec.get('permissions', []) %}
+<a href="/intelligence" class="text-sm">返回情报中心</a>
+<h1 class="page-title mt-16">{{ item.title }}</h1>
+<div class="opp-meta">
+  <span class="badge badge-info">{{ item.intel_type }}</span>
+  <span>可信度：{{ item.credibility }}/5</span>
+  <span>重要度：{{ item.importance }}/5</span>
+  <span>来源：{{ item.source_name or 'manual' }}</span>
+  <span>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '' }}</span>
+</div>
+{% if sec.get('can_manage_users') or 'review_data' in perms or 'manage_monitoring' in perms %}
+<div class="platform-card"><a class="btn btn-primary" href="/admin/intelligence/{{ item.id }}">管理此情报</a></div>
+{% endif %}
+<section class="platform-card"><h2>摘要</h2><p>{{ item.summary or item.content or '暂无内容' }}</p></section>
+{% if item.content %}<section class="platform-card"><h2>详细内容</h2><p style="white-space:pre-wrap;">{{ item.content }}</p></section>{% endif %}
+{% if item.companies %}<section class="platform-card"><h2>涉及企业</h2><p>{{ item.companies }}</p></section>{% endif %}
+{% if item.industry_directions %}<section class="platform-card"><h2>产业方向</h2><p>{{ item.industry_directions }}</p></section>{% endif %}
+<section class="platform-card"><form method="post" action="/api/v1/favorites/toggle"><input type="hidden" name="target_type" value="intelligence"><input type="hidden" name="target_id" value="{{ item.id }}"><button class="btn btn-sm">{{ '取消收藏' if is_favorited else '收藏' }}</button></form></section>
+{% endblock %}

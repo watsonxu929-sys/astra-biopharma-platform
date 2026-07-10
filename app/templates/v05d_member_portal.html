@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}会员门户{% endblock %}
+{% block content %}
+{% set member = portal.member if portal is defined and portal.member is defined else {} %}
+{% set csrf_token = portal.csrf_token if portal is defined and portal.csrf_token is defined else '' %}
+{% set accessible = portal.accessible_memberships if portal is defined and portal.accessible_memberships is defined else [] %}
+{% set can_switch = portal.can_switch if portal is defined and portal.can_switch is defined else false %}
+{% set current_mid = portal.current_membership_id if portal is defined and portal.current_membership_id is defined else None %}
+
+<section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>会员门户</h1><p>会员自助查看资料、活动、供需内容和通知。</p></div><a class="button secondary" href="/club">返回俱乐部</a></section>
+
+{% if portal %}
+<section class="membership-switcher">
+<div class="current-identity">
+<span>当前会员身份：</span>
+{% if can_switch and accessible %}
+<form method="post" action="/member/switch-membership" class="inline-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<select name="membership_id" class="membership-select" onchange="this.form.submit()">
+{% for m in accessible %}
+<option value="{{ m.id }}" {% if m.id == current_mid %}selected{% endif %}>
+{{ m.member_no }} · {{ m.name }} · {{ {"standard":"标准","premium":"高级","vip":"VIP","founding":"创始"}[m.member_level] or m.member_level }} · {{ {"pending":"待审核","active":"有效","inactive":"无效","suspended":"已暂停","exited":"已退出"}[m.status] or m.status }}
+</option>
+{% endfor %}
+</select>
+</form>
+{% elif member %}
+<span class="current-member">{{ member.member_no }} · {{ member.person_name or member.name }}</span>
+{% else %}
+<span class="no-membership">尚未关联会员身份</span>
+{% endif %}
+</div>
+{% if portal.user and portal.user.username %}
+<div class="logged-in-user">登录账号：{{ portal.user.display_name or portal.user.username }}</div>
+{% endif %}
+</section>
+{% endif %}
+
+{% if message %}<div class="success-box">{{ message }}</div>{% endif %}{% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
+
+{% if not portal %}
+<section class="panel empty"><h2>请先登录</h2><p>请使用会员账号登录后访问会员门户。</p><p><a href="/member/login" class="button primary">前往登录</a></p></section>
+{% elif not member %}
+<section class="panel empty"><h2>会员身份不存在</h2><p>您的会员账号关联的会员身份不存在或已失效。</p><p>请联系管理员处理。</p></section>
+{% else %}
+<section class="profile-sections">
+<article class="panel">
+<h2>会员资料</h2>
+<dl class="info-list">
+<dt>姓名</dt><dd>{{ member.person_name or member.name or '暂无' }}</dd>
+<dt>企业/机构</dt><dd>{{ member.organization_name or '暂无' }}</dd>
+<dt>职务</dt><dd>{{ member.public_role or member.member_role or '暂无' }}</dd>
+<dt>会员编号</dt><dd>{{ member.member_no or '暂无' }}</dd>
+<dt>会员等级</dt><dd>{{ {"standard":"标准会员","premium":"高级会员","vip":"VIP会员","founding":"创始会员"}[member.member_level] or member.member_level or '暂无' }}</dd>
+<dt>状态</dt><dd>{{ {"pending":"待审核","active":"有效","inactive":"无效","suspended":"已暂停","exited":"已退出"}[member.status] or member.status or '暂无' }}</dd>
+{% if member.person_external_id %}
+<dt>人物档案</dt><dd><a href="/subjects/person/{{ member.person_external_id }}" target="_blank" rel="noopener">查看人物档案</a></dd>
+{% endif %}
+{% if user_link_status %}
+<dt>账号关联</dt><dd>{{ user_link_status_label }}</dd>
+{% endif %}
+{% if can_request_link %}
+<dt>关联申请</dt><dd><a href="/member/request-membership-link" class="button secondary compact">申请关联我的会员身份</a></dd>
+{% endif %}
+</dl>
+</article>
+<article class="panel"><h2>快捷入口</h2><div class="quick-grid"><a href="/member/profile">资料维护</a><a href="/member/events">活动报名</a><a href="/member/matches">资源匹配</a><a href="/member/notifications">通知</a></div></article>
+</section>
+{% endif %}
+{% if mode == 'activate_invalid' or mode == 'reset_invalid' %}
+<section class="panel empty"><h2>链接不可用</h2><p>链接已失效、已使用或不存在，请联系运营人员重新发送。</p></section>
+{% elif mode == 'activate' %}
+<section class="panel"><h2>激活会员账号</h2><form method="post" action="/member/activate" class="form-grid"><input type="hidden" name="token" value="{{ token }}"><label>用户名<input name="username" value="{{ activation.username or '' }}" required></label><label>密码<input name="password" type="password" required></label><label>确认密码<input name="confirm_password" type="password" required></label><label class="checkbox-line full"><input type="checkbox" name="agree" value="1" required> 我已阅读并同意俱乐部账号使用规则</label><button class="button primary" type="submit">激活账号</button></form></section>
+{% elif mode == 'profile' %}
+<section class="panel"><h2>资料维护</h2><form method="post" action="/member/profile" class="form-grid"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>姓名<input name="display_name" value="{{ member.person_name or '' }}"></label><label>企业/机构<input name="organization_name" value="{{ member.organization_name or '' }}"></label><label>职务<input name="title" value="{{ member.public_role or member.member_role or '' }}"></label><label>城市<input name="city" value="{{ member.city or '' }}"></label><label>能力标签<input name="expertise_tags" value="{{ member.expertise_tags or '' }}"></label><label>合作偏好<input name="cooperation_preferences" value="{{ member.cooperation_preferences or '' }}"></label><label>手机<input name="mobile" value="{{ member.mobile or '' }}"></label><label>邮箱<input name="email" value="{{ member.email or '' }}"></label><label>微信<input name="wechat" value="{{ member.wechat or '' }}"></label><label>联系偏好<input name="preferred_contact_method" value="{{ member.preferred_contact_method or '' }}"></label><label class="full">修改说明<textarea name="evidence_note" rows="3"></textarea></label><button class="button primary" type="submit">提交资料变更</button></form></section>
+<section class="panel"><h2>变更记录</h2>{% for item in pending|default([]) %}<div class="record-row"><div><strong>{{ item.field_name }}</strong><p>{{ item.current_value or '暂无' }} → {{ item.proposed_value or '暂无' }}</p></div><span class="badge">{{ item.status }}</span></div>{% else %}<div class="empty">暂无资料变更记录。</div>{% endfor %}</section>
+{% elif mode == 'events' %}
+<section class="panel"><h2>活动</h2>{% for item in events|default([]) %}<div class="record-row"><div><strong>{{ item.name }}</strong><p>{{ item.event_date or '时间待定' }}</p></div><form method="post" action="/member/events/{{ item.id }}/register"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button secondary" type="submit">报名</button></form></div>{% else %}<div class="empty">暂无活动</div>{% endfor %}</section>
+{% elif mode == 'matches' %}
+<section class="panel"><h2>资源匹配</h2>{% for item in matches|default([]) %}<div class="record-row"><div><strong>{{ item.match_no or item.title or '匹配记录' }}</strong><p>{{ item.status or '待确认' }}</p></div><form method="post" action="/member/matches/{{ item.id }}/feedback"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input name="feedback" value="interested" type="hidden"><button class="button secondary" type="submit">感兴趣</button></form></div>{% else %}<div class="empty">暂无资源匹配</div>{% endfor %}</section>
+{% elif mode == 'notifications' %}
+<section class="panel"><h2>通知</h2><form method="post" action="/member/notifications"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="read_all"><button class="button secondary" type="submit">全部标记已读</button></form>{% for item in notifications|default([]) %}<div class="record-row"><div><strong>{{ item.title }}</strong><p>{{ item.body or '' }}</p></div><span class="badge">{{ item.status }}</span></div>{% else %}<div class="empty">暂无通知</div>{% endfor %}</section>
+{% elif mode == 'request_link' %}
+<section class="panel">
+<h2>申请关联会员身份</h2>
+<p>如果您已有系统账号，可以通过会员编号或邀请码申请关联您的会员身份。</p>
+<form method="post" action="/member/request-membership-link" class="form-grid">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>会员编号<input name="member_no" placeholder="输入会员编号"></label>
+<label>邀请码<input name="invite_code" placeholder="输入邀请码（选填）"></label>
+<label class="full">申请说明<textarea name="reason" rows="3" placeholder="请说明您申请关联的原因"></textarea></label>
+<button class="button primary" type="submit">提交申请</button>
+</form>
+</section>
+{% else %}
+<section class="panel"><h2>今日待办</h2><p>待处理资料变更 {{ counts.pending_changes if counts is defined else 0 }} 条，未读通知 {{ counts.unread if counts is defined else 0 }} 条。</p>{% for item in notifications|default([]) %}<div class="record-row"><div><strong>{{ item.title }}</strong><p>{{ item.body or '' }}</p></div><span class="badge">{{ item.status }}</span></div>{% else %}<div class="empty">暂无待办。</div>{% endfor %}</section>
+{% endif %}
+
+
+{% endblock %}
+
+

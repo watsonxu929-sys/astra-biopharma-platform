@@ -1,0 +1,22 @@
+﻿{% extends "base.html" %}
+{% block title %}疑似异常主体{% endblock %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">数据审核中心</p>
+  <h1>疑似异常主体</h1>
+  <p>集中处理可能重复、误入库或信息不足的主体记录，处理前请确认不会影响正式业务数据。</p>
+</section>
+{% if message %}<div class="alert success">{{ message }}</div>{% endif %}
+<form method="post" action="/review/suspicious-entities/bulk-deactivate" class="panel suspicious-review-panel" onsubmit="return confirm('确认批量停用选中的疑似异常记录？')">
+  <div class="toolbar"><span>共 {{ records|length }} 条待核实记录</span><label class="confirm-line"><input type="checkbox" name="confirm_bulk" value="1" required> 我已确认批量处理范围</label><button class="btn danger" type="submit">批量停用</button></div>
+  {% if records %}<div class="table-scroll"><table><thead><tr><th>选择</th><th>记录</th><th>类型</th><th>原因</th><th>操作</th></tr></thead><tbody>
+  {% for row in records %}<tr>
+    <td><input type="checkbox" name="record_keys" value="{{ row.record_key }}"></td>
+    <td><a href="{{ row.view_url }}"><strong>{{ row.title }}</strong></a><p>{{ row.detail or '暂无说明' }}</p></td>
+    <td>{{ row.subject_type_label or row.subject_type }}</td>
+    <td>{{ row.reason or '待人工核实' }}</td>
+    <td><button class="btn secondary" formaction="/review/suspicious-entities/{{ row.record_key }}/deactivate" formmethod="post" onclick="return confirm('确认停用该记录？')">停用</button></td>
+  </tr>{% endfor %}
+  </tbody></table></div>{% else %}<div class="empty">暂无疑似异常主体记录。</div>{% endif %}
+</form>
+{% endblock %}

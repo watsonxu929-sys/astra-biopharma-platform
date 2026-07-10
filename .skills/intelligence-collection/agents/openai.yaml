@@ -1,0 +1,3 @@
+interface:
+  display_name: "Intelligence Collection"
+  short_description: "Collect public intelligence with snapshots, deduplication, and logs."

@@ -1,0 +1,20 @@
+{% extends "platform/base.html" %}
+{% set active_nav = "intelligence" %}
+{% set active_subnav = "intelligence.subscriptions" %}
+{% block platform_title %}????{% endblock %}
+{% block platform_content %}
+<div class="platform-content" style="max-width:600px;margin:0 auto;padding:24px 32px;">
+<h1 class="page-title">情报订阅</h1><p class="page-subtitle">设置您关注的情报类型和方向</p>
+<form method="post" action="/intelligence/subscriptions/save" class="platform-form">
+<div class="form-group"><label>情报类型</label><input name="intel_types" placeholder="政策;企业动态;融资事件"></div>
+<div class="form-group"><label>产业方向</label><input name="industry_directions" placeholder="创新药;医疗器械"></div>
+<div class="form-group"><label>关注企业</label><input name="companies" placeholder="企业名称用分号分隔"></div>
+<div class="form-group"><label>标签</label><input name="tags" placeholder="多个用分号分隔"></div>
+<div class="form-group"><label>地区</label><input name="regions"></div>
+<div class="form-group"><label>最低重要程度</label><select name="min_importance"><option value="1">1星</option><option value="2">2星</option><option value="3">3星</option><option value="4">4星</option><option value="5">5星</option></select></div>
+<button type="submit" class="btn btn-primary">保存订阅</button></form>
+{% if subs %}<div class="platform-card mt-16"><h3>已有订阅 ({{ subs|length }})</h3>
+{% for s in subs %}<div style="padding:8px 0;border-bottom:1px solid var(--color-border);">
+<span class="text-sm">类型：{{ s.intel_types or '不限' }} | 方向：{{ s.industry_directions or '不限' }} | 重要：{{ s.min_importance }}+星</span></div>{% endfor %}</div>{% endif %}
+</div>
+{% endblock %}

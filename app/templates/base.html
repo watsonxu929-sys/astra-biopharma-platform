@@ -1,0 +1,53 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}生物医药产业连接与情报平台{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v03a_additions.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v03b_additions.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v03c_additions.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v04a_additions.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/platform.css') }}">
+</head>
+<body>
+{% set path = request.url.path %}
+{% set sec = request.scope.get('security_context', {}) %}
+{% set authenticated = sec.get('authenticated', false) %}
+{% set nav = request.app.state.navigation_for(sec, path) if authenticated else {'primary': [], 'secondary': [], 'account': [], 'admin': []} %}
+{% set explicit_active_nav = active_nav|default('', true) %}
+{% set explicit_active_subnav = active_subnav|default('', true) %}
+<header class="{{ 'public-header' if not authenticated else 'platform-header' }}">
+  <div class="nav-brand-row">
+    <a class="brand" href="{{ '/platform' if authenticated else '/club/apply' }}">生物医药产业连接与情报平台</a>
+    {% if authenticated %}<button class="menu-button" type="button" aria-label="打开菜单" aria-expanded="false">菜单</button>{% endif %}
+  </div>
+  {% if authenticated %}
+  <nav class="main-nav" aria-label="一级导航">
+    {% for item in nav.primary %}<a class="{{ 'active' if (explicit_active_nav and item.key == explicit_active_nav) or (not explicit_active_nav and item.active) else '' }}" href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}
+  </nav>
+  <div class="nav-tools">
+    <form class="nav-search" action="/search" method="get"><input name="q" value="{{ q|default('', true) }}" placeholder="全局搜索" aria-label="全局搜索"><button type="submit">搜索</button></form>
+    {% if nav.admin %}<a class="button nav-primary" href="/admin/platform">管理控制台</a>{% endif %}
+    <details class="user-nav">
+      <summary><span class="user-avatar">{{ sec.get('user', {}).get('display_name', '用')[:1] }}</span><span class="user-label">{{ sec.get('user', {}).get('display_name', '用户') }}</span></summary>
+      <div class="user-menu">
+        <div class="user-menu-head"><strong>{{ sec.get('user', {}).get('display_name', '用户') }}</strong><span>{{ sec.get('role_label', '') }}</span></div>
+        {% for item in nav.account %}<a href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}
+        <a href="/help">帮助与反馈</a>
+        <form method="post" action="/account/logout"><button type="submit" class="link-button">退出登录</button></form>
+      </div>
+    </details>
+  </div>
+  {% else %}
+  <div class="public-nav-tools"><a class="button" href="/account/login">内部登录</a><a class="button secondary" href="/club/apply">会员申请</a></div>
+  {% endif %}
+</header>
+{% if authenticated and nav.secondary %}<nav class="secondary-nav" aria-label="二级导航">{% for item in nav.secondary %}<a class="{{ 'active' if item.active else '' }}" href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}</nav>{% endif %}
+<main class="{{ 'public-main' if not authenticated else '' }}">{% block content %}{% endblock %}</main>
+<footer>生物医药产业连接与情报平台 · 内部使用</footer>
+{% block scripts %}{% endblock %}
+<script>(function(){var b=document.querySelector('.menu-button');var menus=document.querySelectorAll('.user-nav');if(b){b.addEventListener('click',function(){document.body.classList.toggle('menu-open');b.setAttribute('aria-expanded',document.body.classList.contains('menu-open')?'true':'false');});}document.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false;});});document.addEventListener('keydown',function(e){if(e.key==='Escape'){menus.forEach(function(m){m.open=false;});document.body.classList.remove('menu-open');if(b)b.setAttribute('aria-expanded','false');}});})();</script>
+</body>
+</html>

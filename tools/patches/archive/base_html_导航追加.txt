@@ -1,0 +1,11 @@
+文件：app\templates\base.html
+
+在现有导航中找到：
+
+<a href="/review">数据审核</a><a href="/review/intake">数据接入</a>
+
+替换为：
+
+<a href="/review">数据审核</a><a href="/review/intake">数据接入</a><a href="/review/structure">情报结构化</a>
+
+只添加一次。

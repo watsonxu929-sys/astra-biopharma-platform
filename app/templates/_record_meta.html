@@ -1,0 +1,11 @@
+﻿{% if item is defined %}
+<section class="panel compact-meta">
+  <h2>记录信息</h2>
+  <dl class="meta-grid">
+    <dt>确认状态</dt><dd>{% if item.manually_confirmed %}<span class="badge confirmed">人工确认</span>{% else %}<span class="badge auto">系统整理</span>{% endif %}</dd>
+    <dt>来源类型</dt><dd>{{ item.source_type or "暂无数据" }}</dd>
+    <dt>创建时间</dt><dd>{{ item.created_at or "暂无数据" }}</dd>
+    <dt>更新时间</dt><dd>{{ item.updated_at or "暂无数据" }}</dd>
+  </dl>
+</section>
+{% endif %}

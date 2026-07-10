@@ -1,0 +1,29 @@
+{% extends "platform/base.html" %}
+{% set active_nav = "collaboration" %}
+{% set active_subnav = "collaboration.resources" %}
+{% block platform_title %}????{% endblock %}
+{% block platform_content %}
+<div class="platform-content" style="max-width:600px;margin:0 auto;padding:24px 32px;">
+<h1 class="page-title">发布资源</h1>
+<form method="post" action="/resources/new" class="platform-form">
+<div class="form-group"><label>标题 *</label><input name="title" required></div>
+<div class="form-group"><label>类型 *</label><select name="direction" required><option value="supply">供给</option><option value="demand">需求</option></select></div>
+<div class="form-group"><label>资源类型 *</label><select name="resource_type" required>
+<option value="">请选择</option>
+<option>技术成果</option><option>CRO服务</option><option>CDMO服务</option><option>检测服务</option><option>注册服务</option>
+<option>仪器设备</option><option>试剂耗材</option><option>实验室设计与工程</option><option>园区载体</option>
+<option>融资资源</option><option>投资项目</option><option>市场渠道</option><option>销售代理</option>
+<option>人才与职位</option><option>顾问服务</option><option>会议与媒体资源</option><option>其他</option>
+</select></div>
+<div class="form-group"><label>简介</label><textarea name="summary"></textarea></div>
+<div class="form-group"><label>详细说明</label><textarea name="description"></textarea></div>
+<div class="form-group"><label>产业方向</label><input name="industry_direction" placeholder="多个用分号分隔"></div>
+<div class="form-group"><label>地区</label><input name="region"></div>
+<div class="form-group"><label>标签</label><input name="tags" placeholder="多个用分号分隔"></div>
+<div class="form-group"><label>合作方式</label><input name="cooperation_mode"></div>
+<div class="form-group"><label>预算/价格说明</label><input name="budget_note"></div>
+<div class="form-group"><label>联系方式可见级别</label><select name="contact_visibility">
+<option value="connected">已接受联系的用户</option><option value="members">有效会员</option><option value="public">公开</option></select></div>
+<button type="submit" class="btn btn-primary">发布资源</button></form>
+</div>
+{% endblock %}

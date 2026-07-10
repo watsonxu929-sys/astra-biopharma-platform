@@ -1,0 +1,59 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}信息采集中心
+<section class="panel"><h2>采集状态说明</h2><div class="explain-grid"><div><strong>robots_denied</strong><p>目标网站限制自动抓取。系统不会绕过该限制，可改用RSS、公开API、手工录入或获得授权的数据源。</p></div><div><strong>source_disabled</strong><p>该数据源已暂停，不会自动采集。启用后可重新创建任务。</p></div><div><strong>network_error</strong><p>访问目标网站失败，可能是网络、证书或目标站点不可用。</p></div><div><strong>parse_error</strong><p>页面已访问，但内容结构无法解析，需要调整采集规则或改为手工来源。</p></div><div><strong>duplicate</strong><p>采集内容已存在，系统未重复入库。</p></div><div><strong>skipped</strong><p>任务被跳过，请查看具体原因。</p></div></div></section>
+{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/intelligence">情报中心</a><span class="sep">/</span><span class="current">信息采集</span></span>{% endblock %}
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-top">
+    <h1>信息采集中心</h1>
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/collection/sources">管理数据源</a>
+    </div>
+  </div>
+  <p class="page-desc">管理公开信息来源、采集任务、原始情报和来源快照。采集内容进入审核流程前不会自动覆盖正式主体数据。</p>
+</section>
+{% endblock %}
+{% block platform_content %}
+{% set status_labels = {"pending":"待处理","running":"执行中","success":"成功","failed":"失败","partial":"部分成功","queued":"已排队","processed":"已加工","enabled":"已启用","disabled":"已停用","paused":"已暂停","duplicate":"重复","changed":"有变化","unchanged":"无变化","empty":"无正文"} %}
+<nav class="module-tabs">
+  <a class="{{ 'active' if mode == 'home' else '' }}" href="/collection">采集概览</a>
+  <a class="{{ 'active' if mode in ['sources','source_detail'] else '' }}" href="/collection/sources">采集来源</a>
+  <a class="{{ 'active' if mode == 'jobs' else '' }}" href="/collection/jobs">采集任务</a>
+  <a class="{{ 'active' if mode in ['items','item_detail','snapshot'] else '' }}" href="/collection/items">原始情报</a>
+</nav>
+{% if message %}<div class="warning-box soft-delete-note">{{ message }} <a href="/collection/jobs">查看任务</a> · <a href="/collection/items">查看采集内容</a></div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if mode == "home" %}
+<section class="stats stats-4">
+  <a href="/collection/sources"><strong>{{ counts.enabled_sources }}</strong><span>启用来源</span></a>
+  <a href="/collection/jobs"><strong>{{ counts.jobs_today }}</strong><span>今日采集任务</span></a>
+  <a href="/collection/items?processing_status=queued"><strong>{{ counts.queued_items }}</strong><span>待加工情报</span></a>
+  <a href="/collection/sources?status=paused"><strong>{{ counts.paused_sources }}</strong><span>暂停来源</span></a>
+</section>
+<section class="flow-steps compact-flow">
+  {% for title, desc, href in [("数据源","管理需要持续监测的网站、RSS、企业官网或手工来源。","/collection/sources"),("采集任务","执行抓取或采集，记录成功、失败、跳过和失败原因。","/collection/jobs"),("原始情报","保存采集到的标题、正文、来源链接和快照。","/collection/items"),("数据处理","对原始内容进行清洗、摘要、结构化和实体识别。","/processing/jobs"),("候选匹配","将情报与企业、人物、项目或产业方向建立候选关联。","/processing/candidates"),("情报审核","人工确认、修正、驳回或发布。","/admin/intelligence")] %}
+  <a class="flow-card" href="{{ href }}"><strong>{{ title }}</strong><span>{{ desc }}</span></a>
+  {% endfor %}
+</section>
+<section class="two-columns">
+  <article class="panel"><div class="panel-title"><h2>最近采集任务</h2><a href="/collection/jobs">查看全部</a></div>{% for job in latest_jobs %}<div class="record-row"><div><strong>{{ job.source_name }}</strong><p>{{ job.run_no }} · {{ status_labels.get(job.status, job.status) }}</p></div><span class="badge">新增 {{ job.new_content_count }} 条</span></div>{% else %}<div class="empty">暂无采集任务。添加信息来源后，系统将按计划自动获取公开信息。</div>{% endfor %}</article>
+  <article class="panel"><div class="panel-title"><h2>最近原始情报</h2><a href="/collection/items">查看全部</a></div>{% for item in latest_items %}<div class="record-row"><div><strong>{{ item.title or item.item_no }}</strong><p>{{ item.source_name }} · {{ item.captured_at }}</p></div><span class="badge">{{ status_labels.get(item.processing_status, item.processing_status) }}</span></div>{% else %}<div class="empty">暂无原始情报。新增采集来源后会在这里沉淀采集结果。</div>{% endfor %}</article>
+</section>
+{% elif mode == "sources" %}
+<section class="grid-2">
+  <form class="form-card" method="post" action="/collection/sources"><h2>新增采集来源</h2><label>来源名称<input name="name" maxlength="200" required></label><label>来源地址<input name="url" maxlength="2000" required placeholder="https://example.com/news 或 inline:test"></label><div class="grid-2"><label>来源类型<select name="source_type"><option value="rss">RSS / Atom</option><option value="webpage">网页</option><option value="list_page">栏目页</option><option value="api">公开 API</option><option value="dynamic_page">动态页面</option><option value="manual_url_list">手动链接清单</option></select></label><label>采集方式<select name="collection_mode"><option value="auto">自动判断</option><option value="http">HTTP抓取</option><option value="rss">RSS</option><option value="api">API</option><option value="playwright">浏览器抓取</option></select></label></div><div class="grid-2"><label>主体类型<input name="subject_type"></label><label>主体编号<input name="subject_id"></label></div><div class="grid-2"><label>允许域名<input name="allowed_domains"></label><label>最多链接数<input name="max_links" type="number" value="20" min="1" max="100"></label></div><label><input type="checkbox" name="crawl_detail_pages" value="1"> 从列表页继续抓取详情页</label><label>合规说明<textarea name="compliance_note"></textarea></label><button class="primary">保存来源</button></form>
+  <section class="panel"><form id="batch-source-run" method="post" action="/collection/sources/batch-run"></form><div class="panel-title"><h2>采集来源</h2><button class="button secondary" form="batch-source-run">批量创建任务</button></div><div class="subject-table"><table><thead><tr><th></th><th>来源</th><th>方式</th><th>状态</th><th>操作</th></tr></thead><tbody>{% for s in sources %}<tr><td><input type="checkbox" name="source_ids" value="{{ s.id }}" form="batch-source-run"></td><td><a href="/collection/sources/{{ s.id }}"><strong>{{ s.name }}</strong></a><div class="code">{{ s.source_no }}</div><div class="muted">{{ s.url }}</div></td><td>{{ s.collection_source_type or s.source_type }} / {{ s.collection_mode or "auto" }}</td><td><span class="badge {{ 'inactive' if s.auto_paused or not s.is_enabled else '' }}">{{ '已暂停' if s.auto_paused else ('已启用' if s.is_enabled else '已停用') }}</span><div class="muted">连续失败 {{ s.consecutive_failures }} 次</div><div class="muted">最近结果：{{ s.latest_job_status_label }}{% if s.latest_job_no %} · {{ s.latest_job_no }}{% endif %}</div><div class="muted">{{ s.latest_result_summary }}</div>{% if s.latest_error_type %}<div class="warning-box">{{ s.latest_error_label }}：{{ s.latest_error_explanation }}</div>{% endif %}<div class="muted">已采内容 {{ s.collected_item_count }} 条</div></td><td><form method="post" action="/collection/sources/{{ s.id }}/run"><button class="button secondary">创建任务</button><button class="button primary" name="run_now" value="1">立即执行一次</button></form><a class="button secondary" href="/collection/jobs">查看任务</a><a class="button secondary" href="/collection/items">查看原始情报</a></td></tr>{% else %}<tr><td colspan="5" class="empty">暂无采集来源。添加第一个信息来源后，系统将按计划自动获取公开信息。</td></tr>{% endfor %}</tbody></table></div></section>
+</section>
+{% elif mode == "source_detail" %}
+<section class="panel"><h2>{{ source.name }}</h2><p class="muted">{{ source.source_no }} · {{ source.collection_source_type or source.source_type }} · {{ source.collection_mode or "auto" }}</p><p><a href="{{ source.url }}">{{ source.url }}</a></p><form method="post" action="/collection/sources/{{ source.id }}/run"><button class="primary">创建采集任务</button></form></section>
+{% elif mode == "jobs" %}
+<section class="panel"><div class="subject-table"><table><thead><tr><th>任务</th><th>来源</th><th>状态</th><th>数量</th><th>操作</th></tr></thead><tbody>{% for job in jobs %}<tr><td><span class="code">{{ job.run_no }}</span><div class="muted">{{ job.created_at }}</div></td><td><a href="/collection/sources/{{ job.monitoring_source_id }}">{{ job.source_name }}</a></td><td><span class="badge">{{ status_labels.get(job.status, job.status) }}</span>{% if job.error_type %}<div class="warning-box">{{ job.error_label }}：{{ job.status_explanation }}</div>{% else %}<div class="muted">{{ job.status_explanation }}</div>{% endif %}</td><td>新增 {{ job.new_content_count }} 条 / 变化 {{ job.changed_content_count }} 条 / 重复 {{ job.duplicate_content_count }} 条 / 排队 {{ job.queued_item_count }} 条 / 失败 {{ job.failed_content_count }} 条<div class="muted">已生成原始情报 {{ job.created_item_count }} 条，处理任务 {{ job.processing_job_count }} 个</div></td><td>{% if job.status in ["pending","failed","skipped"] %}<form method="post" action="/collection/jobs/{{ job.id }}/run"><button class="button secondary">立即执行一次</button></form>{% endif %}{% if job.next_step_url %}<a class="button primary" href="{{ job.next_step_url }}">{{ job.next_step_label }}</a>{% else %}<span class="muted">{{ job.next_step_label }}</span>{% endif %}<a class="button secondary" href="/processing/jobs">进入处理任务</a></td></tr>{% else %}<tr><td colspan="5" class="empty">暂无采集任务。采集来源启用后会自动生成任务。</td></tr>{% endfor %}</tbody></table></div></section>
+{% elif mode == "items" %}
+<section class="panel"><div class="subject-table"><table><thead><tr><th>原始情报</th><th>来源</th><th>去重</th><th>加工队列</th><th>快照</th></tr></thead><tbody>{% for item in items %}<tr><td><a href="/collection/items/{{ item.id }}"><strong>{{ item.title or item.item_no }}</strong></a><div class="muted">{{ item.normalized_url }}</div></td><td>{{ item.source_name }}<div class="code">{{ item.source_no }}</div></td><td>{{ item.dedup_status_label }} / {{ item.change_status_label }}</td><td><span class="badge">{{ item.processing_status_label }}</span><div class="muted">{{ item.flow_hint }}</div><div class="muted">候选 {{ item.candidate_count }} 条{% if item.processing_job_no %} · 处理任务 {{ item.processing_job_no }}{% endif %}</div></td><td>{% if item.snapshot_id %}<a href="/collection/snapshots/{{ item.snapshot_id }}">来源快照</a>{% endif %} <a href="/processing/jobs">进入处理</a> <a href="/processing/candidates">查看候选</a>{% if item.published_intelligence_id %} <a href="/intelligence/{{ item.published_intelligence_id }}">查看前台情报</a>{% endif %}</td></tr>{% else %}<tr><td colspan="5" class="empty">暂无原始情报。添加采集来源后，系统将沉淀公开信息原文。</td></tr>{% endfor %}</tbody></table></div></section>
+{% elif mode == "item_detail" %}
+<section class="panel"><h2>{{ item.title or item.item_no }}</h2><p class="muted">{{ item.source_name }} · {{ item.captured_at }} · {{ item.page_structure }}</p><p><a href="{{ item.normalized_url }}">{{ item.normalized_url }}</a></p><p><span class="badge">{{ status_labels.get(item.dedup_status, item.dedup_status) }}</span> <span class="badge">{{ status_labels.get(item.processing_status, item.processing_status) }}</span></p>{% if snapshot %}<pre class="source-text">{{ snapshot.cleaned_text[:6000] }}</pre>{% endif %}</section>
+{% elif mode == "snapshot" %}
+<section class="panel"><h2>{{ snapshot.page_title or snapshot.snapshot_no }}</h2><p class="muted">{{ snapshot.source_name }} · {{ snapshot.captured_at }}</p><p><a href="{{ snapshot.normalized_url or snapshot.url }}">{{ snapshot.normalized_url or snapshot.url }}</a></p><pre class="source-text">{{ snapshot.cleaned_text[:8000] }}</pre></section>
+{% endif %}
+{% endblock %}

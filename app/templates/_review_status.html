@@ -1,0 +1,1 @@
+﻿{% set review = review_summary|default({}) %}<div class="review-status"><span class="badge">待审核 {{ review.open_count|default(0) }}</span>{% if review.conflict_count|default(0) %}<span class="badge warning">冲突 {{ review.conflict_count }}</span>{% endif %}</div>

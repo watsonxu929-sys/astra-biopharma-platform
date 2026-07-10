@@ -1,0 +1,22 @@
+﻿{% extends "base.html" %}
+{% block title %}粘贴解析{% endblock %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">主体中心</p>
+  <h1>粘贴解析</h1>
+  <p>粘贴公开资料后，系统会识别企业、人物、项目和事件候选信息，提交后进入人工确认。</p>
+</section>
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+<form class="panel form-grid" method="post">
+  <label>来源类型<select name="source_type"><option value="manual">手动录入</option><option value="news">新闻报道</option><option value="website">官方网站</option><option value="document">文档资料</option></select></label>
+  <label>标题<input name="title" value="{{ title or '' }}"></label>
+  <label class="full">原始文本<textarea name="text" rows="16" required placeholder="粘贴企业介绍、融资新闻、活动材料或招商线索。">{{ text or '' }}</textarea></label>
+  <div class="form-actions"><button class="btn primary" type="submit">开始解析</button></div>
+</form>
+{% if result %}
+<section class="panel">
+  <h2>解析结果</h2>
+  <pre class="code-block">{{ result | tojson(indent=2, ensure_ascii=False) }}</pre>
+</section>
+{% endif %}
+{% endblock %}

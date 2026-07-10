@@ -1,0 +1,13 @@
+v0.4H 智能推荐与关系切入路径 - 覆盖补丁
+
+安装：
+1. 关闭后端。
+2. 备份整个项目文件夹。
+3. 将本补丁内容解压到项目根目录，覆盖同名文件。
+4. 运行 migrate_all_windows.bat。
+5. 运行 verify_all_windows.bat。
+6. 运行 run_windows.bat。
+7. 打开 http://127.0.0.1:8000/recommendations
+
+本补丁不包含 data/app.db，不清空、不重建业务数据库。
+详细说明见 docs/11_V04H_RECOMMENDATIONS.md。

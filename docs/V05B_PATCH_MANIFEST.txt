@@ -1,0 +1,34 @@
+v0.5B patch manifest
+
+Modified files:
+- README.md
+- requirements.txt
+- project_tools_windows.bat
+- app/main.py
+- app/security.py
+- app/v04f_operations.py
+- app/static/style.css
+- app/templates/base.html
+- app/templates/v04f_club.html
+- app/templates/person_detail.html
+- scripts/migrate_all.py
+- scripts/verify_all.py
+- docs/DOCUMENT_INDEX.md
+
+New files:
+- app/v05b_member_import.py
+- app/services/member_import_service.py
+- app/templates/v05b_member_import.html
+- scripts/migrate_v05b.py
+- scripts/verify_v05b.py
+- docs/14_V05B_MEMBER_IMPORT.md
+- docs/15_V05B_PATCH_INSTALL.md
+- docs/V05B_PATCH_MANIFEST.txt
+
+Excluded from patch:
+- data/app.db
+- data/backups/
+- data/uploads/
+- logs/
+- .venv/
+- __pycache__/

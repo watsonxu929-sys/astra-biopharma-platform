@@ -1,0 +1,31 @@
+v0.4D-B compatibility validation report
+
+Validated against uploaded baseline:
+- v04d_context_bundle_20260629_132840.zip
+- Uploaded baseline contains app/v04d_structuring.py
+- app/main.py already registers v0.4C, v0.4C-1 and v0.4D-A routers
+- app/templates/base.html already contains /review/structure navigation
+
+Validation completed:
+1. v0.4D-B schema creation: PASS
+2. Default offline rules seed: PASS
+3. Unstructured source extraction: PASS
+4. Field/relation/event candidate generation: PASS
+5. Evidence excerpts and offsets: PASS
+6. Confidence scoring: PASS
+7. Existing subject match suggestion: PASS
+8. Single candidate acceptance into v0.4D-A draft: PASS
+9. Batch acceptance of high-confidence candidates: PASS
+10. Candidate rejection: PASS
+11. No direct write to v0.4C review queue: PASS
+12. No direct write to canonical facts: PASS
+13. Rule update: PASS
+14. Normal extraction reuse: PASS
+15. Forced re-extraction: PASS
+16. /review/prestructure template render: PASS
+17. /review/prestructure/health route: PASS
+
+Result:
+ALL V0.4D-B CHECKS PASSED
+
+This package is compatible with the uploaded v0.4D-A baseline.

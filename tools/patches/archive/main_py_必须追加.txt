@@ -1,0 +1,27 @@
+文件：app\main.py
+
+一、在顶部 import 区域追加（只添加一次）：
+
+from app.v04d_structuring import router as v04d_structuring_router
+
+建议放在现有两行后面：
+
+from app.v04c_review import router as v04c_review_router
+from app.v04c1_ingestion import router as v04c1_ingestion_router
+from app.v04d_structuring import router as v04d_structuring_router
+
+二、在 app = FastAPI(...) 后面的路由注册区域追加（只添加一次）：
+
+app.include_router(v04d_structuring_router)
+
+最终应类似：
+
+app = FastAPI(title="生物医药产业情报系统")
+app.include_router(v04c_review_router)
+app.include_router(v04c1_ingestion_router)
+app.include_router(v04d_structuring_router)
+
+注意：
+1. 不要放进函数内部。
+2. 不要重复添加。
+3. 必须先完成 import，再 include_router。

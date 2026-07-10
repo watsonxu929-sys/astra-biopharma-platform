@@ -1,0 +1,33 @@
+{
+  "batch": {
+    "source_name": "真实来源名称",
+    "source_type": "manual-json",
+    "note": "填写本批次说明"
+  },
+  "records": [
+    {
+      "external_key": "SOURCE-UNIQUE-001",
+      "title": "来源标题",
+      "source_url": "https://example.com/article",
+      "source_grade": "B",
+      "published_at": "2026-06-29",
+      "subjects": [
+        {
+          "subject_type": "org",
+          "subject_id": "ORG-001",
+          "subject_label": "企业名称",
+          "fields": [
+            {
+              "name": "临床阶段",
+              "value": "II期",
+              "fact_level": "fact",
+              "confidence": 0.9,
+              "excerpt": "支持该值的原文摘录"
+            }
+          ]
+        }
+      ],
+      "relations": []
+    }
+  ]
+}

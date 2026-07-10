@@ -1,0 +1,185 @@
+{% extends "platform/base.html" %}
+{% block platform_breadcrumb %}管理中心{% endblock %}
+{% block platform_page_header %}
+  <div class="page-header-left"><h1 class="page-title">管理中心</h1><p class="page-subtitle">运营、数据维护、权限和系统治理入口。</p></div>
+{% endblock %}
+{% block platform_content %}
+
+<!-- 1. 人物与机构 -->
+<section class="admin-group">
+  <h2 class="group-title">人物与机构</h2>
+  <p class="group-desc">维护主体主数据、身份关联和关系。</p>
+  <div class="platform-grid platform-grid-3">
+    <div class="platform-card">
+      <h3>人物库</h3>
+      <p>统一管理人物主数据、标签和关系。</p>
+      <a href="/admin/people" class="btn btn-outline btn-sm">进入管理</a>
+    </div>
+    <div class="platform-card">
+      <h3>机构库</h3>
+      <p>维护机构信息、类型和关联关系。</p>
+      <a href="/admin/organizations" class="btn btn-outline btn-sm">进入管理</a>
+    </div>
+    <div class="platform-card">
+      <h3>数据审核</h3>
+      <p>审核待确认的主体、关系和内容。</p>
+      <a href="/review" class="btn btn-outline btn-sm">进入审核</a>
+    </div>
+  </div>
+</section>
+
+<!-- 2. 会员与俱乐部 -->
+<section class="admin-group">
+  <h2 class="group-title">会员与俱乐部</h2>
+  <p class="group-desc">会员管理、活动、供需和申请处理。</p>
+  <div class="platform-grid platform-grid-3">
+    <div class="platform-card">
+      <h3>会员管理</h3>
+      <p>查看和管理俱乐部会员。</p>
+      <a href="/club/members" class="btn btn-outline btn-sm">进入管理</a>
+    </div>
+    <div class="platform-card">
+      <h3>活动管理</h3>
+      <p>创建和管理俱乐部活动。</p>
+      <a href="/club/events" class="btn btn-outline btn-sm">进入管理</a>
+    </div>
+    <div class="platform-card">
+      <h3>会员申请</h3>
+      <p>处理入会申请和审批。</p>
+      <a href="/club" class="btn btn-outline btn-sm">查看申请</a>
+    </div>
+    <div class="platform-card">
+      <h3>数据导入</h3>
+      <p>批量导入会员和机构数据。</p>
+      <a href="/club/import" class="btn btn-outline btn-sm">进入导入</a>
+    </div>
+  </div>
+</section>
+
+<!-- 3. 情报运营 -->
+<section class="admin-group">
+  <h2 class="group-title">情报运营</h2>
+  <p class="group-desc">采集、处理、审核、发布和报告全流程。</p>
+  <div class="platform-grid platform-grid-3">
+    <div class="platform-card">
+      <h3>情报运营中心</h3>
+      <p>工作流总览和快捷操作入口。</p>
+      <a href="/intelligence/operations" class="btn btn-outline btn-sm">进入中心</a>
+    </div>
+    <div class="platform-card">
+      <h3>数据源管理</h3>
+      <p>配置和管理情报采集数据源。</p>
+      <a href="/collection/sources" class="btn btn-outline btn-sm">管理数据源</a>
+    </div>
+    <div class="platform-card">
+      <h3>数据处理</h3>
+      <p>查看和处理采集内容。</p>
+      <a href="/processing/jobs" class="btn btn-outline btn-sm">查看任务</a>
+    </div>
+    <div class="platform-card">
+      <h3>情报审核与发布</h3>
+      <p>审核候选情报并发布。</p>
+      <a href="/admin/intelligence" class="btn btn-outline btn-sm">进入管理</a>
+    </div>
+    <div class="platform-card">
+      <h3>候选匹配</h3>
+      <p>查看待处理候选匹配结果。</p>
+      <a href="/processing/candidates" class="btn btn-outline btn-sm">查看候选</a>
+    </div>
+    <div class="platform-card">
+      <h3>产业信号</h3>
+      <p>查看和分析产业动态信号。</p>
+      <a href="/signals" class="btn btn-outline btn-sm">查看信号</a>
+    </div>
+    <div class="platform-card">
+      <h3>报告中心</h3>
+      <p>生成和查看情报分析报告。</p>
+      <a href="/reports" class="btn btn-outline btn-sm">查看报告</a>
+    </div>
+  </div>
+</section>
+
+<!-- 4. 资源与合作 -->
+<section class="admin-group">
+  <h2 class="group-title">资源与合作</h2>
+  <p class="group-desc">资源管理、合作机会和协作任务。</p>
+  <div class="platform-grid platform-grid-3">
+    <div class="platform-card">
+      <h3>资源市场</h3>
+      <p>管理供给和需求资源。</p>
+      <a href="/resources" class="btn btn-outline btn-sm">进入市场</a>
+    </div>
+    <div class="platform-card">
+      <h3>合作机会</h3>
+      <p>跟踪和管理合作机会。</p>
+      <a href="/opportunities" class="btn btn-outline btn-sm">查看机会</a>
+    </div>
+    <div class="platform-card">
+      <h3>协作任务</h3>
+      <p>查看和分配协作任务。</p>
+      <a href="/workspace" class="btn btn-outline btn-sm">查看任务</a>
+    </div>
+  </div>
+</section>
+
+<!-- 5. 数据治理 -->
+<section class="admin-group">
+  <h2 class="group-title">数据治理</h2>
+  <p class="group-desc">数据完整性、质量、审核和审计。</p>
+  <div class="platform-grid platform-grid-3">
+    <div class="platform-card">
+      <h3>审核队列</h3>
+      <p>审核待确认的数据和内容。</p>
+      <a href="/review" class="btn btn-outline btn-sm">进入审核</a>
+    </div>
+    <div class="platform-card">
+      <h3>候选数据</h3>
+      <p>查看和处理候选匹配数据。</p>
+      <a href="/processing/candidates" class="btn btn-outline btn-sm">查看候选</a>
+    </div>
+  </div>
+</section>
+
+<!-- 6. 用户与权限 -->
+<section class="admin-group">
+  <h2 class="group-title">用户与权限</h2>
+  <p class="group-desc">用户管理、角色权限和操作审计。</p>
+  <div class="platform-grid platform-grid-3">
+    <div class="platform-card">
+      <h3>用户管理</h3>
+      <p>管理系统用户和角色。</p>
+      <a href="/admin/users" class="btn btn-outline btn-sm">进入管理</a>
+    </div>
+  </div>
+</section>
+
+<!-- 7. 系统运维 -->
+<section class="admin-group">
+  <h2 class="group-title">系统运维</h2>
+  <p class="group-desc">运行状态、日志和系统配置。</p>
+  <div class="platform-grid platform-grid-3">
+    <div class="platform-card">
+      <h3>API 健康</h3>
+      <p>检查系统各模块运行状态。</p>
+      <a href="/api/v1/health" target="_blank" class="btn btn-outline btn-sm">查看状态</a>
+    </div>
+  </div>
+</section>
+
+<!-- 产业标签管理 -->
+<section class="platform-card mt-16">
+  <h2>产业标签管理</h2>
+  <form method="post" action="/admin/tags/create" class="platform-form">
+    <div class="grid-2">
+      <label>分组<select name="tag_group"><option value="user_type">用户类型</option><option value="industry_direction">产业方向</option><option value="capability">能力标签</option><option value="need">需求标签</option></select></label>
+      <label>标签名称<input name="label" required></label>
+    </div>
+    <button class="btn btn-primary">添加标签</button>
+  </form>
+  <table class="admin-table">
+    <thead><tr><th>分组</th><th>标签</th><th>标识</th><th>状态</th></tr></thead>
+    <tbody>{% for t in tags %}<tr><td>{{ t.tag_group }}</td><td>{{ t.label }}</td><td>{{ t.tag_key }}</td><td>{{ '启用' if t.is_active else '停用' }}</td></tr>{% else %}<tr><td colspan="4" class="empty">暂无标签</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% macro status_badge(text) %}<span class="badge">{{ text }}</span>{% endmacro %}`r`n{% block title %}Q-BAY俱乐部{% endblock %}
+{% block content %}
+{% set sec = request.scope.get('security_context', {}) %}
+{% set status_names = {
+  "submitted": "待审核",
+  "under_review": "审核中",
+  "need_more_info": "需补充资料",
+  "approved": "已批准",
+  "rejected": "已拒绝",
+  "active": "正常",
+  "inactive": "停用",
+  "suspended": "暂停",
+  "candidate": "候选匹配",
+  "confirmed": "已确认",
+  "contacted": "已联系",
+  "progressing": "推进中",
+  "successful": "已成功",
+  "expired": "已过期"
+} %}
+{% set count_names = {
+  "members": "会员总数",
+  "active_members": "正常会员",
+  "pending_applications": "待审核申请",
+  "needs": "有效需求",
+  "offerings": "有效供给",
+  "candidate_matches": "候选匹配",
+  "progressing_matches": "推进中匹配"
+} %}
+
+{% if mode == "home" %}
+<section class="page-head action-head">
+  <div>
+    <p class="eyebrow">业务经营</p>
+    <h1>Q-BAY俱乐部</h1>
+    <p>集中管理会员申请、会员档案、供需内容、活动参与和资源匹配。</p>
+    <p class="next-step">当前重点：优先处理待审核申请和候选资源匹配，确认后再进入业务行动。</p>
+  </div>
+  <div class="actions">
+    <a class="button secondary" href="/recommendations?category=club_match&status=open">查看供需推荐</a>
+    <a class="button primary" href="/club/apply">公开申请页</a>
+  </div>
+</section>
+
+<section class="subject-stats">
+  {% for k, v in counts.items() %}
+  <div class="panel mini-stat">
+    <span>{{ count_names.get(k, k) }}</span>
+    <strong>{{ v }}</strong>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="profile-sections">
+  <a class="panel" href="/club/admin/applications"><h2>申请审核</h2><p>查看待审核会员申请，确认人物和企业/机构匹配。</p></a>
+  <a class="panel" href="/club/members"><h2>会员管理</h2><p>筛选会员并进入会员档案，维护供需和活动记录。</p></a>
+  <a class="panel" href="/club/matches"><h2>资源匹配</h2><p>查看候选匹配并人工确认，确认后可转为行动任务。</p></a>
+  <a class="panel" href="/club/events"><h2>活动管理</h2><p>创建活动、开放报名、签到和会后跟进。</p></a>
+  <a class="panel" href="/club/registrations"><h2>报名与签到</h2><p>查看活动报名和签到情况。</p></a>
+  <a class="panel" href="/club/import"><h2>智能导入</h2><p>导入会员资料和头像素材，进入后续审核与管理流程。</p></a>
+</section>
+
+<section class="profile-sections">
+  <a class="panel" href="/club/member-accounts"><h2>会员账号</h2><p>生成激活链接，停用或恢复会员自助门户账号。</p></a>
+  <a class="panel" href="/club/profile-changes"><h2>资料变更审核</h2><p>审核会员自助提交的资料修改。</p></a>
+  <a class="panel" href="/club/member-content"><h2>供需内容审核</h2><p>审核会员提交的需求和资源，通过后进入正式供需库。</p></a>
+  <a class="panel" href="/club/announcements"><h2>会员公告</h2><p>发布站内通知，不自动外发邮件、短信或微信。</p></a>
+</section>
+
+{% elif mode == "applications" %}
+<section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>会员申请审核</h1><p>集中处理会员申请，确认人物和企业/机构匹配后再批准入会。</p></div><a class="button secondary" href="/club">返回俱乐部</a></section>
+<section class="panel"><table><thead><tr><th>编号</th><th>姓名</th><th>企业/机构</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead><tbody>{% for a in applications %}<tr><td>{{ a.application_no }}</td><td>{{ a.applicant_name }}</td><td>{{ a.organization_name or "暂无" }}</td><td>{{ status_badge(status_names.get(a.status, a.status)) }}</td><td>{{ a.submitted_at }}</td><td><a class="button secondary compact" href="/club/admin/applications/{{ a.id }}">审核</a></td></tr>{% else %}<tr><td colspan="6" class="empty">暂无会员申请</td></tr>{% endfor %}</tbody></table></section>
+
+{% elif mode == "application_detail" %}
+<section class="page-head action-head"><div><p class="eyebrow">{{ application.application_no }}</p><h1>{{ application.applicant_name }}</h1><p>{{ application.organization_name or "暂无企业/机构" }} · {{ application.title or "暂无职务" }}</p></div><a class="button secondary" href="/club/admin/applications">返回申请列表</a></section>
+<section class="profile-sections"><article class="panel"><h2>申请信息</h2><dl class="info-list"><dt>城市</dt><dd>{{ application.city or "暂无" }}</dd><dt>赛道</dt><dd>{{ application.industry_tags or "暂无" }}</dd><dt>能力</dt><dd>{{ application.expertise_tags or "暂无" }}</dd><dt>可提供资源</dt><dd>{{ application.offered_resources or "暂无" }}</dd><dt>合作需求</dt><dd>{{ application.cooperation_needs or "暂无" }}</dd><dt>联系方式</dt><dd>{% if sec.get("can_view_sensitive") %}手机：{{ application.mobile or "暂无" }}<br>邮箱：{{ application.email or "暂无" }}<br>微信：{{ application.wechat or "暂无" }}<br>偏好：{{ application.preferred_contact_method or "暂无" }}{% else %}<span class="privacy-mask">当前角色无权查看联系方式</span>{% endif %}</dd></dl></article><article class="panel"><h2>候选匹配</h2><h3>人物</h3>{% for p in matches.people %}<p>{{ p.name }} · {{ p.external_id }} · ID {{ p.id }}</p>{% else %}<p class="muted">暂无候选人物</p>{% endfor %}<h3>企业/机构</h3>{% for o in matches.organizations %}<p>{{ o.standard_name }} · {{ o.external_id }} · ID {{ o.id }}</p>{% else %}<p class="muted">暂无候选企业/机构</p>{% endfor %}</article></section>
+<section class="panel"><h2>审核操作</h2><form method="post" action="/club/admin/applications/{{ application.id }}/review" class="grid-2"><label>决定<select name="decision"><option value="under_review">审核中</option><option value="need_more_info">需补充资料</option><option value="approved">批准</option><option value="rejected">拒绝</option></select></label><div class="form-readonly"><span>审核人</span><strong>{{ sec.get("user", {}).get("display_name", "当前用户") }}</strong></div><label>人物ID<input name="person_id" type="number" value="{{ application.matched_person_id or 0 }}"></label><label>企业/机构ID<input name="organization_id" type="number" value="{{ application.matched_organization_id or 0 }}"></label><label class="grid-span">审核意见<textarea name="note">{{ application.review_note or "" }}</textarea></label><button class="button primary" type="submit">保存审核</button></form></section>
+
+{% elif mode == "members" %}
+<section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>会员管理</h1><p>查看会员档案、供需内容和活动参与记录。</p></div><div class="actions"><a class="button primary" href="/club/import">智能导入</a><a class="button secondary" href="/club/members.csv">导出 CSV</a></div></section>
+<form class="search-bar" method="get"><input name="q" value="{{ filters.q }}" placeholder="会员编号、姓名、企业/机构"><select name="status"><option value="">全部状态</option><option value="active" {% if filters.status == "active" %}selected{% endif %}>正常</option><option value="inactive" {% if filters.status == "inactive" %}selected{% endif %}>停用</option><option value="suspended" {% if filters.status == "suspended" %}selected{% endif %}>暂停</option></select><input name="level" value="{{ filters.level }}" placeholder="等级"><button class="button secondary" type="submit">筛选</button></form>
+<section class="panel"><table><thead><tr><th>编号</th><th>姓名</th><th>企业/机构</th><th>职务</th><th>等级</th><th>状态</th><th>标签/需求</th><th>入口</th></tr></thead><tbody>{% for m in members %}<tr><td>{{ m.member_no }}</td><td>{{ m.person_name }}</td><td>{{ m.organization_name or "暂无" }}</td><td>{{ m.public_role or "暂无" }}</td><td>{{ m.member_level }}</td><td>{{ status_badge(status_names.get(m.status, m.status)) }}</td><td class="clip-text">{{ m.expertise_tags or m.cooperation_preferences or "暂无" }}</td><td><a href="/club/members/{{ m.id }}">会员档案</a>{% if m.person_external_id %} · <a href="/subjects/person/{{ m.person_external_id }}">人物档案</a>{% endif %}</td></tr>{% else %}<tr><td colspan="8" class="empty">暂无会员记录</td></tr>{% endfor %}</tbody></table></section>
+
+{% elif mode == "member_detail" %}
+<section class="page-head action-head"><div class="member-profile-head">{% if member.avatar_asset_id %}<img class="member-avatar small" src="/club/media/{{ member.avatar_asset_id }}?thumb=1" alt="{{ member.person_name or '会员' }}头像">{% elif member.person_name %}<div class="avatar-placeholder" style="width:72px;height:72px;font-size:26px">{{ member.person_name[:1] }}</div>{% else %}<div class="avatar-placeholder" style="width:72px;height:72px;font-size:26px">会</div>{% endif %}<div><p class="eyebrow">{{ member.member_no }}</p><h1>{{ member.person_name or "尚未关联人物档案" }}</h1><p>{{ member.organization_name or "暂无企业/机构" }} · {{ member.member_level }} · {{ status_names.get(member.status, member.status) }}</p></div></div><div class="actions">{% if member.person_external_id %}<a class="button secondary" href="/subjects/person/{{ member.person_external_id }}">人物档案</a>{% endif %}{% if member.organization_external_id %}<a class="button secondary" href="/subjects/organization/{{ member.organization_external_id }}">企业/机构档案</a>{% endif %}</div></section>
+{% if message %}<div class="success-box">{{ message }}</div>{% endif %}{% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
+<section class="profile-sections">
+<article class="panel">
+<h2>关联人物档案</h2>
+{% if link_info and link_info.link_status == "linked" %}
+<div class="link-status linked">
+<p class="status-badge">已关联</p>
+<div class="person-summary">
+<p><strong>{{ link_info.person.name }}</strong></p>
+<p>人物编号：{{ link_info.person.external_id }}</p>
+<p>当前机构：{{ link_info.person.organization_network or "暂无" }}</p>
+<p>当前职位：{{ link_info.person.public_role or "暂无" }}</p>
+</div>
+</div>
+{% if link_info.field_differences %}
+<div class="field-differences">
+<h3>字段差异</h3>
+<table>
+<thead><tr><th>字段</th><th>会员资料</th><th>人物档案</th><th>状态</th></tr></thead>
+<tbody>
+{% for field, diff in link_info.field_differences.items() %}
+<tr>
+<td>{{ {"name":"姓名","title":"职位","organization":"机构","mobile":"手机","email":"邮箱"}[field] or field }}</td>
+<td>{{ diff.membership }}</td>
+<td>{{ diff.person }}</td>
+<td class="status-{{ "match" if diff.match else "diff" }}">{{ diff.status }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endif %}
+<div class="link-actions">
+<form method="post" action="/club/members/{{ member.id }}/person-unlink" class="inline-form">
+<input type="hidden" name="reason" value="更换关联">
+<button class="button secondary compact" type="submit">解除关联</button>
+</form>
+</div>
+{% else %}
+<div class="link-status unlinked">
+<p class="status-badge">尚未关联人物档案</p>
+<p>请从候选列表中选择人物进行关联，或搜索人物编号、姓名查找。</p>
+</div>
+{% if candidates %}
+<div class="candidate-list">
+<h3>候选人物</h3>
+{% for c in candidates %}
+<div class="candidate-item" data-person-id="{{ c.id }}">
+<div class="candidate-header">
+<span class="candidate-name">{{ c.name }}</span>
+<span class="candidate-id">{{ c.external_id }}</span>
+<span class="risk-badge {{ c.risk_level }}">{{ c.risk_label }}</span>
+</div>
+<div class="candidate-details">
+<p>机构：{{ c.organization_network or "暂无" }}</p>
+<p>职位：{{ c.public_role or "暂无" }}</p>
+{% if c.match_basis %}<p>匹配依据：{{ ", ".join(c.match_basis) }}</p>{% endif %}
+{% if c.mobile_masked %}<p>手机：{{ c.mobile_masked }}</p>{% endif %}
+{% if c.email_masked %}<p>邮箱：{{ c.email_masked }}</p>{% endif %}
+</div>
+<form method="post" action="/club/members/{{ member.id }}/person-link" class="inline-form">
+<input type="hidden" name="person_id" value="{{ c.id }}">
+<input type="hidden" name="reason" value="管理员确认匹配，依据：{{ ', '.join(c.match_basis) }}">
+<button class="button primary compact" type="submit">确认关联</button>
+</form>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="empty">未找到合适人物，请先在人物档案中创建或完善信息。</div>
+{% endif %}
+{% endif %}
+{% if link_audit %}
+<div class="link-audit">
+<h3>绑定记录</h3>
+{% for a in link_audit %}
+<div class="audit-row">
+<span>{{ "关联" if a.action == "bind_person" else "解除关联" }}</span>
+<span>{{ a.created_at }}</span>
+{% if a.reason %}<span>{{ a.reason }}</span>{% endif %}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+</article>
+<article class="panel">
+<h2>关联登录账号</h2>
+{% if user_link_info and user_link_info.link_status == "linked" %}
+<div class="link-status linked">
+<p class="status-badge">已关联</p>
+<div class="person-summary">
+<p><strong>{{ user_link_info.user.display_name }}</strong></p>
+<p>用户名：{{ user_link_info.user.username }}</p>
+<p>角色：{{ user_link_info.user.role }}</p>
+<p>账号状态：{{ user_link_info.user.status }}</p>
+</div>
+</div>
+<div class="link-actions">
+<form method="post" action="/club/members/{{ member.id }}/user-unlink" class="inline-form">
+<input type="hidden" name="reason" value="更换账号绑定">
+<button class="button secondary compact" type="submit">解除关联</button>
+</form>
+</div>
+{% else %}
+<div class="link-status unlinked">
+<p class="status-badge">尚未关联登录账号</p>
+<p>请搜索并选择用户进行关联，或会员本人在门户中申请关联。</p>
+</div>
+<div class="link-actions">
+<form method="post" action="/club/members/{{ member.id }}/user-link" class="inline-form">
+<label>用户ID<input name="user_id" type="number" required></label>
+<label>原因<input name="reason" type="text" placeholder="输入关联原因"></label>
+<button class="button primary compact" type="submit">确认关联</button>
+</form>
+</div>
+{% endif %}
+{% if user_link_audit %}
+<div class="link-audit">
+<h3>绑定记录</h3>
+{% for a in user_link_audit %}
+<div class="audit-row">
+<span>{{ "关联" if a.action == "bind_user" else ("解除" if a.action == "unbind_user" else a.action) }}</span>
+<span>{{ a.created_at }}</span>
+{% if a.reason %}<span>{{ a.reason }}</span>{% endif %}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+</article>
+<article class="panel"><h2>会员头像</h2><form method="post" action="/club/members/{{ member.id }}/avatar" enctype="multipart/form-data"><input type="file" name="file" accept=".jpg,.jpeg,.png,.webp" required><button class="button secondary" type="submit">上传或替换头像</button></form>{% if member.avatar_source %}<p class="muted small">来源：{{ member.avatar_source.source_type or "upload" }}{% if member.avatar_source.source_url %} · <a href="{{ member.avatar_source.source_url }}" target="_blank" rel="noopener">原始页面</a>{% endif %}</p>{% endif %}</article>
+</section>
+<section class="profile-sections"><article class="panel"><h2>联系方式</h2>{% if sec.get("can_view_sensitive") %}<div class="member-contact-list"><p><strong>手机</strong>{{ member.contact.mobile or "暂无" }}</p><p><strong>邮箱</strong>{{ member.contact.email or "暂无" }}</p><p><strong>微信</strong>{{ member.contact.wechat or "暂无" }}</p><p><strong>联系偏好</strong>{{ member.contact.preferred_contact_method or "暂无" }}</p></div>{% else %}<div class="privacy-mask">当前角色无权查看会员联系方式</div>{% endif %}</article></section>
+<section class="profile-sections"><article class="panel"><h2>新增需求</h2><form method="post" action="/club/members/{{ member.id }}/needs"><input name="title" placeholder="需求标题" required><input name="need_type" placeholder="需求类型"><input name="industry_tags" placeholder="赛道标签"><input name="region" placeholder="地区"><textarea name="description" placeholder="需求描述"></textarea><button class="button secondary" type="submit">保存需求</button></form></article><article class="panel"><h2>新增供给</h2><form method="post" action="/club/members/{{ member.id }}/offerings"><input name="title" placeholder="供给标题" required><input name="offering_type" placeholder="供给类型"><input name="industry_tags" placeholder="赛道标签"><input name="region" placeholder="地区"><textarea name="description" placeholder="供给描述"></textarea><button class="button secondary" type="submit">保存供给</button></form></article></section>
+<section class="profile-sections"><article class="panel"><h2>需求</h2>{% for n in needs %}<div class="record-row"><div><strong>{{ n.title }}</strong><p>{{ n.need_type }} · {{ n.industry_tags }}</p><p class="muted">{{ n.description }}</p></div></div>{% else %}<div class="empty">暂无需求记录</div>{% endfor %}</article><article class="panel"><h2>供给</h2>{% for o in offerings %}<div class="record-row"><div><strong>{{ o.title }}</strong><p>{{ o.offering_type }} · {{ o.industry_tags }}</p><p class="muted">{{ o.description }}</p></div></div>{% else %}<div class="empty">暂无供给记录</div>{% endfor %}</article></section>
+<section class="profile-sections"><article class="panel"><h2>活动参与历史</h2>{% if member.activity %}<p class="muted">活跃度：{{ member.activity.level }} · {{ member.activity.score }} 分 · {{ member.activity.risk_reminder or "无风险提醒" }}</p>{% endif %}{% for e in member.event_history %}<div class="record-row"><div><strong>{{ e.event_no }} · {{ e.name }}</strong><p>{{ e.event_date or "时间待定" }} · 报名 {{ status_names.get(e.registration_status, e.registration_status) }} · 出席 {{ status_names.get(e.attendance_status, e.attendance_status or "未签到") }}</p><p class="muted">{{ e.feedback or e.follow_up_note or "" }}</p></div></div>{% else %}<div class="empty">暂无活动参与记录</div>{% endfor %}</article></section>
+
+{% elif mode == "matches" %}
+<section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>资源匹配工作台</h1><p>系统只生成候选匹配，人工确认后才创建业务行动。</p></div><form method="post" action="/club/matches/generate"><button class="button primary" type="submit">生成候选匹配</button></form></section>
+{% if created %}<div class="warning-box">本次新增候选：{{ created }}</div>{% endif %}
+<section class="panel"><table><thead><tr><th>编号</th><th>需求</th><th>供给</th><th>分数</th><th>状态</th><th>原因</th><th>操作</th></tr></thead><tbody>{% for m in matches %}<tr><td>{{ m.match_no }}</td><td>{{ m.need_id }}</td><td>{{ m.offering_id }}</td><td>{{ m.match_score }} · {{ m.match_grade }}</td><td>{{ status_badge(status_names.get(m.status, m.status)) }}</td><td class="clip-text">{{ m.reasons_json }}</td><td><form method="post" action="/club/matches/{{ m.id }}/status" class="inline-form"><select name="status"><option value="confirmed">确认</option><option value="rejected">拒绝</option><option value="progressing">推进中</option><option value="successful">成功</option></select><input name="note" placeholder="说明"><button class="button secondary compact" type="submit">保存</button></form>{% if not m.action_id %}<form method="post" action="/club/matches/{{ m.id }}/action" class="inline-form"><button class="button secondary compact" type="submit">创建行动</button></form>{% else %}<span class="badge">已转行动</span>{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="empty">暂无资源匹配记录</td></tr>{% endfor %}</tbody></table></section>
+{% endif %}
+{% endblock %}
+

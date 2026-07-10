@@ -1,0 +1,12 @@
+﻿{% extends "base.html" %}
+{% block title %}资源详情{% endblock %}
+{% block content %}
+<section class="page-head"><p class="eyebrow">主体中心</p><h1>{{ item.name }}</h1><p>{{ item.resource_type or "资源" }}</p></section>
+<section class="panel"><h2>资源信息</h2><dl class="meta-grid">
+  <dt>说明</dt><dd>{{ item.description or "暂无数据" }}</dd>
+  <dt>区域</dt><dd>{{ item.region or "暂无数据" }}</dd>
+  <dt>适用对象</dt><dd>{{ item.applicable_to or "暂无数据" }}</dd>
+  <dt>可见范围</dt><dd>{{ item.visibility or "暂无数据" }}</dd>
+</dl></section>
+{% include "_record_meta.html" %}
+{% endblock %}

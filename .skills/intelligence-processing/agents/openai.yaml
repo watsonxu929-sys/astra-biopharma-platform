@@ -1,0 +1,3 @@
+interface:
+  display_name: "Intelligence Processing"
+  short_description: "Process intelligence into evidence-backed candidates and review flows."

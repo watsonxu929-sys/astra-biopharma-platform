@@ -1,0 +1,10 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}????{% endblock %}
+{% block platform_content %}
+<div class="platform-content" style="max-width:600px;margin:80px auto;padding:24px 32px;text-align:center;">
+  <div style="font-size:64px;color:var(--color-warning, #f0ad4e);margin-bottom:16px;">&#x1f512;</div>
+  <h1 style="font-size:28px;margin-bottom:12px;">您当前没有访问该内容的权限</h1>
+  <p style="color:var(--color-muted);font-size:15px;margin-bottom:32px;">如需获取访问权限，请联系系统管理员。</p>
+  <a href="{{ '/platform' if authenticated else '/account/login' }}" class="btn btn-primary">返回首页</a>
+</div>
+{% endblock %}

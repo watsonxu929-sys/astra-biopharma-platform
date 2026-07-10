@@ -1,0 +1,77 @@
+﻿{% extends "platform/base.html" %}
+{% block platform_breadcrumb %}
+<nav class="breadcrumb">
+  <a href="/platform">工作台</a>
+  <span class="sep">/</span>
+  <span>情报中心</span>
+</nav>
+{% endblock %}
+{% block platform_title %}情报中心{% endblock %}
+{% block platform_page_header %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">情报中心</h1>
+    <p class="page-desc">统一情报流、订阅、企业动态和专题研究。</p>
+  </div>
+  <div class="page-header-right">
+    {% if session.user and session.user.get('role') in ['admin', 'editor', 'operator'] %}
+    <a class="btn btn-primary" href="/intelligence/operations">情报运营</a>
+    {% endif %}
+    <a class="btn btn-outline" href="/intelligence/subscriptions">我的订阅</a>
+  </div>
+</div>
+{% endblock %}
+{% block platform_content %}
+
+<section class="filter-bar">
+  <form method="get" action="/intelligence" class="filter-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索情报标题、摘要、正文" class="filter-input">
+    <select name="intel_type" class="filter-select">
+      <option value="">全部类型</option>
+      {% for option in intel_type_options|default([]) %}
+      <option value="{{ option }}" {% if intel_type == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+    <select name="industry_direction" class="filter-select">
+      <option value="">全部方向</option>
+      {% for option in industry_direction_options|default([]) %}
+      <option value="{{ option }}" {% if industry_direction == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm" type="submit">筛选</button>
+    {% if q or intel_type or industry_direction %}
+    <a class="btn btn-sm btn-outline" href="/intelligence">清除</a>
+    {% endif %}
+  </form>
+</section>
+
+<section class="data-table-section">
+  {% if items %}
+  <div class="card-grid">
+    {% for item in items %}
+    <article class="intel-card">
+      <div class="intel-card-header">
+        <span class="badge badge-{{ item.intel_type or 'default' }}">{{ item.intel_type or '情报' }}</span>
+        {% if item.importance %}<span class="badge">重要度 {{ item.importance }}</span>{% endif %}
+      </div>
+      <h3 class="intel-card-title">
+        <a href="/intelligence/{{ item.id }}">{{ item.title }}</a>
+      </h3>
+      <p class="intel-card-summary">{{ item.summary|default('', true)|truncate(120, True) }}</p>
+      <div class="intel-card-meta">
+        <span>{{ item.source_name or '' }}</span>
+        <span>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '' }}</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">📊</div>
+    <h3>暂无已发布情报</h3>
+    <p>可稍后查看或调整筛选条件。</p>
+    <a class="btn btn-sm" href="/intelligence/subscriptions">管理订阅</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

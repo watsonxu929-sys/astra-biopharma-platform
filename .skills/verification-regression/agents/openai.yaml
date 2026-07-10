@@ -1,0 +1,3 @@
+interface:
+  display_name: "Verification Regression"
+  short_description: "Add and run focused verification and regression checks."

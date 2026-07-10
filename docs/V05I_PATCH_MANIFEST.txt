@@ -1,0 +1,45 @@
+v0.5I complete patch manifest
+
+Core code:
+- app/services/pipeline/
+- app/api/v1/pipeline.py
+- app/api/v1/router.py
+- app/v05i_pipeline.py
+- app/templates/v05i_pipeline.html
+- app/main.py
+- app/navigation.py
+- app/security.py
+
+Migration and verification:
+- scripts/migrate_v05i.py
+- scripts/verify_v05i.py
+- scripts/migrate_all.py
+- scripts/verify_all.py
+
+Workers and pilot:
+- scripts/run_pipeline_worker.py
+- scripts/pilot_real_sources.py
+- config/pilot_sources.yaml
+- run_pipeline_once_windows.bat
+- run_pipeline_worker_windows.bat
+- migrate_v05i_windows.bat
+- verify_v05i_windows.bat
+- project_tools_windows.bat
+
+Documentation:
+- docs/V05I_PIPELINE_QUALITY_CENTER.md
+- docs/V05I_PATCH_INSTALL.md
+- docs/V05I_REAL_SOURCE_ACCEPTANCE.md
+- docs/V05I_PATCH_MANIFEST.txt
+- docs/API_V1_GUIDE.md
+
+Excluded:
+- data/app.db
+- data/backups
+- data/uploads
+- logs
+- .venv
+- .git
+- real credentials
+- cookies
+- historical patch packages

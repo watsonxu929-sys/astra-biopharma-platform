@@ -1,0 +1,7 @@
+文件：app\templates\v04c1_ingestion.html
+
+在页面顶部 actions 区域中，现有“系统首页”“审核队列”按钮附近追加：
+
+<a class="button secondary" href="/review/structure">结构化工作台</a>
+
+该修改是可选项，顶部公共导航已能进入工作台。

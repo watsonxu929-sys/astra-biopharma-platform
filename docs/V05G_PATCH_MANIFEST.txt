@@ -1,0 +1,46 @@
+v0.5G semantic processing patch
+
+Included feature files:
+app/api/v1/processing.py
+app/services/processing/__init__.py
+app/services/processing/confidence_service.py
+app/services/processing/content_block_service.py
+app/services/processing/document_classifier.py
+app/services/processing/entity_extraction_service.py
+app/services/processing/processing_job_service.py
+app/services/processing/subject_matching_service.py
+app/templates/v05g_processing.html
+app/v05g_processing.py
+scripts/migrate_v05g.py
+scripts/verify_v05g.py
+scripts/run_processing_worker.py
+scripts/queue_historical_processing.py
+migrate_v05g_windows.bat
+verify_v05g_windows.bat
+run_processing_once_windows.bat
+run_processing_worker_windows.bat
+docs/V05G_PROCESSING.md
+docs/V05G_PATCH_INSTALL.md
+docs/V05G_PATCH_MANIFEST.txt
+
+Updated integration files:
+app/main.py
+app/api/v1/router.py
+app/security.py
+app/templates/v05f_collection.html
+scripts/migrate_all.py
+scripts/verify_all.py
+project_tools_windows.bat
+docs/API_V1_GUIDE.md
+
+Excluded local/generated files:
+.venv/
+venv/
+.env
+data/app.db
+data/*.db*
+data/backups/
+logs/
+__pycache__/
+*.pyc
+.pytest_cache/

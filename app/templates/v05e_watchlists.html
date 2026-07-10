@@ -1,0 +1,7 @@
+﻿{% extends "base.html" %}
+{% block title %}关注清单{% endblock %}
+{% block content %}
+<section class="page-head action-head"><div><p class="eyebrow">产业信号中心</p><h1>关注清单</h1><p>跟踪重点企业、人物、项目和赛道变化。</p></div><a class="btn primary" href="/watchlists/new">新增关注清单</a></section>
+<section class="panel"><h2>清单列表</h2>{% if result and result.data %}{% for item in result.data %}<a class="record-row" href="/watchlists/{{ item.id }}"><div><strong>{{ item.name }}</strong><p>{{ item.category or '通用关注' }}</p></div><span class="badge">{{ item.status_label or item.status or '启用' }}</span></a>{% endfor %}{% else %}<div class="empty">暂无关注清单。添加重点主体后，系统将持续跟踪相关变化。</div>{% endif %}</section>
+<section class="panel"><h2>关注主体</h2>{% if subjects %}{% for item in subjects %}<a class="record-row" href="/subjects/{{ item.subject_type }}/{{ item.subject_id }}"><div><strong>{{ item.subject_name or item.subject_id }}</strong><p>{{ item.subject_type_label or item.subject_type }}</p></div></a>{% endfor %}{% else %}<div class="empty">暂无关注主体。</div>{% endif %}</section>
+{% endblock %}

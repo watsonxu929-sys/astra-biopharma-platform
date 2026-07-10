@@ -1,0 +1,75 @@
+﻿{% extends "platform/base.html" %}
+{% block platform_breadcrumb %}
+<nav class="breadcrumb">
+  <a href="/platform">工作台</a>
+  <span class="sep">/</span>
+  <span>业务协同</span>
+</nav>
+{% endblock %}
+{% block platform_title %}资源市场{% endblock %}
+{% block platform_page_header %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">资源市场</h1>
+    <p class="page-desc">供给、需求、匹配和合作机会统一入口。</p>
+  </div>
+  <div class="page-header-right">
+    <a class="btn btn-sm" href="/resources?direction=supply">资源供给</a>
+    <a class="btn btn-sm" href="/resources?direction=demand">资源需求</a>
+    <a class="btn btn-primary" href="/resources/new">+ 发布资源</a>
+  </div>
+</div>
+{% endblock %}
+{% block platform_content %}
+
+<section class="filter-bar">
+  <form method="get" action="/resources" class="filter-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索资源标题、摘要、详情" class="filter-input">
+    <select name="direction" class="filter-select">
+      <option value="">全部方向</option>
+      <option value="supply" {% if direction == 'supply' %}selected{% endif %}>供给</option>
+      <option value="demand" {% if direction == 'demand' %}selected{% endif %}>需求</option>
+    </select>
+    <select name="resource_type" class="filter-select">
+      <option value="">全部类型</option>
+      {% for option in resource_type_options|default([]) %}
+      <option value="{{ option }}" {% if resource_type == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm" type="submit">筛选</button>
+    {% if q or direction or resource_type %}
+    <a class="btn btn-sm btn-outline" href="/resources">清除</a>
+    {% endif %}
+  </form>
+</section>
+
+<section class="data-table-section">
+  {% if items %}
+  <div class="card-grid">
+    {% for r in items %}
+    <article class="resource-card">
+      <div class="resource-card-header">
+        <span class="badge badge-{{ r.direction or 'default' }}">{{ r.direction|default('resource')|status_label }}</span>
+        <span class="badge">{{ r.resource_type or '资源' }}</span>
+      </div>
+      <h3 class="resource-card-title">
+        <a href="/resources/{{ r.id }}">{{ r.title }}</a>
+      </h3>
+      <p class="resource-card-summary">{{ r.summary|default('', true)|truncate(100, True) }}</p>
+      <div class="resource-card-meta">
+        <span>{{ r.region or '' }}</span>
+        <span>{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '' }}</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🔗</div>
+    <h3>暂无资源</h3>
+    <p>可发布供给或需求，等待匹配。</p>
+    <a class="btn btn-sm" href="/resources/new">发布资源</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

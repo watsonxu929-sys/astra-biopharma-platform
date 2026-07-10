@@ -1,0 +1,51 @@
+{% extends "platform/base.html" %}
+{% block platform_breadcrumb %}
+<nav class="breadcrumb">
+  <a href="/platform">工作台</a>
+  <span class="sep">/</span>
+  <span>产业关系</span>
+</nav>
+{% endblock %}
+{% block platform_title %}产业关系{% endblock %}
+{% block platform_page_header %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">产业关系</h1>
+    <p class="page-desc">发现人物、机构和可信连接关系。</p>
+  </div>
+  <div class="page-header-right">
+    <a class="btn btn-primary" href="/network/people">人物发现</a>
+    <a class="btn btn-outline" href="/network/organizations">机构发现</a>
+  </div>
+</div>
+{% endblock %}
+{% block platform_content %}
+
+<div class="dashboard-grid">
+  <section class="dashboard-card">
+    <h3 class="card-title">人物发现</h3>
+    <p class="card-desc">浏览产业人物档案和画像。</p>
+    <a class="btn btn-sm" href="/network/people">查看人物</a>
+  </section>
+  <section class="dashboard-card">
+    <h3 class="card-title">机构发现</h3>
+    <p class="card-desc">查看产业机构、组织和上下文。</p>
+    <a class="btn btn-sm" href="/network/organizations">查看机构</a>
+  </section>
+  <section class="dashboard-card">
+    <h3 class="card-title">推荐人脉</h3>
+    <div class="card-content">
+      {% for item in recommendations|default([]) %}
+      <p class="recommendation-item">{{ item.name|default('推荐人物') }}</p>
+      {% else %}
+      <p class="text-muted">暂无推荐。</p>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="dashboard-card">
+    <h3 class="card-title">我的产业身份</h3>
+    <p class="card-desc">维护当前账号与产业人物身份的关系。</p>
+    <a class="btn btn-sm btn-outline" href="/me/industry-profile">进入身份中心</a>
+  </section>
+</div>
+{% endblock %}

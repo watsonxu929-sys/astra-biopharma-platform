@@ -1,0 +1,3 @@
+interface:
+  display_name: "Service API Separation"
+  short_description: "Separate web routes, APIs, and shared service logic safely."

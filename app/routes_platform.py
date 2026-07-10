@@ -1,0 +1,902 @@
+﻿"""v0.6 Platform routes -- product pages for the industry connection platform."""
+from datetime import datetime
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import desc, select, func
+
+from app.database import get_db
+from app.models import Organization, Person
+from app.models_platform import (
+    IndustryTag, PersonProfile, PersonTag,
+    Favorite, Follow, ContactIntent,
+    IntelligenceItem, IntelSubscription,
+    MarketResource, CooperationOpportunity,
+    FollowUp, CollabTask, TimelineEntry,
+)
+from app.services.unified_intelligence_service import UnifiedIntelligenceService
+from app.services.unified_resource_service import UnifiedResourceService
+from app.services.unified_opportunity_service import UnifiedOpportunityService
+from app.services.platform_service import (
+    get_user_person, get_person_full_profile, upsert_person_profile, set_person_tags,
+    list_tags, seed_default_tags,
+    toggle_favorite, is_favorited, list_favorites,
+    toggle_follow, is_following,
+    create_contact_intent, respond_contact_intent, list_contact_intents,
+    discover_people, recommend_people,
+    list_intelligence, personalized_feed,
+    list_market_resources, match_resources,
+    create_opportunity, update_opportunity_stage, get_opportunity_timeline,
+    create_follow_up, create_collab_task, list_user_tasks,
+    unified_search,
+)
+
+STATUS_LABELS = {
+    # 合作机会阶段
+    "lead": "线索", "contacted": "已联系", "qualified": "已确认",
+    "negotiating": "洽谈中", "proposal": "方案阶段", "due_diligence": "尽职调查",
+    "agreement": "协议阶段", "won": "已达成", "lost": "已失效", "closed": "已关闭",
+    # 联系意向状态
+    "identified": "已识别", "evaluating": "评估中", "active": "进行中", "paused": "已暂停",
+    "pending": "待处理", "accepted": "已接受", "declined": "已拒绝", "ignored": "已忽略",
+    # 任务状态
+    "completed": "已完成", "in_progress": "进行中", "todo": "待办", "cancelled": "已取消",
+    # 资源/情报状态
+    "published": "已发布", "draft": "草稿", "archived": "已归档",
+    # 会员等级
+    "standard": "标准", "premium": "高级", "exited": "已退出",
+    # 审核状态
+    "submitted": "已提交", "approved": "已通过", "rejected": "已驳回",
+}
+def status_label(value: str) -> str:
+    """Map English status/stage to Chinese label."""
+    return STATUS_LABELS.get(str(value).lower(), str(value))
+
+
+router = APIRouter()
+
+# Initialize template engine once with custom filters
+from fastapi.templating import Jinja2Templates
+from pathlib import Path
+_BASE_DIR = Path(__file__).resolve().parent
+_templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
+_templates.env.filters["status_label"] = status_label
+
+
+def render(request: Request, name: str, **context):
+    """Render a Jinja2 template with platform status_label filter."""
+    return _templates.TemplateResponse(request=request, name=name, context=context)
+
+
+def is_platform_admin(request: Request) -> bool:
+    sec = request.scope.get("security_context", {})
+    return bool(sec.get("can_manage_users") or "platform:manage" in sec.get("permissions", []))
+
+
+def get_current_user_id(request: Request) -> int | None:
+    sec = request.scope.get("security_context", {})
+    return sec.get("user", {}).get("id")
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  HOME  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/platform", response_class=HTMLResponse)
+def platform_home(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    # Card 1: Network
+    rec_people = recommend_people(db, user_id, limit=4) if user_id is not None else []
+    recent_people = list(db.scalars(
+        select(Person).where(Person.is_active == True).order_by(desc(Person.created_at)).limit(4)
+    ).all())
+    # Card 2: Intelligence
+    feed = personalized_feed(db, user_id, limit=4)
+    # Card 3: Resources
+    supplies = list(db.scalars(
+        select(MarketResource).where(MarketResource.status == "published", MarketResource.direction == "supply").order_by(desc(MarketResource.created_at)).limit(4)
+    ).all())
+    demands = list(db.scalars(
+        select(MarketResource).where(MarketResource.status == "published", MarketResource.direction == "demand").order_by(desc(MarketResource.created_at)).limit(4)
+    ).all())
+    # Card 4: Opportunities
+    opps = list(db.scalars(
+        select(CooperationOpportunity).where(CooperationOpportunity.status == "active").order_by(desc(CooperationOpportunity.updated_at)).limit(4)
+    ).all())
+
+    return render(request, "platform/home.html",
+        rec_people=rec_people, recent_people=recent_people,
+        feed=feed, supplies=supplies, demands=demands,
+        opps=opps, user_id=user_id,
+    )
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  IDENTITY CENTER  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/me/industry-profile", response_class=HTMLResponse)
+def industry_profile(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403, "please login first")
+    person = get_user_person(db, user_id)
+    linked = [person] if person else []
+    try:
+        from app.services.membership_access_service import get_membership_context
+        memberships = get_membership_context({"id": user_id}, db_path=None).get("memberships", [])
+    except Exception:
+        memberships = []
+
+    all_tags = list_tags(db)
+    person_data = None
+    my_tags = []
+    if person:
+        person_data = get_person_full_profile(db, person.id)
+        my_tags = person_data.get("tags", [])
+
+    return render(request, "platform/identity.html",
+        linked=linked, memberships=memberships, person_data=person_data,
+        all_tags=all_tags, my_tags=my_tags, user_id=user_id,
+    )
+
+@router.post("/me/industry-profile/update")
+async def update_industry_profile(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403, "璇峰厛鐧诲綍")
+    form = await request.form()
+    person = get_user_person(db, user_id)
+    if person is None:
+        raise HTTPException(404, "当前账号尚未绑定有效人物，请先提交身份关联申请")
+    submitted_person_id = int(form.get("person_id", "0") or 0)
+    if submitted_person_id and submitted_person_id != person.id:
+        raise HTTPException(403, "不能修改其他人物档案")
+    person_id = person.id
+
+    profile_fields = ["title", "bio", "city", "province", "cooperation_preferences",
+                      "contact_email", "contact_phone", "contact_wechat", "contact_visibility"]
+    profile_data = {k: str(form.get(k, "")).strip() or None for k in profile_fields}
+    upsert_person_profile(db, person_id, **profile_data)
+
+    # Update tags
+    tag_ids = [int(v) for k, v in form.multi_items() if k == "tag_ids" and v]
+    if tag_ids:
+        set_person_tags(db, person_id, tag_ids)
+
+    # Update basic person fields
+    person = db.get(Person, person_id)
+    if person:
+        person.name = str(form.get("name", person.name)).strip()
+        person.public_role = str(form.get("public_role", person.public_role or "")).strip() or None
+        person.ability_tags = str(form.get("ability_tags", person.ability_tags or "")).strip() or None
+        db.commit()
+
+    return RedirectResponse("/me/industry-profile", 303)
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  NETWORK  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/network", response_class=HTMLResponse)
+def network_home(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    rec = recommend_people(db, user_id, limit=8) if user_id is not None else []
+    my_contacts = list_contact_intents(db, user_id, "sent") if user_id is not None else []
+    my_follows = list(db.scalars(select(Follow).where(Follow.user_id == user_id)).all()) if user_id is not None else []
+    return render(request, "platform/network.html", rec=rec, my_contacts=my_contacts, my_follows=my_follows, user_id=user_id)
+
+
+@router.get("/network/people", response_class=HTMLResponse)
+def network_people(
+    request: Request,
+    name: str = Query(""),
+    user_type: str = Query(""),
+    industry_direction: str = Query(""),
+    capability: str = Query(""),
+    need: str = Query(""),
+    organization: str = Query(""),
+    region: str = Query(""),
+    page: int = Query(1),
+    db: Session = Depends(get_db),
+):
+    user_id = get_current_user_id(request)
+    result = discover_people(db, current_user_id=user_id, name=name, user_type=user_type,
+        industry_direction=industry_direction, capability=capability, need=need,
+        organization=organization, region=region, page=page)
+    all_tags = list_tags(db)
+    return render(request, "platform/people_discovery.html",
+        items=result["items"], total=result["total"], page=result["page"],
+        all_tags=all_tags, name_filter=name, user_type=user_type, industry_direction=industry_direction,
+        capability=capability, need=need, organization=organization, region=region,
+        user_id=user_id,
+    )
+
+
+@router.get("/network/people/{person_id}", response_class=HTMLResponse)
+def person_card(request: Request, person_id: int, db: Session = Depends(get_db)):
+    person = db.get(Person, person_id)
+    if not person:
+        raise HTTPException(404, "request failed")
+    person_data = get_person_full_profile(db, person_id)
+    user_id = get_current_user_id(request)
+    fav = is_favorited(db, user_id, "person", person_id) if user_id is not None else False
+    following = is_following(db, user_id, "person", person_id) if user_id is not None else False
+    return render(request, "platform/person_card.html",
+        person=person, person_data=person_data, is_favorited=fav, is_following=following, user_id=user_id)
+
+
+@router.get("/network/organizations", response_class=HTMLResponse)
+def network_organizations(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+    stmt = select(Organization).where(Organization.is_active == True).order_by(Organization.standard_name)
+    if q:
+        stmt = stmt.where(Organization.standard_name.contains(q))
+    orgs = list(db.scalars(stmt).all())
+    return render(request, "platform/organizations.html", orgs=orgs, q=q)
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  CONTACT INTENTS  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.post("/network/contact-intent/create")
+async def create_intent(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403, "璇峰厛鐧诲綍")
+    form = await request.form()
+    ci = create_contact_intent(db, from_user_id=user_id,
+        target_type=form.get("target_type", "person"),
+        target_id=int(form.get("target_id", 0)),
+        intent_type=form.get("intent_type", "connection"),
+        message=form.get("message", ""))
+    return RedirectResponse(f"/network/people/{form.get('target_id')}", 303)
+
+
+@router.post("/network/contact-intent/{intent_id}/respond")
+async def respond_intent(intent_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403, "璇峰厛鐧诲綍")
+    form = await request.form()
+    ci = respond_contact_intent(db, intent_id, form.get("status", "accepted"),
+        form.get("response_message", ""), user_id)
+    if not ci:
+        raise HTTPException(404, "request failed")
+    return RedirectResponse("/network", 303)
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  INTELLIGENCE  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/intelligence", response_class=HTMLResponse)
+def intelligence_center(
+    request: Request,
+    intel_type: str = Query(""),
+    industry_direction: str = Query(""),
+    q: str = Query(""),
+    page: int = Query(1),
+    db: Session = Depends(get_db),
+):
+    user_id = get_current_user_id(request)
+    result = list_intelligence(db, user_id=user_id,
+        intel_type=intel_type or None,
+        industry_direction=industry_direction or None,
+        q=q or None, page=page)
+    feed = personalized_feed(db, user_id, limit=6) if user_id is not None else []
+    intel_type_options = [v for v in db.scalars(select(IntelligenceItem.intel_type).where(IntelligenceItem.status == "published", IntelligenceItem.intel_type.is_not(None), IntelligenceItem.intel_type != "").distinct().order_by(IntelligenceItem.intel_type)).all() if v]
+    industry_direction_options = [v for v in db.scalars(select(IntelligenceItem.industry_directions).where(IntelligenceItem.status == "published", IntelligenceItem.industry_directions.is_not(None), IntelligenceItem.industry_directions != "").distinct().order_by(IntelligenceItem.industry_directions)).all() if v]
+    return render(request, "platform/intelligence.html",
+        items=result["items"], total=result["total"], page=result["page"],
+        feed=feed, intel_type=intel_type, industry_direction=industry_direction,
+        q=q, user_id=user_id,
+        intel_type_options=intel_type_options,
+        industry_direction_options=industry_direction_options,
+    )
+
+
+@router.get("/intelligence/{item_id:int}", response_class=HTMLResponse)
+def intelligence_detail(item_id: int, request: Request, db: Session = Depends(get_db)):
+    item = UnifiedIntelligenceService(db).detail(item_id)
+    user_id = get_current_user_id(request)
+    fav = is_favorited(db, user_id, "intelligence", item_id) if user_id is not None else False
+    return render(request, "platform/intelligence_detail.html", item=item, is_favorited=fav, user_id=user_id)
+
+
+@router.get("/intelligence/subscriptions", response_class=HTMLResponse)
+def intelligence_subscriptions(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    subs = list(db.scalars(select(IntelSubscription).where(IntelSubscription.user_id == user_id)).all())
+    return render(request, "platform/subscriptions.html", subs=subs, user_id=user_id)
+
+
+@router.post("/intelligence/subscriptions/save")
+async def save_subscription(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    sub = IntelSubscription(
+        user_id=user_id,
+        intel_types=form.get("intel_types"),
+        industry_directions=form.get("industry_directions"),
+        companies=form.get("companies"),
+        tags=form.get("tags"),
+        regions=form.get("regions"),
+        min_importance=int(form.get("min_importance", "1")),
+    )
+    db.add(sub)
+    db.commit()
+    return RedirectResponse("/intelligence/subscriptions", 303)
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  RESOURCES  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/resources", response_class=HTMLResponse)
+def resource_market(
+    request: Request,
+    direction: str = Query(""),
+    resource_type: str = Query(""),
+    q: str = Query(""),
+    industry_direction: str = Query(""),
+    region: str = Query(""),
+    page: int = Query(1),
+    db: Session = Depends(get_db),
+):
+    result = list_market_resources(db,
+        direction=direction or None, resource_type=resource_type or None,
+        q=q or None,
+        industry_direction=industry_direction or None, region=region or None, page=page)
+    resource_type_options = [v for v in db.scalars(select(MarketResource.resource_type).where(MarketResource.status == "published", MarketResource.resource_type.is_not(None), MarketResource.resource_type != "").distinct().order_by(MarketResource.resource_type)).all() if v]
+    return render(request, "platform/resources.html",
+        items=result["items"], total=result["total"], page=result["page"],
+        direction=direction, resource_type=resource_type, q=q,
+        industry_direction=industry_direction, region=region,
+        resource_type_options=resource_type_options,
+    )
+
+
+@router.get("/resources/{resource_id:int}", response_class=HTMLResponse)
+def resource_detail(resource_id: int, request: Request, db: Session = Depends(get_db)):
+    resource = UnifiedResourceService(db).detail(resource_id)
+    user_id = get_current_user_id(request)
+    fav = is_favorited(db, user_id, "resource", resource_id) if user_id is not None else False
+    matches = match_resources(db, resource_id, limit=6)
+    return render(request, "platform/resource_detail.html",
+        resource=resource, is_favorited=fav, matches=matches, user_id=user_id)
+
+
+@router.get("/resources/new", response_class=HTMLResponse)
+def new_resource(request: Request):
+    return render(request, "platform/resource_form.html", resource=None, mode="new")
+
+
+@router.post("/resources/new")
+async def create_resource(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    resource = UnifiedResourceService(db).create(actor_user_id=user_id, fields={
+        "title": form.get("title", ""),
+        "direction": form.get("direction", "supply"),
+        "resource_type": form.get("resource_type", "其他"),
+        "summary": form.get("summary"),
+        "description": form.get("description"),
+        "region": form.get("region"),
+        "industry_direction": form.get("industry_direction"),
+        "tags": form.get("tags"),
+        "cooperation_mode": form.get("cooperation_mode"),
+        "budget_note": form.get("budget_note"),
+        "contact_visibility": form.get("contact_visibility", "connected"),
+        "status": "published",
+    })
+    return RedirectResponse(f"/resources/{resource.id}", 303)
+
+
+@router.post("/resources/{resource_id}/status")
+async def update_resource_status(resource_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    form = await request.form()
+    UnifiedResourceService(db).update_status(resource_id, actor_user_id=user_id, status=form.get("status", "published"), is_admin=is_platform_admin(request))
+    return RedirectResponse(f"/resources/{resource_id}", 303)
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  OPPORTUNITIES  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/opportunities", response_class=HTMLResponse)
+def opportunities(request: Request,
+    status: str = Query(""),
+    stage: str = Query(""),
+    q: str = Query(""),
+    page: int = Query(1),
+    db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    result = UnifiedOpportunityService(db).list(
+        user_id=user_id, is_admin=is_platform_admin(request),
+        status=status or "active", stage=stage, q=q, page=page, page_size=20)
+    return render(request, "platform/opportunities.html",
+        opps=result["items"], total=result["total"],
+        page=result["page"], status=status or "active", stage=stage, q=q, user_id=user_id)
+
+
+@router.get("/opportunities/{opp_id}", response_class=HTMLResponse)
+def opportunity_detail(opp_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    svc = UnifiedOpportunityService(db)
+    opp = svc.detail(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
+    timeline = svc.timeline(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
+    follow_ups = svc.follow_ups(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
+    tasks = svc.tasks(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
+    return render(request, "platform/opportunity_detail.html",
+        opp=opp, timeline=timeline, follow_ups=follow_ups, tasks=tasks, user_id=user_id)
+
+
+@router.post("/opportunities/create")
+async def create_opp(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    opp = create_opportunity(db,
+        title=form.get("title", ""),
+        opp_type=form.get("opp_type", "鍏朵粬"),
+        initiator_id=user_id,
+        description=form.get("description"),
+        expected_outcome=form.get("expected_outcome"),
+        status="active",
+        visibility=form.get("visibility", "organization"),
+    )
+    return RedirectResponse(f"/opportunities/{opp.id}", 303)
+
+
+@router.post("/opportunities/{opp_id}/stage")
+async def update_stage(opp_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    form = await request.form()
+    opp = UnifiedOpportunityService(db).update_stage(opp_id, actor_user_id=user_id, stage=form.get("stage", "lead"), is_admin=is_platform_admin(request))
+    if not opp:
+        raise HTTPException(404)
+    return RedirectResponse(f"/opportunities/{opp_id}", 303)
+
+
+@router.post("/opportunities/{opp_id}/follow-up")
+async def add_follow_up(opp_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    create_follow_up(db,
+        opportunity_id=opp_id,
+        follow_type=form.get("follow_type", "note"),
+        content=form.get("content", ""),
+        created_by=user_id,
+        visibility=form.get("visibility", "organization"),
+    )
+    return RedirectResponse(f"/opportunities/{opp_id}", 303)
+
+
+@router.post("/opportunities/{opp_id}/task")
+async def add_task(opp_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    create_collab_task(db,
+        title=form.get("title", ""),
+        opportunity_id=opp_id,
+        owner_id=int(form.get("owner_id", user_id)),
+        priority=form.get("priority", "P2"),
+        created_by=user_id,
+    )
+    return RedirectResponse(f"/opportunities/{opp_id}", 303)
+
+
+@router.post("/opportunities/convert/{intent_id}")
+async def convert_intent_to_opp(intent_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    opp = UnifiedOpportunityService(db).convert_contact_intent(intent_id=intent_id, actor_user_id=user_id, is_admin=is_platform_admin(request))
+    return RedirectResponse(f"/opportunities/{opp.id}", 303)
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  WORKSPACE  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/workspace", response_class=HTMLResponse)
+def workspace(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    tasks = list_user_tasks(db, user_id)
+    my_opps = list(db.scalars(
+        select(CooperationOpportunity).where(
+            CooperationOpportunity.initiator_id == user_id,
+            CooperationOpportunity.status == "active",
+        ).order_by(desc(CooperationOpportunity.updated_at))
+    ).all())
+    pending_intents = list_contact_intents(db, user_id, "received") if user_id is not None else []
+    pending_intents = [c for c in pending_intents if c.status == "pending"]
+    my_resources = list(db.scalars(
+        select(MarketResource).where(MarketResource.publisher_id == user_id).order_by(desc(MarketResource.updated_at))
+    ).all())
+    favs = list_favorites(db, user_id)
+    return render(request, "platform/workspace.html",
+        tasks=tasks, my_opps=my_opps, pending_intents=pending_intents,
+        my_resources=my_resources, favs=favs, user_id=user_id,
+    )
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  FAVORITES & FOLLOWS (AJAX)  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.post("/api/v1/favorites/toggle")
+async def api_toggle_favorite(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    result = toggle_favorite(db, user_id, form.get("target_type", ""), int(form.get("target_id", 0)))
+    return result
+
+
+@router.post("/api/v1/follows/toggle")
+async def api_toggle_follow(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    result = toggle_follow(db, user_id, form.get("target_type", ""), int(form.get("target_id", 0)))
+    return result
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  UNIFIED SEARCH  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/platform/search", response_class=HTMLResponse)
+def platform_search(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+    result = unified_search(db, q)
+    return render(request, "platform/search_results.html", result=result)
+
+
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  ADMIN  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+
+@router.get("/admin/platform", response_class=HTMLResponse)
+def admin_platform(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    sec = request.scope.get("security_context", {})
+    if not sec.get("can_manage_users") and "platform:manage" not in sec.get("permissions", []):
+        raise HTTPException(403, "闇€瑕佺鐞嗗憳鏉冮檺")
+    tags = list_tags(db)
+    return render(request, "platform/admin.html", tags=tags)
+
+
+@router.post("/admin/tags/create")
+async def admin_create_tag(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    tag_key = f"{form.get('tag_group')}:{form.get('label')}"
+    existing = db.scalar(select(IndustryTag).where(IndustryTag.tag_key == tag_key))
+    if not existing:
+        db.add(IndustryTag(
+            tag_key=tag_key,
+            tag_group=form.get("tag_group", ""),
+            label=form.get("label", ""),
+        ))
+        db.commit()
+    return RedirectResponse("/admin/platform", 303)
+
+
+
+
+
+
+
+
+
+
+# v0.6D data integrity admin
+from app.services.data_integrity_service import connect as _di_connect, current_fk_issues as _di_current_fk_issues, sync_issues as _di_sync_issues, list_registered_issues as _di_list_issues, issue_summary as _di_summary, audit_trail as _di_audit_trail, update_issue_status as _di_update_status
+
+
+def _can_manage_data_integrity(request: Request) -> bool:
+    sec = request.scope.get("security_context", {})
+    permissions = set(sec.get("permissions") or [])
+    return bool(sec.get("can_manage_users") or "review_data" in permissions or "manage_users" in permissions)
+
+
+@router.get("/admin", response_class=HTMLResponse)
+def admin_root():
+    return RedirectResponse("/admin/platform", status_code=303)
+
+
+@router.get("/admin/data-integrity", response_class=HTMLResponse)
+def admin_data_integrity(request: Request, status: str = "", table: str = "", severity: str = ""):
+    if not _can_manage_data_integrity(request):
+        raise HTTPException(403, "data integrity admin permission required")
+    with _di_connect() as conn:
+        issues = _di_current_fk_issues(conn)
+        _di_sync_issues(conn, issues, actor="admin_page_recheck")
+        conn.commit()
+        return render(request, "platform/data_integrity.html", summary=_di_summary(conn), issues=_di_list_issues(conn, status=status, table=table, severity=severity), audit_entries=_di_audit_trail(conn), filters={"status": status, "table": table, "severity": severity})
+
+
+@router.post("/admin/data-integrity/{issue_id}/status")
+def admin_data_integrity_status(request: Request, issue_id: int, status: str = Form(...), note: str = Form("")):
+    if not _can_manage_data_integrity(request):
+        raise HTTPException(403, "data integrity admin permission required")
+    actor = request.scope.get("security_context", {}).get("user", {}).get("username", "admin")
+    with _di_connect() as conn:
+        _di_update_status(conn, issue_id, status=status, actor=actor, note=note)
+        conn.commit()
+    return RedirectResponse("/admin/data-integrity", status_code=303)
+
+# v0.6E product recovery routes
+from app.services.product_recovery_service import pipeline_counts as _v06e_pipeline_counts, latest_pipeline_records as _v06e_pipeline_records, publish_collection_item as _v06e_publish_collection_item
+
+
+def _v06e_permissions(request: Request) -> set[str]:
+    return set(request.scope.get("security_context", {}).get("permissions") or [])
+
+
+def _can_manage_people_orgs(request: Request) -> bool:
+    sec = request.scope.get("security_context", {})
+    perms = _v06e_permissions(request)
+    return bool(sec.get("can_manage_users") or "manage_users" in perms or "edit_data" in perms or "review_data" in perms)
+
+
+def _can_manage_intelligence(request: Request) -> bool:
+    sec = request.scope.get("security_context", {})
+    perms = _v06e_permissions(request)
+    return bool(sec.get("can_manage_users") or "manage_users" in perms or "review_data" in perms or "manage_monitoring" in perms)
+
+
+def _next_external_id(prefix: str) -> str:
+    return f"{prefix}-{datetime.now():%Y%m%d%H%M%S%f}"
+
+
+@router.get("/intelligence/operations", response_class=HTMLResponse)
+def intelligence_operations(request: Request):
+    if not _can_manage_intelligence(request):
+        raise HTTPException(403, "intelligence operations permission required")
+    records = _v06e_pipeline_records()
+    return render(
+        request,
+        "platform/intelligence_operations.html",
+        counts=_v06e_pipeline_counts(),
+        records=records,
+        latest_jobs=records.get("jobs", []),
+        latest_items=records.get("items", []),
+        latest_candidates=records.get("candidates", []),
+    )
+
+
+@router.get("/admin/people", response_class=HTMLResponse)
+def admin_people(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    stmt = select(Person).order_by(desc(Person.created_at))
+    if q:
+        stmt = stmt.where((Person.name.contains(q)) | (Person.public_role.contains(q)) | (Person.organization_network.contains(q)))
+    people = list(db.scalars(stmt.limit(100)).all())
+    return render(request, "platform/admin_people.html", people=people, person=None, q=q)
+
+
+@router.post("/admin/people")
+async def admin_create_person(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    form = await request.form()
+    person = Person(
+        external_id=_next_external_id("PER"),
+        name=str(form.get("name", "")).strip(),
+        public_role=str(form.get("public_role", "")).strip() or None,
+        organization_network=str(form.get("organization_network", "")).strip() or None,
+        ability_tags=str(form.get("ability_tags", "")).strip() or None,
+        value_provided=str(form.get("value_provided", "")).strip() or None,
+        visibility=str(form.get("visibility", "内部")).strip() or "内部",
+        verification_status=str(form.get("verification_status", "待核验")).strip() or "待核验",
+        manually_confirmed=True,
+        is_active=bool(form.get("is_active")),
+    )
+    db.add(person)
+    db.commit()
+    return RedirectResponse(f"/admin/people/{person.id}", 303)
+
+
+@router.get("/admin/people/{person_id:int}", response_class=HTMLResponse)
+def admin_person_detail(person_id: int, request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    person = db.get(Person, int(person_id))
+    if not person:
+        raise HTTPException(404, "person not found")
+    people = list(db.scalars(select(Person).order_by(desc(Person.created_at)).limit(100)).all())
+    return render(request, "platform/admin_people.html", people=people, person=person, q=q)
+
+
+@router.post("/admin/people/{person_id:int}/update")
+async def admin_update_person(person_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    person = db.get(Person, int(person_id))
+    if not person:
+        raise HTTPException(404, "person not found")
+    form = await request.form()
+    person.name = str(form.get("name", person.name)).strip() or person.name
+    person.public_role = str(form.get("public_role", "")).strip() or None
+    person.organization_network = str(form.get("organization_network", "")).strip() or None
+    person.ability_tags = str(form.get("ability_tags", "")).strip() or None
+    person.value_provided = str(form.get("value_provided", "")).strip() or None
+    person.visibility = str(form.get("visibility", person.visibility)).strip() or person.visibility
+    person.verification_status = str(form.get("verification_status", person.verification_status)).strip() or person.verification_status
+    person.is_active = bool(form.get("is_active"))
+    person.manually_confirmed = True
+    if not person.is_active:
+        person.deactivated_at = datetime.now()
+    db.commit()
+    return RedirectResponse(f"/admin/people/{person.id}", 303)
+
+
+@router.get("/admin/organizations", response_class=HTMLResponse)
+def admin_organizations(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    stmt = select(Organization).order_by(desc(Organization.created_at))
+    if q:
+        stmt = stmt.where((Organization.standard_name.contains(q)) | (Organization.region.contains(q)) | (Organization.industry_tags.contains(q)))
+    org_rows = list(db.scalars(stmt.limit(100)).all())
+    orgs = []
+    for org in org_rows:
+        people_count = db.scalar(select(func.count()).select_from(Person).where(Person.organization_network.contains(org.standard_name))) or 0
+        orgs.append({"org": org, "people_count": int(people_count)})
+    return render(request, "platform/admin_organizations.html", orgs=orgs, org=None, related_people=[], q=q)
+
+
+@router.post("/admin/organizations")
+async def admin_create_organization(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    form = await request.form()
+    org = Organization(
+        external_id=_next_external_id("ORG"),
+        standard_name=str(form.get("standard_name", "")).strip(),
+        org_type=str(form.get("org_type", "")).strip() or None,
+        region=str(form.get("region", "")).strip() or None,
+        industry_tags=str(form.get("industry_tags", "")).strip() or None,
+        resources=str(form.get("resources", "")).strip() or None,
+        needs=str(form.get("needs", "")).strip() or None,
+        visibility=str(form.get("visibility", "内部")).strip() or "内部",
+        verification_status=str(form.get("verification_status", "待核验")).strip() or "待核验",
+        manually_confirmed=True,
+        is_active=bool(form.get("is_active")),
+    )
+    db.add(org)
+    db.commit()
+    return RedirectResponse(f"/admin/organizations/{org.id}", 303)
+
+
+@router.get("/admin/organizations/{org_id:int}", response_class=HTMLResponse)
+def admin_organization_detail(org_id: int, request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    org = db.get(Organization, int(org_id))
+    if not org:
+        raise HTTPException(404, "organization not found")
+    related_people = list(db.scalars(select(Person).where(Person.organization_network.contains(org.standard_name)).limit(50)).all())
+    org_rows = list(db.scalars(select(Organization).order_by(desc(Organization.created_at)).limit(100)).all())
+    orgs = [{"org": item, "people_count": int(db.scalar(select(func.count()).select_from(Person).where(Person.organization_network.contains(item.standard_name))) or 0)} for item in org_rows]
+    return render(request, "platform/admin_organizations.html", orgs=orgs, org=org, related_people=related_people, q=q)
+
+
+@router.post("/admin/organizations/{org_id:int}/update")
+async def admin_update_organization(org_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    org = db.get(Organization, int(org_id))
+    if not org:
+        raise HTTPException(404, "organization not found")
+    form = await request.form()
+    org.standard_name = str(form.get("standard_name", org.standard_name)).strip() or org.standard_name
+    org.org_type = str(form.get("org_type", "")).strip() or None
+    org.region = str(form.get("region", "")).strip() or None
+    org.industry_tags = str(form.get("industry_tags", "")).strip() or None
+    org.resources = str(form.get("resources", "")).strip() or None
+    org.needs = str(form.get("needs", "")).strip() or None
+    org.visibility = str(form.get("visibility", org.visibility)).strip() or org.visibility
+    org.verification_status = str(form.get("verification_status", org.verification_status)).strip() or org.verification_status
+    org.is_active = bool(form.get("is_active"))
+    org.manually_confirmed = True
+    if not org.is_active:
+        org.deactivated_at = datetime.now()
+    db.commit()
+    return RedirectResponse(f"/admin/organizations/{org.id}", 303)
+
+
+@router.get("/admin/intelligence", response_class=HTMLResponse)
+def admin_intelligence(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_intelligence(request):
+        raise HTTPException(403, "intelligence admin permission required")
+    items = list(db.scalars(select(IntelligenceItem).order_by(desc(IntelligenceItem.updated_at), desc(IntelligenceItem.created_at)).limit(100)).all())
+    return render(request, "platform/admin_intelligence.html", items=items, item=None)
+
+
+@router.post("/admin/intelligence")
+async def admin_create_intelligence(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_intelligence(request):
+        raise HTTPException(403, "intelligence admin permission required")
+    form = await request.form()
+    status = str(form.get("status", "draft"))
+    item = IntelligenceItem(
+        title=str(form.get("title", "")).strip(),
+        summary=str(form.get("summary", "")).strip() or None,
+        content=str(form.get("content", "")).strip() or None,
+        intel_type=str(form.get("intel_type", "manual")).strip() or "manual",
+        companies=str(form.get("companies", "")).strip() or None,
+        industry_directions=str(form.get("industry_directions", "")).strip() or None,
+        tags=str(form.get("tags", "")).strip() or None,
+        source_name="manual",
+        source_url=str(form.get("source_url", "")).strip() or None,
+        status=status,
+        visibility=str(form.get("visibility", "public")).strip() or "public",
+        credibility=int(form.get("credibility", 3) or 3),
+        importance=int(form.get("importance", 2) or 2),
+        published_at=datetime.now() if status == "published" else None,
+        created_by=get_current_user_id(request),
+    )
+    db.add(item)
+    db.commit()
+    return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
+
+
+@router.get("/admin/intelligence/{item_id:int}", response_class=HTMLResponse)
+def admin_intelligence_detail(item_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_intelligence(request):
+        raise HTTPException(403, "intelligence admin permission required")
+    item = db.get(IntelligenceItem, int(item_id))
+    if not item:
+        raise HTTPException(404, "intelligence not found")
+    items = list(db.scalars(select(IntelligenceItem).order_by(desc(IntelligenceItem.updated_at), desc(IntelligenceItem.created_at)).limit(100)).all())
+    return render(request, "platform/admin_intelligence.html", items=items, item=item)
+
+
+@router.post("/admin/intelligence/{item_id:int}/update")
+async def admin_update_intelligence(item_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_intelligence(request):
+        raise HTTPException(403, "intelligence admin permission required")
+    item = db.get(IntelligenceItem, int(item_id))
+    if not item:
+        raise HTTPException(404, "intelligence not found")
+    form = await request.form()
+    item.title = str(form.get("title", item.title)).strip() or item.title
+    item.summary = str(form.get("summary", "")).strip() or None
+    item.content = str(form.get("content", "")).strip() or None
+    item.intel_type = str(form.get("intel_type", item.intel_type)).strip() or item.intel_type
+    item.companies = str(form.get("companies", "")).strip() or None
+    item.industry_directions = str(form.get("industry_directions", "")).strip() or None
+    item.tags = str(form.get("tags", "")).strip() or None
+    item.source_url = str(form.get("source_url", "")).strip() or None
+    item.visibility = str(form.get("visibility", item.visibility)).strip() or item.visibility
+    item.credibility = int(form.get("credibility", item.credibility) or item.credibility)
+    item.importance = int(form.get("importance", item.importance) or item.importance)
+    old_status = item.status
+    item.status = str(form.get("status", item.status)).strip() or item.status
+    if item.status == "published" and old_status != "published":
+        item.published_at = datetime.now()
+    item.updated_at = datetime.now()
+    db.commit()
+    return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
+
+
+@router.post("/admin/intelligence/{item_id:int}/publish")
+def admin_publish_intelligence(item_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_intelligence(request):
+        raise HTTPException(403, "intelligence admin permission required")
+    item = db.get(IntelligenceItem, int(item_id))
+    if not item:
+        raise HTTPException(404, "intelligence not found")
+    item.status = "published"
+    item.visibility = item.visibility or "public"
+    item.published_at = item.published_at or datetime.now()
+    item.updated_at = datetime.now()
+    db.commit()
+    return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
+
+
+@router.post("/admin/intelligence/collection/{collection_item_id:int}/publish")
+def admin_publish_collection_item(collection_item_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_intelligence(request):
+        raise HTTPException(403, "intelligence admin permission required")
+    item = _v06e_publish_collection_item(db, int(collection_item_id), actor_user_id=get_current_user_id(request), status="published")
+    return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
+
+

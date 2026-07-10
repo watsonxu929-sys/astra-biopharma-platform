@@ -1,0 +1,50 @@
+﻿{% extends "base.html" %}
+{% block title %}主体中心{% endblock %}
+{% block content %}
+<section class="page-head action-head">
+  <div>
+    <p class="eyebrow">主体中心</p>
+    <h1>主体中心</h1>
+    <p>统一查看企业/机构、人物和项目，支持按名称、编号、标签和状态筛选。</p>
+    <p class="next-step">当前重点：优先补齐缺失核心字段，并处理存在待审核数据的主体。</p>
+  </div>
+  <a class="button primary" href="/intelligence/new">新增情报</a>
+</section>
+<form class="search-bar subject-filter" method="get" action="/subjects">
+  <input name="q" value="{{ filters.q }}" placeholder="按名称或系统编号搜索">
+  <select name="subject_type">
+    <option value="">全部主体</option>
+    {% for key, label in subject_labels.items() %}
+    <option value="{{ key }}" {% if filters.subject_type == key %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <input name="tag" value="{{ filters.tag }}" placeholder="标签/赛道">
+  <select name="status">
+    <option value="">全部状态</option>
+    <option value="inactive" {% if filters.status == "inactive" %}selected{% endif %}>已停用</option>
+    <option value="待核验" {% if filters.status == "待核验" %}selected{% endif %}>待核验</option>
+    <option value="已确认" {% if filters.status == "已确认" %}selected{% endif %}>已确认</option>
+  </select>
+  <select name="has_review">
+    <option value="">审核状态不限</option>
+    <option value="yes" {% if filters.has_review == "yes" %}selected{% endif %}>存在待审核</option>
+    <option value="no" {% if filters.has_review == "no" %}selected{% endif %}>无待审核</option>
+  </select>
+  <label class="inline-check"><input type="checkbox" name="missing_core" value="true" {% if filters.missing_core %}checked{% endif %}> 缺少核心字段</label>
+  <button class="button secondary" type="submit">筛选</button>
+</form>
+<section class="subject-stats">
+  {% for key, label in subject_labels.items() %}<div class="panel mini-stat"><span>{{ label }}</span><strong>{{ counts.get(key, 0) }}</strong></div>{% endfor %}
+  <div class="panel mini-stat"><span>当前结果</span><strong>{{ total }}</strong></div>
+</section>
+<section class="panel">
+  <div class="panel-title"><h2>主体列表</h2><span class="muted">第 {{ page }} / {{ pages }} 页，每页 {{ page_size }} 条</span></div>
+  <div class="subject-table"><table><thead><tr><th>类型</th><th>系统编号</th><th>名称</th><th>核心标签</th><th>完整度</th><th>待审核</th><th>状态</th><th>操作</th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item.type_label }}</td><td><span class="code">{{ item.external_id }}</span></td><td><a href="{{ item.profile_url }}"><strong>{{ item.name }}</strong></a></td><td class="clip-text">{{ item.tags or "暂无标签" }}</td><td><span class="badge">{{ item.completeness }}%</span></td><td>{{ item.review_open_count }}</td><td><span class="badge {% if item.is_active == false %}inactive{% endif %}">{{ item.status }}</span></td><td><a href="{{ item.profile_url }}">统一档案</a> · <a href="{{ item.detail_url }}">原详情</a></td></tr>{% else %}<tr><td colspan="8" class="empty">暂无匹配主体</td></tr>{% endfor %}</tbody></table></div>
+  <div class="pager">
+    {% set query_base = "subject_type=" ~ filters.subject_type ~ "&q=" ~ filters.q ~ "&tag=" ~ filters.tag ~ "&status=" ~ filters.status ~ "&has_review=" ~ filters.has_review ~ ("&missing_core=true" if filters.missing_core else "") %}
+    {% if page > 1 %}<a class="button secondary" href="/subjects?{{ query_base }}&page={{ page - 1 }}">上一页</a>{% endif %}
+    <span>第 {{ page }} 页</span>
+    {% if page < pages %}<a class="button secondary" href="/subjects?{{ query_base }}&page={{ page + 1 }}">下一页</a>{% endif %}
+  </div>
+</section>
+{% endblock %}

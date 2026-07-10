@@ -1,0 +1,90 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}我的工作区{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><span class="current">我的工作区</span></span>{% endblock %}
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-top">
+    <h1>我的工作区</h1>
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/opportunities/new">新建合作机会</a>
+      <a class="btn" href="/resources/create">发布资源</a>
+    </div>
+  </div>
+  <p class="page-desc">个人任务、联系意向、收藏和参与合作。</p>
+</section>
+{% endblock %}
+{% block platform_content %}
+
+<div class="dashboard-grid-2">
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>我的待办</h3>
+      <a href="/workspace?tab=todos" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for t in tasks|default([]) %}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+        <span><a href="/workspace/tasks/{{ t.id }}">{{ t.title }}</a></span>
+        <span class="badge badge-{{ t.status }}">{{ t.status|status_label }}</span>
+      </div>
+      {% else %}
+      <p style="font-size:13px;color:var(--color-text-muted);">暂无待办任务。<a href="/workspace?tab=todos">查看全部</a></p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>待处理联系</h3>
+      <a href="/network?tab=intents" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for c in pending_intents|default([]) %}
+      <div style="padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+        <a href="/network/person/{{ c.person_id }}">{{ c.person_name or '联系人' }}</a>
+        <span style="font-size:12px;color:var(--color-text-muted);">· {{ c.intent_type|default('联系意向', true) }}</span>
+        <span class="badge badge-{{ c.status }}">{{ c.status|status_label }}</span>
+      </div>
+      {% else %}
+      <p style="font-size:13px;color:var(--color-text-muted);">暂无待处理联系。</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>我的合作</h3>
+      <a href="/opportunities" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for o in my_opps|default([]) %}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+        <span><a href="/opportunities/{{ o.id }}">{{ o.title }}</a></span>
+        <span class="badge badge-{{ o.stage }}">{{ o.stage|status_label }}</span>
+      </div>
+      {% else %}
+      <p style="font-size:13px;color:var(--color-text-muted);">暂无合作机会。<a href="/opportunities">查看全部</a></p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>最近访问</h3>
+    </div>
+    <div class="platform-card-body">
+      {% for r in recent_views|default([]) %}
+      <div style="padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+        <a href="{{ r.url }}">{{ r.title or r.url }}</a>
+        <span style="font-size:11px;color:var(--color-text-muted);">{{ r.viewed_at }}</span>
+      </div>
+      {% else %}
+      <p style="font-size:13px;color:var(--color-text-muted);">暂无访问记录。</p>
+      {% endfor %}
+    </div>
+  </section>
+
+</div>
+
+{% endblock %}

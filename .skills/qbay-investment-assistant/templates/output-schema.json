@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Q-BAY Investment Assessment",
+  "type": "object",
+  "required": [
+    "company_name",
+    "identity_status",
+    "region_type",
+    "track",
+    "business_type",
+    "facts",
+    "score_breakdown",
+    "grade",
+    "grade_reason",
+    "qbay_fit",
+    "qiantang_fit",
+    "sources",
+    "data_gaps"
+  ],
+  "properties": {
+    "company_name": {"type": "string", "minLength": 1},
+    "identity_status": {"enum": ["confirmed", "ambiguous", "unverified"]},
+    "region_type": {"enum": ["shanghai_local", "zhejiang_internal", "yangtze_delta_other", "outside_yangtze_delta", "local_resource", "unknown"]},
+    "track": {"type": "array", "items": {"type": "string"}},
+    "track_priority": {"enum": ["priority", "secondary", "out_of_scope", "unknown"]},
+    "business_type": {"enum": ["external_financing", "self_funded_growth", "subsidiary_or_affiliate", "unknown"]},
+    "facts": {"type": "array", "items": {"type": "object"}},
+    "signals": {"type": "array", "items": {"type": "object"}},
+    "constraints": {"type": "array", "items": {"type": "object"}},
+    "score_breakdown": {
+      "type": "object",
+      "required": ["track_fit", "development_signal", "space_fit", "window", "reachability", "data_completeness", "resistance", "total"],
+      "properties": {
+        "track_fit": {"type": "number", "minimum": 0, "maximum": 20},
+        "development_signal": {"type": "number", "minimum": 0, "maximum": 25},
+        "space_fit": {"type": "number", "minimum": 0, "maximum": 20},
+        "window": {"type": "number", "minimum": 0, "maximum": 15},
+        "reachability": {"type": "number", "minimum": 0, "maximum": 10},
+        "data_completeness": {"type": "number", "minimum": 0, "maximum": 10},
+        "resistance": {"type": "number", "minimum": -30, "maximum": 0},
+        "total": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    "grade": {"enum": ["A", "B", "C", "D", "R", "OUT_OF_SCOPE", "UNVERIFIED"]},
+    "grade_reason": {"type": "string"},
+    "hard_adjustments": {"type": "array", "items": {"type": "string"}},
+    "qbay_fit": {"type": "object"},
+    "qiantang_fit": {"type": "object"},
+    "relationship_clues": {"type": "array", "items": {"type": "object"}},
+    "recommended_actions": {"type": "array", "items": {"type": "object"}},
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "url", "source_level"],
+        "properties": {
+          "title": {"type": "string"},
+          "url": {"type": "string"},
+          "published_at": {"type": ["string", "null"]},
+          "captured_at": {"type": ["string", "null"]},
+          "source_level": {"enum": ["S", "A", "B", "C"]},
+          "excerpt": {"type": ["string", "null"]},
+          "supports": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "data_gaps": {"type": "array", "items": {"type": "string"}},
+    "system_write_suggestions": {"type": "array", "items": {"type": "object"}}
+  }
+}

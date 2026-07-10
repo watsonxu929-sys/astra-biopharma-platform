@@ -1,0 +1,26 @@
+v0.5A 登录、角色权限、会员隐私与操作审计覆盖补丁
+
+新增核心文件：
+- app/security.py
+- app/v05a_security.py
+- app/templates/v05a_security.html
+- scripts/migrate_v05a.py
+- scripts/verify_v05a.py
+- docs/12_V05A_SECURITY.md
+- docs/13_V05A_PATCH_INSTALL.md
+- tools/windows/archive/v05a/migrate_v05a_windows.bat
+- tools/windows/archive/v05a/verify_v05a_windows.bat
+
+主要修改：
+- app/main.py：注册安全中间件和 v0.5A 路由
+- app/templates/base.html：登录身份、用户菜单和按权限显示操作入口
+- v0.4F/G/H 路由与模板：操作人绑定当前登录账号，会员联系方式按权限显示
+- scripts/migrate_all.py / verify_all.py：纳入 v0.5A 迁移与验证
+- project_tools_windows.bat：增加用户管理和审计入口
+
+本补丁不包含：
+- data/app.db
+- data/backups
+- logs
+- .venv / venv
+- data/.session_secret

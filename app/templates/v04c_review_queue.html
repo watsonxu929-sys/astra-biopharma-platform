@@ -1,0 +1,117 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}数据审核中心{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/intelligence">情报中心</a><span class="sep">/</span><span class="current">数据审核</span></span>{% endblock %}
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-top">
+    <h1>数据审核中心</h1>
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/processing/candidates">处理候选</a>
+      <a class="btn" href="/admin/intelligence">情报审核</a>
+    </div>
+  </div>
+  <p class="page-desc">集中处理待审核数据、冲突记录和异常信息。</p>
+</section>
+{% endblock %}
+{% block platform_content %}
+{% set status_labels = {"pending":"待审核","in_review":"审核中","approved":"已批准","rejected":"已拒绝","deferred":"暂缓","high":"高","medium":"中","low":"低"} %}
+{% set item_type_labels = {"candidate":"候选数据","relationship":"关系","claim":"事实声明","field_change":"字段变更"} %}
+<section class="stats-bar stats-bar-4">
+  <a href="/review?status=pending" class="stat-card"><span class="stat-value">{{ counts.get('pending', 0) }}</span><span class="stat-label">待审核</span></a>
+  <a href="/review?status=in_review" class="stat-card"><span class="stat-value">{{ counts.get('in_review', 0) }}</span><span class="stat-label">审核中</span></a>
+  <a href="/review?status=deferred" class="stat-card"><span class="stat-value">{{ counts.get('deferred', 0) }}</span><span class="stat-label">暂缓</span></a>
+  <a href="/review?status=approved" class="stat-card"><span class="stat-value">{{ counts.get('approved', 0) }}</span><span class="stat-label">已批准</span></a>
+</section>
+
+<section class="filter-row">
+  <form method="get" action="/review" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;width:100%;">
+    <input name="q" value="{{ filters.q }}" placeholder="搜索编号、主体、字段或候选值" style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:13px;">
+    <select name="status" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:13px;">
+      <option value="">全部状态</option>
+      {% for key,label in status_labels.items() %}<option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="item_type" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:13px;">
+      <option value="">全部类型</option>
+      {% for key,label in item_type_labels.items() %}<option value="{{ key }}" {% if filters.item_type == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="priority" style="padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:13px;">
+      <option value="">全部优先级</option>
+      <option value="high" {% if filters.priority == 'high' %}selected{% endif %}>高</option>
+      <option value="medium" {% if filters.priority == 'medium' %}selected{% endif %}>中</option>
+      <option value="low" {% if filters.priority == 'low' %}selected{% endif %}>低</option>
+    </select>
+    <button class="btn btn-sm" type="submit">筛选</button>
+    {% if filters.q or filters.status or filters.item_type or filters.priority %}<a class="btn btn-sm" href="/review" style="color:var(--color-text-muted);">清除</a>{% endif %}
+  </form>
+</section>
+
+<section class="platform-card" style="padding:0;overflow:hidden;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>编号</th>
+        <th>主体</th>
+        <th>字段</th>
+        <th>候选值</th>
+        <th>类型</th>
+        <th>优先级</th>
+        <th>状态</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td><span class="code" style="font-size:12px;">{{ item.review_no }}</span><div style="font-size:11px;color:var(--color-text-muted);">{{ item.created_at }}</div></td>
+        <td>{{ item.subject_label or item.subject_id or '未关联主体' }}<div class="code" style="font-size:11px;">{{ item.subject_type }} {{ item.subject_id or '' }}</div></td>
+        <td>{{ item.field_name or '-' }}</td>
+        <td>{{ item.proposed_value or item.summary or '-' }}</td>
+        <td>{{ item_type_labels.get(item.item_type, item.item_type) }}</td>
+        <td><span class="badge badge-{{ item.priority }}">{{ priority_labels.get(item.priority, item.priority) }}</span></td>
+        <td><span class="badge badge-{{ item.status }}">{{ status_labels.get(item.status, item.status) }}</span></td>
+        <td class="actions">
+          <form method="post" action="/review/items/{{ item.id }}/decision" class="inline-form" style="display:flex;gap:4px;">
+            <select name="decision" style="font-size:12px;padding:2px 4px;">
+              <option value="approved">批准</option>
+              <option value="rejected">拒绝</option>
+              <option value="deferred">暂缓</option>
+            </select>
+            <input name="reviewer" value="manual" type="hidden">
+            <input name="note" placeholder="审核说明" style="font-size:12px;padding:2px 4px;width:80px;">
+            <button class="btn btn-sm" type="submit">保存</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="empty">暂无待审核数据。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="dashboard-grid-2" style="margin-top:20px;">
+  <section class="platform-card">
+    <h3>待确认关系</h3>
+    {% for relation in relations %}
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+      <div><strong>{{ relation.source_label or relation.source_id }} → {{ relation.target_label or relation.target_id }}</strong><p style="font-size:12px;color:var(--color-text-muted);">{{ relation.relation_type }} · {{ relation.confidence }}</p></div>
+      <span class="badge badge-{{ relation.status }}">{{ status_labels.get(relation.status, relation.status) }}</span>
+    </div>
+    {% else %}
+    <p style="font-size:13px;color:var(--color-text-muted);">暂无待确认关系。</p>
+    {% endfor %}
+  </section>
+
+  <section class="platform-card">
+    <h3>事实声明</h3>
+    {% for claim in claims %}
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
+      <div><strong>{{ claim.subject_label or claim.subject_id }}</strong><p style="font-size:12px;color:var(--color-text-muted);">{{ claim.field_name }}：{{ claim.claim_value }}</p></div>
+      <span class="badge badge-{{ claim.status }}">{{ status_labels.get(claim.status, claim.status) }}</span>
+    </div>
+    {% else %}
+    <p style="font-size:13px;color:var(--color-text-muted);">暂无事实声明。</p>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

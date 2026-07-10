@@ -1,0 +1,17 @@
+﻿{% extends "base.html" %}
+{% block title %}新增情报{% endblock %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">情报中心</p>
+  <h1>新增情报</h1>
+  <p>手动录入公开信息，系统将进入情报加工和人工审核流程。</p>
+</section>
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+<form class="panel form-grid" method="post">
+  <label>标题<input name="title" required></label>
+  <label>来源类型<select name="source_type"><option value="news">新闻</option><option value="policy">政策</option><option value="company">企业动态</option><option value="other">其他</option></select></label>
+  <label>来源链接<input name="source_url" type="url"></label>
+  <label class="full">正文<textarea name="content" rows="10" required></textarea></label>
+  <div class="form-actions"><button class="btn primary" type="submit">保存情报</button></div>
+</form>
+{% endblock %}

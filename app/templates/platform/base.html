@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{% block platform_title %}生物医药产业连接与情报平台{% endblock %}{% endblock %}
+{% block content %}
+<div class="platform-content">
+  {% block breadcrumb %}{% endblock %}
+  {% block page_header %}{% endblock %}
+  <div class="platform-main">
+    {% block platform_content %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

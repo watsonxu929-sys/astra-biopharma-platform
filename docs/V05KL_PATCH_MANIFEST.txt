@@ -1,0 +1,28 @@
+v0.5K-L patch manifest
+
+Included:
+- app/core production configuration and database compatibility helpers
+- app/services/tasks unified task queue, worker runner, retry and metrics
+- app/services/operations backup, restore, source quality and health services
+- app/v05kl_operations.py and templates for operations pages
+- app/api/v1/system.py health, readiness and task APIs
+- scripts/migrate_v05kl.py and Windows migration entry
+- scripts/verify_v05kl.py and Windows verification entry
+- scripts/run_worker.py, run_scheduler.py, restore_backup.py
+- scripts/migrate_sqlite_to_postgres.py dry-run migration helper
+- scripts/pilot_real_sources.py safe dry-run enhancements
+- scripts/run_operational_pilot.py
+- Windows start/stop/status entrypoints
+
+Excluded from package:
+- data/app.db
+- data/backups/
+- data/uploads/
+- logs/
+- runtime/
+- .venv/
+- venv/
+- .git/
+- __pycache__/
+- .env and real credentials
+- historical patch zip files

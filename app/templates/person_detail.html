@@ -1,0 +1,30 @@
+﻿{% extends "base.html" %}
+{% block title %}人物详情{% endblock %}
+{% block content %}
+<section class="page-head">
+  <p class="eyebrow">主体中心</p>
+  <h1>{{ item.name }}</h1>
+  <p>{{ item.public_role or "暂无公开职务" }}</p>
+</section>
+<section class="panel">
+  <h2>基础信息</h2>
+  <dl class="meta-grid">
+    <dt>所属网络</dt><dd>{{ item.organization_network or "暂无数据" }}</dd>
+    <dt>能力标签</dt><dd>{{ item.ability_tags or "暂无数据" }}</dd>
+    <dt>价值说明</dt><dd>{{ item.value_provided or "暂无数据" }}</dd>
+    <dt>关系来源</dt><dd>{{ item.relationship_source or "暂无数据" }}</dd>
+    <dt>可见范围</dt><dd>{{ item.visibility or "暂无数据" }}</dd>
+  </dl>
+</section>
+<section class="panel">
+  <h2>关联关系</h2>
+  <p class="muted">对外关系 {{ outgoing|length }} 条，指向关系 {{ incoming|length }} 条。</p>
+  {% if outgoing_views or incoming_views %}
+  <div class="table-scroll"><table><thead><tr><th>方向</th><th>关系</th><th>主体</th></tr></thead><tbody>
+  {% for row in outgoing_views %}<tr><td>对外</td><td>{{ row.relation.relation_type }}</td><td>{{ row.target.label }}</td></tr>{% endfor %}
+  {% for row in incoming_views %}<tr><td>指向</td><td>{{ row.relation.relation_type }}</td><td>{{ row.source.label }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty">暂无关联关系。</div>{% endif %}
+</section>
+{% include "_record_meta.html" %}
+{% endblock %}

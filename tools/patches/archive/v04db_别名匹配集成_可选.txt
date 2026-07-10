@@ -1,0 +1,41 @@
+文件：app\v04db_prestructure.py
+
+目的：让智能预结构化的主体匹配建议识别简称、曾用名、英文名和品牌名。
+
+找到函数：
+
+def _entity_matches(conn: sqlite3.Connection, subject_type: str | None, label: str | None)
+
+在以下代码之后：
+
+    if not subject_type or not label:
+        return "unmatched", []
+
+加入：
+
+    try:
+        from app.v04e_entity_resolution import search_entities as search_v04e_entities
+        alias_matches = search_v04e_entities(
+            subject_type,
+            label,
+            limit=5,
+        )
+        if alias_matches:
+            suggestions = [
+                {
+                    "subject_id": item["subject_id"],
+                    "subject_label": item["subject_label"],
+                    "match_type": item.get("match_type"),
+                    "matched_text": item.get("matched_text"),
+                }
+                for item in alias_matches
+            ]
+            exact_matches = [
+                item for item in suggestions
+                if item.get("match_type") in {"primary_exact", "alias_exact"}
+            ]
+            return ("exact" if len(exact_matches) == 1 else "suggested"), suggestions
+    except Exception:
+        pass
+
+这是可选增强。建议先完成核心迁移和自检，再添加该段。

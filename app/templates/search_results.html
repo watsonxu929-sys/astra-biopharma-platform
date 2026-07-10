@@ -1,0 +1,13 @@
+﻿{% extends "base.html" %}
+{% block title %}搜索结果{% endblock %}
+{% block content %}
+<section class="page-head"><p class="eyebrow">全局搜索</p><h1>搜索结果</h1><p>{% if q %}关键词：{{ q }}，共 {{ total|default(0) }} 条。{% else %}请输入关键词。{% endif %}</p></section>
+{% for group in groups %}
+{% set rows = group.get('items') or group.get('results') or [] %}
+<section class="panel"><div class="panel-title"><h2>{{ group.label }}</h2><span class="muted">{{ group.count }} 条</span></div>
+  {% for item in rows %}
+  <div class="record-row"><div><strong><a href="{{ item.url or item.web_url }}">{{ item.title }}</a></strong><p>{{ item.summary or '暂无摘要' }}</p></div><span class="badge">{{ item.status or '暂无状态' }}</span></div>
+  {% else %}<div class="empty">暂无结果</div>{% endfor %}
+</section>
+{% else %}<section class="panel empty">暂无搜索结果</section>{% endfor %}
+{% endblock %}

@@ -1,0 +1,115 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+from app.security import current_username
+from app.services.processing import (
+    apply_candidate,
+    candidate_detail,
+    create_processing_job,
+    dashboard,
+    list_candidates,
+    list_jobs,
+    list_subject_matches,
+    process_job,
+    review_candidate,
+    run_worker,
+)
+
+router = APIRouter(tags=["情报加工"])
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+
+
+@router.get("/processing", response_class=HTMLResponse)
+def processing_home(request: Request):
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "home", **dashboard()})
+
+
+@router.get("/processing/jobs", response_class=HTMLResponse)
+def processing_jobs(request: Request, page: int = 1, status: str = "", message: str = "", error: str = ""):
+    rows, total = list_jobs(page=page, status=status)
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "jobs", "jobs": rows, "total": total, "page": page, "status": status, "message": message, "error": error})
+
+
+@router.post("/processing/jobs")
+def processing_create_job(
+    request: Request,
+    item_id: int = Form(0),
+    snapshot_id: int = Form(0),
+    queued_only: str = Form("1"),
+    reprocess: str = Form(""),
+    run_now: str = Form(""),
+):
+    try:
+        job = create_processing_job(
+            item_id=item_id or None,
+            snapshot_id=snapshot_id or None,
+            trigger_type="manual",
+            operator=current_username(request),
+            queued_only=bool(queued_only),
+            reprocess=bool(reprocess),
+        )
+        if run_now:
+            result = process_job(job["id"])
+            return RedirectResponse(f"/processing/jobs?message=已执行 {job['job_no']}: {result.get('status')}", status_code=303)
+        return RedirectResponse(f"/processing/jobs?message=任务已创建：{job['job_no']}", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(f"/processing/jobs?error={str(exc)[:200]}", status_code=303)
+
+
+@router.post("/processing/jobs/{job_id}/run")
+def processing_run_job(job_id: int):
+    result = process_job(job_id)
+    return RedirectResponse(f"/processing/jobs?message=已执行 {job_id}: {result.get('status')}", status_code=303)
+
+
+@router.post("/processing/worker/run-once")
+def processing_worker_once(request: Request, limit: int = Form(20), queued_only: str = Form("1"), reprocess: str = Form("")):
+    result = run_worker(once=True, queued_only=bool(queued_only), limit=limit, reprocess=bool(reprocess), operator=current_username(request))
+    return RedirectResponse(f"/processing/jobs?message=执行器已处理 {result.get('processed', 0)} 个任务", status_code=303)
+
+
+@router.get("/processing/candidates", response_class=HTMLResponse)
+def processing_candidates(request: Request, page: int = 1, review_status: str = "", candidate_type: str = "", q: str = "", message: str = "", error: str = ""):
+    rows, total = list_candidates(page=page, review_status=review_status, candidate_type=candidate_type, q=q)
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidates", "candidates": rows, "total": total, "page": page, "review_status": review_status, "candidate_type": candidate_type, "q": q, "message": message, "error": error})
+
+
+@router.get("/processing/candidates/{candidate_id}", response_class=HTMLResponse)
+def processing_candidate_detail(request: Request, candidate_id: int):
+    detail = candidate_detail(candidate_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="候选数据不存在")
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidate_detail", **detail})
+
+
+@router.post("/processing/candidates/{candidate_id}/review")
+def processing_review_candidate(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form(""), final_value: str = Form("")):
+    try:
+        row = review_candidate(candidate_id, decision=decision, actor=current_username(request), note=note, final_value=final_value)
+        return RedirectResponse(f"/processing/candidates/{candidate_id}?message=已审核 {row['review_status']}", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
+
+
+@router.post("/processing/candidates/{candidate_id}/apply")
+def processing_apply_candidate(request: Request, candidate_id: int):
+    result = apply_candidate(candidate_id, actor=current_username(request))
+    return RedirectResponse(f"/processing/candidates/{candidate_id}?message=入库 {result.get('result')}", status_code=303)
+
+
+@router.get("/processing/subject-matches", response_class=HTMLResponse)
+def processing_subject_matches(request: Request, page: int = 1, status: str = "", message: str = ""):
+    rows, total = list_subject_matches(page=page, status=status)
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "matches", "matches": rows, "total": total, "page": page, "status": status, "message": message})
+
+
+@router.get("/v05g/health")
+def health():
+    data = dashboard()
+    return {"ok": True, "version": "0.5G", "counts": data["counts"]}
+

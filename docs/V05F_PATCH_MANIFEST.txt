@@ -1,0 +1,61 @@
+v0.5F Multi-source Collection Patch Manifest
+
+Purpose:
+- Add controlled public-source collection, URL discovery, snapshots, deduplication, queueing and local worker execution.
+- Reuse v0.4G monitoring source/run/snapshot tables.
+- Do not update formal subjects automatically.
+
+Files:
+- app/services/collection_service.py
+- app/api/v1/collection.py
+- app/api/v1/router.py
+- app/v05f_collection.py
+- app/templates/v05f_collection.html
+- app/templates/base.html
+- app/main.py
+- app/security.py
+- scripts/migrate_v05f.py
+- scripts/migrate_all.py
+- scripts/verify_v05f.py
+- scripts/verify_all.py
+- scripts/run_collection_worker.py
+- migrate_v05f_windows.bat
+- verify_v05f_windows.bat
+- run_collection_once_windows.bat
+- run_collection_worker_windows.bat
+- project_tools_windows.bat
+- docs/API_V1_GUIDE.md
+- docs/COLLECTION_SCHEDULER_WINDOWS.md
+- docs/V05F_COLLECTION.md
+- docs/V05F_PATCH_INSTALL.md
+- docs/V05F_PATCH_MANIFEST.txt
+
+Install:
+1. Back up the existing project and database.
+2. Overwrite files with this patch.
+3. Run migrate_all_windows.bat.
+4. Run verify_all_windows.bat.
+5. Run run_windows.bat.
+
+Manual acceptance:
+- Open http://127.0.0.1:8000/collection.
+- Create a public RSS or web page source.
+- Create a job and run the collection worker.
+- Confirm collection items enter the queue.
+- Confirm duplicate content is not queued repeatedly.
+- Confirm formal subject records are not changed automatically.
+
+Rollback:
+- Restore previous files.
+- Restore the database backup from data/backups/ if a real migration was run.
+
+Excluded from package:
+- data/app.db
+- data/backups/
+- data/uploads/
+- logs/
+- .venv/
+- venv/
+- .git/
+- __pycache__/
+- local secrets, cookies, tokens or credentials

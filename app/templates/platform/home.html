@@ -1,0 +1,65 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}工作台{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a></span>{% endblock %}
+{% block page_header %}
+<section class="page-header">
+  <div class="page-header-top">
+    <h1>工作台</h1>
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/intelligence/operations">情报运营</a>
+      <a class="btn" href="/collection/sources">数据源管理</a>
+    </div>
+  </div>
+  <p class="page-desc">业务概览、待办事项、推荐内容和最近动态。</p>
+</section>
+{% endblock %}
+{% block platform_content %}
+<section class="stats-bar stats-bar-4">
+  <a class="stat-card" href="/workspace?tab=todos"><span class="stat-value">{{ tasks|default([])|length }}</span><span class="stat-label">待办任务</span></a>
+  <a class="stat-card" href="/network/people"><span class="stat-value">{{ rec_people|default([])|length }}</span><span class="stat-label">推荐人脉</span></a>
+  <a class="stat-card" href="/intelligence"><span class="stat-value">{{ feed|default([])|length }}</span><span class="stat-label">最新情报</span></a>
+  <a class="stat-card" href="/opportunities"><span class="stat-value">{{ opps|default([])|length }}</span><span class="stat-label">进行中合作</span></a>
+</section>
+
+<div class="dashboard-grid-2">
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>推荐人脉</h3>
+      <a href="/network/people" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for item in rec_people|default([]) %}<p><a href="/network/people/{{ item.person_id|default(item.id, true) }}">{{ item.name|default(item.person.name if item.person is defined else '人物', true) }}</a></p>{% else %}<p class="text-muted">暂无推荐。</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>最新情报</h3>
+      <a href="/intelligence" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for item in feed|default([]) %}<p><a href="/intelligence/{{ item.id if item.id is defined else item.item.id }}">{{ item.title if item.title is defined else item.item.title }}</a></p>{% else %}<p class="text-muted">暂无情报。</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>资源匹配</h3>
+      <a href="/resources" class="btn btn-sm">进入资源市场</a>
+    </div>
+    <div class="platform-card-body">
+      <p>供给 {{ supplies|default([])|length }} 条，需求 {{ demands|default([])|length }} 条。</p>
+    </div>
+  </section>
+
+  <section class="platform-card">
+    <div class="platform-card-header">
+      <h3>进行中的合作</h3>
+      <a href="/opportunities" class="btn btn-sm">查看全部</a>
+    </div>
+    <div class="platform-card-body">
+      {% for o in opps|default([]) %}<p><a href="/opportunities/{{ o.id }}">{{ o.title }}</a> <span class="badge badge-{{ o.stage }}">{{ o.stage|status_label }}</span></p>{% else %}<p class="text-muted">暂无合作机会。</p>{% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

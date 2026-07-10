@@ -1,0 +1,16 @@
+﻿{% extends "base.html" %}
+{% block title %}运行管理{% endblock %}
+{% block content %}
+<section class="page-head action-head"><div><p class="eyebrow">系统管理</p><h1>运行管理</h1><p>查看系统健康、后台任务、备份恢复和来源质量。</p></div></section>
+<nav class="subnav"><a href="/system/health">健康检查</a><a href="/system/tasks">后台任务</a><a href="/system/backups">备份恢复</a><a href="/system/sources">来源健康</a><a href="/system/errors">异常记录</a></nav>
+<section class="stats-grid">
+  <div class="stat-card"><span>系统状态</span><strong>{{ health.status if health else '未知' }}</strong></div>
+  <div class="stat-card"><span>待处理任务</span><strong>{{ tasks.counts.pending if tasks and tasks.counts else 0 }}</strong></div>
+  <div class="stat-card"><span>失败任务</span><strong>{{ tasks.counts.failed if tasks and tasks.counts else 0 }}</strong></div>
+  <div class="stat-card"><span>信息来源</span><strong>{{ quality.source_total if quality else 0 }}</strong></div>
+</section>
+<section class="panel"><h2>健康检查</h2>{% if health and health.checks %}{% for key,value in health.checks.items() %}<div class="record-row"><strong>{{ key }}</strong><span>{{ value }}</span></div>{% endfor %}{% else %}<div class="empty">暂无健康检查数据。</div>{% endif %}</section>
+<section class="grid-2"><form class="form-card" method="post" action="/system/tasks"><h2>新建后台任务</h2><label>任务类型<select name="task_type"><option value="backup">备份</option><option value="health_check">健康检查</option></select></label><button class="btn primary" type="submit">创建任务</button></form><section class="panel"><h2>任务记录</h2>{% if result and result.data %}{% for task in result.data %}<div class="record-row"><div><strong>{{ task.task_uid }}</strong><p>{{ task.task_type }} · {{ task.status }}</p></div></div>{% endfor %}{% else %}<div class="empty">暂无后台任务。</div>{% endif %}</section></section>
+<section class="grid-2"><form class="form-card" method="post" action="/system/backups"><h2>新建备份</h2><label>类型<select name="backup_type"><option value="manual">手动备份</option></select></label><button class="btn primary" type="submit">创建备份</button></form><section class="panel"><h2>备份记录</h2>{% if backups and backups.data %}{% for row in backups.data %}<div class="record-row"><div><strong>{{ row.backup_id }}</strong><p>{{ row.backup_path }}</p></div><span class="badge">{{ row.status }}</span></div>{% endfor %}{% else %}<div class="empty">暂无备份记录。</div>{% endif %}</section></section>
+<section class="panel"><h2>失败任务</h2>{% if metrics and metrics.failed %}{% for task in metrics.failed %}<div class="record-row"><div><strong>{{ task.task_uid }}</strong><p>{{ task.error_summary }}</p></div><span>{{ task.created_at }}</span></div>{% endfor %}{% else %}<div class="empty">暂无失败任务。</div>{% endif %}</section>
+{% endblock %}

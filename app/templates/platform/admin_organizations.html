@@ -1,0 +1,160 @@
+{% extends "platform/base.html" %}
+{% block platform_breadcrumb %}
+<nav class="breadcrumb">
+  <a href="/platform">工作台</a>
+  <span class="sep">/</span>
+  <a href="/admin/platform">管理中心</a>
+  <span class="sep">/</span>
+  <span>机构库</span>
+</nav>
+{% endblock %}
+{% block platform_title %}机构库管理{% endblock %}
+{% block platform_page_header %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">机构库</h1>
+    <p class="page-desc">复用 organizations 主表，维护机构、关联人物和业务资料。</p>
+  </div>
+  <div class="page-header-right">
+    <a class="btn btn-primary" href="/admin/organizations/new">+ 新增机构</a>
+    <a class="btn btn-outline" href="/admin/platform">返回管理中心</a>
+  </div>
+</div>
+{% endblock %}
+{% block platform_content %}
+{# 筛选栏 #}
+<section class="filter-bar">
+  <form method="get" action="/admin/organizations" class="filter-form">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索机构名称、地区、标签…" class="filter-input">
+    <select name="org_type" class="filter-select">
+      <option value="">全部类型</option>
+      <option value="企业" {% if filter_type=='企业' %}selected{% endif %}>企业</option>
+      <option value="高校" {% if filter_type=='高校' %}selected{% endif %}>高校</option>
+      <option value="科研院所" {% if filter_type=='科研院所' %}selected{% endif %}>科研院所</option>
+      <option value="医院" {% if filter_type=='医院' %}selected{% endif %}>医院</option>
+      <option value="投资机构" {% if filter_type=='投资机构' %}selected{% endif %}>投资机构</option>
+      <option value="政府部门" {% if filter_type=='政府部门' %}selected{% endif %}>政府部门</option>
+    </select>
+    <select name="status" class="filter-select">
+      <option value="">全部状态</option>
+      <option value="active" {% if filter_status=='active' %}selected{% endif %}>启用</option>
+      <option value="inactive" {% if filter_status=='inactive' %}selected{% endif %}>停用</option>
+    </select>
+    <button class="btn btn-sm" type="submit">筛选</button>
+    {% if q or filter_type or filter_status %}
+    <a class="btn btn-sm btn-outline" href="/admin/organizations">清除</a>
+    {% endif %}
+  </form>
+</section>
+
+{# 机构列表 #}
+<section class="data-table-section">
+  <div class="table-header">
+    <span class="table-count">共 <strong>{{ orgs|length }}</strong> 条</span>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>机构名称</th>
+        <th>简称</th>
+        <th>类型</th>
+        <th>地区</th>
+        <th>关联人物</th>
+        <th>状态</th>
+        <th>更新时间</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in orgs %}
+      <tr>
+        <td><a class="link" href="/admin/organizations/{{ item.org.id }}">{{ item.org.standard_name }}</a></td>
+        <td>{{ item.org.common_name or '' }}</td>
+        <td>{{ item.org.org_type or '' }}</td>
+        <td>{{ item.org.region or '' }}</td>
+        <td>{{ item.people_count or 0 }}</td>
+        <td><span class="badge {% if item.org.is_active %}badge-active{% else %}badge-inactive{% endif %}">{{ '启用' if item.org.is_active else '停用' }}</span></td>
+        <td class="text-muted">{{ item.org.updated_at.strftime('%Y-%m-%d') if item.org.updated_at else '' }}</td>
+        <td class="table-actions">
+          <a class="action-link" href="/admin/organizations/{{ item.org.id }}">编辑</a>
+          <a class="action-link" href="/network/organizations?q={{ item.org.standard_name }}">前台查看</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="8" class="empty-state">
+          <div class="empty-icon">🏢</div>
+          <p>暂无机构数据</p>
+          <a class="btn btn-sm" href="/admin/organizations/new">新增机构</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{# 编辑/新增表单（弹窗或独立页） #}
+{% if show_form %}
+<section class="form-section mt-16">
+  <h2>{{ '编辑机构' if org else '新增机构' }}</h2>
+  <form method="post" action="{{ '/admin/organizations/' ~ org.id ~ '/update' if org else '/admin/organizations' }}" class="platform-form">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label required">机构名称</label>
+        <input class="form-input" name="standard_name" required value="{{ org.standard_name if org else '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">简称</label>
+        <input class="form-input" name="common_name" value="{{ org.common_name if org else '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">类型</label>
+        <input class="form-input" name="org_type" value="{{ org.org_type if org else '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">地区</label>
+        <input class="form-input" name="region" value="{{ org.region if org else '' }}">
+      </div>
+      <div class="form-group form-full">
+        <label class="form-label">产业标签</label>
+        <input class="form-input" name="industry_tags" value="{{ org.industry_tags if org else '' }}" placeholder="逗号分隔">
+      </div>
+      <div class="form-group form-full">
+        <label class="form-label">资源</label>
+        <textarea class="form-textarea" name="resources">{{ org.resources if org else '' }}</textarea>
+      </div>
+      <div class="form-group form-full">
+        <label class="form-label">需求</label>
+        <textarea class="form-textarea" name="needs">{{ org.needs if org else '' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">可见性</label>
+        <input class="form-input" name="visibility" value="{{ org.visibility if org else '内部' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">核验状态</label>
+        <input class="form-input" name="verification_status" value="{{ org.verification_status if org else '待核验' }}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <label class="form-checkbox"><input type="checkbox" name="is_active" value="1" {% if not org or org.is_active %}checked{% endif %}> 启用</label>
+      <button class="btn btn-primary" type="submit">保存机构</button>
+      {% if org %}<a class="btn btn-outline" href="/admin/organizations">取消</a>{% endif %}
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% if org %}
+<section class="detail-section mt-16">
+  <h2>关联人物</h2>
+  <ul class="link-list">
+    {% for p in related_people %}
+    <li><a class="link" href="/admin/people/{{ p.id }}">{{ p.name }}</a> {{ p.public_role or '' }}</li>
+    {% else %}
+    <li class="empty">暂无明确关联人物</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,13 @@
+文件：app\templates\intelligence_detail.html
+
+目的：在每条原始情报详情页增加“进入结构化工作台”按钮。
+
+建议在右侧“人工处理”区域的状态更新表单之后、删除表单之前加入：
+
+<hr>
+<form method="post" action="/review/structure/raw/{{ item.id }}/start">
+  <input type="hidden" name="actor" value="manual">
+  <button class="primary" type="submit">进入结构化工作台</button>
+</form>
+
+该修改是可选项。即使不加，也可以从顶部“情报结构化”导航进入工作台。

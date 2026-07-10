@@ -1,0 +1,35 @@
+{% extends "platform/base.html" %}
+{% set active_nav = "collaboration" %}
+{% set active_subnav = "collaboration.opportunities" %}
+{% block platform_title %}{{ opp.title }} - ????{% endblock %}
+{% block platform_content %}
+<div class="platform-content" style="max-width:900px;margin:0 auto;padding:24px 32px;">
+<a href="/opportunities" class="text-sm" style="color:var(--color-accent);">&larr; 返回合作列表</a>
+<h1 class="page-title mt-16">{{ opp.title }}</h1>
+<div class="opp-meta"><span class="tag tag-blue">{{ opp.opp_type }}</span><span>阶段：</span>
+<form method="post" action="/opportunities/{{ opp.id }}/stage" style="display:inline"><select name="stage">
+{% for s in ['lead','contacted','qualified','negotiating','proposal','due_diligence','agreement','won','lost','closed'] %}
+<option value="{{ s }}" {% if opp.stage == s %}selected{% endif %}>{{ s|status_label }}</option>{% endfor %}
+</select><button type="submit" class="btn btn-sm">更新阶段</button></form></div>
+<div class="platform-card"><h3>合作说明</h3><p>{{ opp.description or '' }}</p></div>
+{% if opp.expected_outcome %}<div class="platform-card"><h3>预期目标</h3><p>{{ opp.expected_outcome }}</p></div>{% endif %}
+
+<!-- Timeline -->
+<div class="platform-card"><h3>商务时间线</h3>
+{% if timeline %}<div class="timeline">{% for t in timeline %}<div class="timeline-item"><div class="time">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</div><div class="desc">{{ t.description }}</div></div>{% endfor %}</div>
+{% else %}<p class="text-muted text-sm">暂无记录</p>{% endif %}</div>
+
+<!-- Follow-ups -->
+<div class="platform-card"><h3>跟进记录 ({{ follow_ups|length }})</h3>
+{% for fu in follow_ups %}<div style="padding:8px 0;border-bottom:1px solid var(--color-border);"><span class="badge badge-info">{{ fu.follow_type }}</span><span class="text-sm text-muted"> {{ fu.followed_at.strftime('%Y-%m-%d %H:%M') if fu.followed_at else '' }}</span><p class="text-sm">{{ fu.content[:200] }}</p></div>{% endfor %}
+{% if authenticated %}<form method="post" action="/opportunities/{{ opp.id }}/follow-up" class="mt-16"><textarea name="content" placeholder="跟进内容..." style="width:100%;min-height:60px;margin-bottom:8px;"></textarea>
+<div><select name="follow_type"><option value="note">备注</option><option value="call">电话</option><option value="meeting">会议</option><option value="email">邮件</option><option value="visit">拜访</option></select>
+<button type="submit" class="btn btn-primary btn-sm">添加跟进</button></div></form>{% endif %}</div>
+
+<!-- Tasks -->
+<div class="platform-card"><h3>协作任务 ({{ tasks|length }})</h3>
+{% for t in tasks %}<div style="padding:8px 0;border-bottom:1px solid var(--color-border);"><span class="badge badge-{% if t.status == 'completed' %}success{% elif t.status == 'in_progress' %}warning{% else %}neutral{% endif %}">{{ t.status|status_label }}</span>
+<span>{{ t.title }}</span><span class="text-sm text-muted"> 优先级：{{ t.priority }}</span></div>{% endfor %}
+{% if authenticated %}<form method="post" action="/opportunities/{{ opp.id }}/task" class="mt-16"><input name="title" placeholder="任务标题" style="width:200px;"><select name="priority"><option value="P2">P2</option><option value="P1">P1</option><option value="P0">P0</option></select><button type="submit" class="btn btn-primary btn-sm">添加任务</button></form>{% endif %}</div>
+</div>
+{% endblock %}
