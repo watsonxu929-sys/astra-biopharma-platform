@@ -15,6 +15,7 @@ from app.models_platform import (
     FollowUp, CollabTask, TimelineEntry,
 )
 from app.services.unified_intelligence_service import UnifiedIntelligenceService
+from app.services.intelligence_product_service import IntelligenceProductService
 from app.services.unified_resource_service import UnifiedResourceService
 from app.services.unified_opportunity_service import UnifiedOpportunityService
 from app.services.platform_service import (
@@ -290,9 +291,10 @@ def intelligence_center(
 @router.get("/intelligence/{item_id:int}", response_class=HTMLResponse)
 def intelligence_detail(item_id: int, request: Request, db: Session = Depends(get_db)):
     item = UnifiedIntelligenceService(db).detail(item_id)
+    evidence = IntelligenceProductService().trace(item_id)["evidence"]
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "intelligence", item_id) if user_id is not None else False
-    return render(request, "platform/intelligence_detail.html", item=item, is_favorited=fav, user_id=user_id)
+    return render(request, "platform/intelligence_detail.html", item=item, evidence=evidence, is_favorited=fav, user_id=user_id)
 
 
 @router.get("/intelligence/subscriptions", response_class=HTMLResponse)

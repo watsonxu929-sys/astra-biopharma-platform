@@ -495,10 +495,14 @@ def candidate_detail(candidate_id: int, db_path: str | Path | None = None) -> di
         matches = [dict(r) for r in conn.execute("SELECT * FROM v05g_subject_match_candidates WHERE extraction_candidate_id=? ORDER BY match_score DESC", (candidate_id,)).fetchall()]
         history = [dict(r) for r in conn.execute("SELECT * FROM v05g_candidate_review_history WHERE candidate_id=? ORDER BY created_at DESC", (candidate_id,)).fetchall()]
         logs = [dict(r) for r in conn.execute("SELECT * FROM v05g_candidate_application_logs WHERE candidate_id=? ORDER BY applied_at DESC", (candidate_id,)).fetchall()]
+        try:
+            evidence = [dict(r) for r in conn.execute("SELECT e.*, s.url, s.captured_at, s.content_hash AS snapshot_hash, s.page_title FROM p2_fact_candidate_evidence e JOIN v04g_source_snapshots s ON s.id=e.snapshot_id WHERE e.candidate_id=? ORDER BY e.id", (candidate_id,)).fetchall()]
+        except sqlite3.Error:
+            evidence = []
     data = dict(row)
     data["warning_list"] = _loads(data.get("warning_json"), [])
     data["payload"] = _loads(data.get("payload_json"), {})
-    return {"candidate": data, "matches": matches, "history": history, "logs": logs}
+    return {"candidate": data, "matches": matches, "history": history, "logs": logs, "evidence": evidence}
 
 
 def review_candidate(candidate_id: int, *, decision: str, actor: str, note: str = "", final_value: str = "", db_path: str | Path | None = None) -> dict[str, Any]:

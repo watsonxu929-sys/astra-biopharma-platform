@@ -1,0 +1,2 @@
+# Optional dynamic-page collection PoC only. Browser binaries require a separate explicit install.
+playwright>=1.45,<2

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services.api_common import Pagination, normalize_page, paginated, require_permission, single
 from app.services.unified_intelligence_service import UnifiedIntelligenceService
+from app.services.intelligence_product_service import IntelligenceProductService
 
 router = APIRouter()
 
@@ -24,3 +25,13 @@ def intelligence_detail(request: Request, item_id: int, db: Session = Depends(ge
     require_permission(request, "view_internal")
     svc = UnifiedIntelligenceService(db)
     return single(svc.to_api(svc.detail(item_id)), meta={"canonical_model": svc.canonical_model})
+
+@router.get("/intelligence/{item_id}/evidence", summary="Trace product evidence")
+def intelligence_evidence(request: Request, item_id: int):
+    require_permission(request, "view_internal")
+    try:
+        trace = IntelligenceProductService().trace(item_id)
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail={"code": "INTELLIGENCE_NOT_FOUND", "message": str(exc), "details": {}}) from exc
+    return single({"product_id": item_id, "candidates": trace["candidates"], "evidence": trace["evidence"]})

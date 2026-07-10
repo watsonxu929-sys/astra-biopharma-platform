@@ -157,7 +157,8 @@ def api_job_detail(request: Request, job_id: int):
 @router.post("/jobs/{job_id}/retry", summary="Process or retry a job")
 def api_retry_job(request: Request, job_id: int):
     require_permission(request, "manage_monitoring")
-    return single(add_labels(process_job(job_id)))
+    user = require_permission(request, "manage_monitoring")
+    return single(add_labels(retry_job(job_id, operator=str(user.get("username") or "api"))))
 
 
 @router.post("/jobs/{job_id}/cancel", summary="Cancel a pending collection job")

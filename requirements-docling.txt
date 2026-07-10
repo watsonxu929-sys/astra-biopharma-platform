@@ -1,0 +1,2 @@
+# Optional document parsing PoC only. Do not install into the core production environment.
+docling>=2,<3

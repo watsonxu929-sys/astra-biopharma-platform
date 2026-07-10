@@ -551,6 +551,22 @@ def create_job(source_id: int, trigger_type: str = "manual", operator: str = "",
         return dict(conn.execute("SELECT * FROM v04g_monitoring_runs WHERE id=?", (cur.lastrowid,)).fetchone())
 
 
+def retry_job(job_id: int, *, operator: str = "", db_path: str | Path | None = None) -> dict[str, Any]:
+    """Create a derived retry job so the original run remains an immutable execution record."""
+    ensure_schema(db_path)
+    with db_connection(db_path) as conn:
+        original = conn.execute("SELECT * FROM v04g_monitoring_runs WHERE id=?", (job_id,)).fetchone()
+        if not original:
+            raise ValueError("job_not_found")
+        has_parent_column = "parent_job_id" in {str(item[1]) for item in conn.execute("PRAGMA table_info(v04g_monitoring_runs)")}
+    derived = create_job(int(original["monitoring_source_id"]), trigger_type="retry", operator=operator, db_path=db_path, force=True)
+    if has_parent_column:
+        with db_connection(db_path) as conn:
+            conn.execute("UPDATE v04g_monitoring_runs SET parent_job_id=?,attempt_count=? WHERE id=?", (job_id, int(original["attempt_count"] or 0) + 1, derived["id"]))
+            derived = dict(conn.execute("SELECT * FROM v04g_monitoring_runs WHERE id=?", (derived["id"],)).fetchone())
+    return derived
+
+
 def _acquire_lock(conn: sqlite3.Connection, source_id: int, run_id: int) -> str | None:
     token = secrets.token_hex(12)
     ts = now()
@@ -840,6 +856,8 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                 """,
                 (now(), now(), int(counts["new"] > 0 or counts["changed"] > 0), now(), now(), source["id"]),
             )
+            if "health_status" in source.keys():
+                conn.execute("UPDATE v04g_monitoring_sources SET health_status='healthy' WHERE id=?", (source["id"],))
             _release_lock(conn, source["id"], token)
             return {"run_id": run_id, "status": status, **counts, "discovered": discovered_count}
         except Exception as exc:
@@ -864,6 +882,8 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                 """,
                 (now(), now(), failures, int(auto_paused), int(auto_paused), str(error_type)[:200], now(), source["id"]),
             )
+            if "health_status" in source.keys():
+                conn.execute("UPDATE v04g_monitoring_sources SET health_status=? WHERE id=?", ("paused" if auto_paused else "degraded", source["id"] ))
             _release_lock(conn, source["id"], token)
             return {"run_id": run_id, "status": "failed", "error_type": str(error_type), "error": str(exc)[:800]}
 

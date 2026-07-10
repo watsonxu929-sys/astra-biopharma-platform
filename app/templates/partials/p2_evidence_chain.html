@@ -1,0 +1,24 @@
+<section class="panel">
+  <h2>结构化证据链</h2>
+  <p>生成方式：{{ candidate.generated_by or 'rule' }} · {{ candidate.provider or 'rule' }} / {{ candidate.model or candidate.extraction_rule or '' }} · {{ candidate.prompt_version or '' }}</p>
+  <p>审核状态：<span class="badge">{{ candidate.pipeline_review_status or candidate.review_status }}</span>{% if candidate.rejection_reason %} · 拒绝原因：{{ candidate.rejection_reason }}{% endif %}</p>
+  <div class="subject-table">
+    <table>
+      <thead><tr><th>快照</th><th>来源与哈希</th><th>证据定位</th></tr></thead>
+      <tbody>
+      {% for ev in evidence %}
+        <tr>
+          <td>#{{ ev.snapshot_id }}<div class="muted">{{ ev.captured_at }}</div></td>
+          <td>{% if ev.url %}<a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or ev.url }}</a>{% endif %}<div class="code">{{ ev.snapshot_hash }}</div></td>
+          <td>{{ ev.evidence_excerpt }}<div class="muted">{% if ev.char_start is not none %}字符 {{ ev.char_start }}–{{ ev.char_end }}{% endif %}{% if ev.page_number %} · 第 {{ ev.page_number }} 页{% endif %}{% if ev.table_number %} · 表 {{ ev.table_number }}{% endif %}</div></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">该兼容候选尚无结构化证据关联，不能通过 P2.1 发布服务发布。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if (candidate.pipeline_review_status or candidate.review_status) == 'approved' and evidence %}
+  <form method="post" action="/processing/candidates/{{ candidate.id }}/publish"><button class="button primary">发布为正式情报产品</button></form>
+  {% endif %}
+</section>

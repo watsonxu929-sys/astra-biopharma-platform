@@ -1,4 +1,4 @@
-﻿{% extends "platform/base.html" %}
+{% extends "platform/base.html" %}
 {% block platform_title %}{{ item.title }}{% endblock %}
 {% block platform_content %}
 {% set sec = request.scope.get('security_context', {}) %}
@@ -19,5 +19,5 @@
 {% if item.content %}<section class="platform-card"><h2>详细内容</h2><p style="white-space:pre-wrap;">{{ item.content }}</p></section>{% endif %}
 {% if item.companies %}<section class="platform-card"><h2>涉及企业</h2><p>{{ item.companies }}</p></section>{% endif %}
 {% if item.industry_directions %}<section class="platform-card"><h2>产业方向</h2><p>{{ item.industry_directions }}</p></section>{% endif %}
-<section class="platform-card"><form method="post" action="/api/v1/favorites/toggle"><input type="hidden" name="target_type" value="intelligence"><input type="hidden" name="target_id" value="{{ item.id }}"><button class="btn btn-sm">{{ '取消收藏' if is_favorited else '收藏' }}</button></form></section>
+{% if evidence %}<section class="platform-card"><h2>证据链</h2>{% for ev in evidence %}<article><p><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or ev.url }}</a> · 抓取于 {{ ev.captured_at }}</p><p>{{ ev.evidence_excerpt }}</p><p class="text-sm">Snapshot #{{ ev.snapshot_id }} · SHA256 {{ ev.snapshot_hash }}{% if ev.page_number %} · 第 {{ ev.page_number }} 页{% endif %}{% if ev.table_number %} · 表 {{ ev.table_number }}{% endif %}</p></article>{% endfor %}</section>{% endif %}<section class="platform-card"><form method="post" action="/api/v1/favorites/toggle"><input type="hidden" name="target_type" value="intelligence"><input type="hidden" name="target_id" value="{{ item.id }}"><button class="btn btn-sm">{{ '取消收藏' if is_favorited else '收藏' }}</button></form></section>
 {% endblock %}

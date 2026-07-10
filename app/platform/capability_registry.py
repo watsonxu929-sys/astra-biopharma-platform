@@ -59,7 +59,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("intelligence.feed", "情报动态", "动态", "已发布情报流", "intelligence", "intelligence", "/intelligence", "/api/v1/intelligence", "rss", order=31),
     cap("intelligence.subscriptions", "我的订阅", "订阅", "情报订阅", "intelligence", "intelligence", "/intelligence/subscriptions", "/api/v1/intelligence/subscriptions", "bell", order=32),
     cap("intelligence.favorites", "我的收藏", "收藏", "收藏的情报", "intelligence", "intelligence", "/workspace?tab=intelligence_favorites", "/api/v1/collection", "bookmark", order=33),
-    cap("intelligence.company_updates", "企业动态", "企业", "企业相关动态和信号", "intelligence", "intelligence", "/signals", "/api/v1/signals", "pulse", order=34, legacy=("/watchlists",)),
+    cap("intelligence.company_updates", "企业动态", "企业", "重点企业关注和变化跟踪", "intelligence", "intelligence", "/watchlists", "/api/v1/watchlists", "pulse", order=34, legacy=("/signals/watchlists",)),
     cap("intelligence.research", "专题研究", "研究", "专题研究和报告", "intelligence", "intelligence", "/research", "/api/v1/research", "flask-conical", order=35),
     cap("intelligence.operations", "情报运营", "运营", "情报采集、加工、审核和发布总览", "intelligence", "intelligence", "/intelligence/operations", "/api/v1/collection", "activity", "manage_monitoring", clients=("web", "admin"), order=36),
     cap("intelligence.auto_collection", "自动采集", "采集", "从数据源创建并执行采集任务", "intelligence", "intelligence", "/collection", "/api/v1/collection", "download", "manage_monitoring", clients=("web", "admin"), order=37),

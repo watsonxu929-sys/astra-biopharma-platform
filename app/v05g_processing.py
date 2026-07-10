@@ -7,6 +7,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.security import current_username
+from app.services.intelligence_review_service import IntelligenceReviewService
+from app.services.intelligence_product_service import IntelligenceProductService
 from app.services.processing import (
     apply_candidate,
     candidate_detail,
@@ -16,7 +18,6 @@ from app.services.processing import (
     list_jobs,
     list_subject_matches,
     process_job,
-    review_candidate,
     run_worker,
 )
 
@@ -90,8 +91,27 @@ def processing_candidate_detail(request: Request, candidate_id: int):
 @router.post("/processing/candidates/{candidate_id}/review")
 def processing_review_candidate(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form(""), final_value: str = Form("")):
     try:
-        row = review_candidate(candidate_id, decision=decision, actor=current_username(request), note=note, final_value=final_value)
+        context = request.scope.get("security_context", {})
+        row = IntelligenceReviewService().review_candidate(
+            candidate_id, decision=decision, actor=current_username(request),
+            permissions=set(context.get("permissions") or []), note=note,
+            final_value=final_value,
+        )
         return RedirectResponse(f"/processing/candidates/{candidate_id}?message=已审核 {row['review_status']}", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
+
+
+@router.post("/processing/candidates/{candidate_id}/publish")
+def processing_publish_candidate(request: Request, candidate_id: int):
+    context = request.scope.get("security_context", {})
+    try:
+        product = IntelligenceProductService().publish_candidate(
+            candidate_id,
+            actor=current_username(request),
+            permissions=set(context.get("permissions") or []),
+        )
+        return RedirectResponse(f"/intelligence/{product['id']}", status_code=303)
     except Exception as exc:
         return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
 

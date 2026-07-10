@@ -43,31 +43,15 @@ class UnifiedIntelligenceService:
         return item
 
     def publish_from_raw(self, raw_id: int, *, actor_user_id: int | None = None) -> IntelligenceItem:
-        row = self.db.execute(text("SELECT * FROM raw_intelligence WHERE id=:id"), {"id": int(raw_id)}).mappings().first()
-        if not row:
-            raise HTTPException(status_code=404, detail={"code": "RAW_INTELLIGENCE_NOT_FOUND", "message": "原始情报不存在", "details": {}})
-        existing = self.db.scalar(select(IntelligenceItem).where(IntelligenceItem.source_name == "raw_intelligence", IntelligenceItem.source_url == (row.get("source_url") or None)))
-        if existing:
-            return existing
-        item = IntelligenceItem(
-            title=row.get("title") or f"Raw intelligence #{raw_id}",
-            summary=(row.get("content") or "")[:300],
-            content=row.get("content"),
-            intel_type=row.get("source_type") or "raw",
-            source_name="raw_intelligence",
-            source_url=row.get("source_url"),
-            source_record_type="raw_intelligence",
-            source_record_id=int(raw_id),
-            evidence_hash=hashlib.sha256((row.get("content") or "").encode("utf-8")).hexdigest(),
-            published_at=datetime.now(),
-            visibility=row.get("visibility") or "public",
-            status="published",
-            created_by=actor_user_id,
+        """Compatibility guard: P2.1 publication must start from an approved FactCandidate."""
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "FACT_CANDIDATE_REVIEW_REQUIRED",
+                "message": "原始情报必须先形成有证据的候选并通过人工审核",
+                "details": {"raw_id": int(raw_id)},
+            },
         )
-        self.db.add(item)
-        self.db.commit()
-        self.db.refresh(item)
-        return item
 
     def to_api(self, item: IntelligenceItem) -> dict[str, Any]:
         return {

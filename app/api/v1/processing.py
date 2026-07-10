@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 from app.i18n.helpers import add_labels
 from app.services.api_common import Pagination, normalize_page, paginated, require_permission, single
+from app.services.intelligence_review_service import IntelligenceReviewService
+from app.services.intelligence_product_service import IntelligenceProductService
 from app.services.processing import (
     apply_candidate,
     candidate_detail,
@@ -14,7 +16,6 @@ from app.services.processing import (
     list_jobs,
     list_subject_matches,
     process_job,
-    review_candidate,
     run_worker,
 )
 
@@ -113,7 +114,11 @@ def api_candidate_detail(request: Request, candidate_id: int):
 def api_review_candidate(request: Request, candidate_id: int, payload: ReviewIn):
     user = require_permission(request, "review_data")
     try:
-        return single(add_labels(review_candidate(candidate_id, decision=payload.decision, actor=str(user.get("username") or "api"), note=payload.note, final_value=payload.final_value)))
+        row = IntelligenceReviewService().review_candidate(
+            candidate_id, decision=payload.decision, actor=str(user.get("username") or "api"),
+            permissions={"review_data"}, note=payload.note, final_value=payload.final_value,
+        )
+        return single(add_labels(row))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail={"code": "CANDIDATE_REVIEW_FAILED", "message": str(exc), "details": {}}) from exc
 
@@ -131,4 +136,15 @@ def api_subject_matches(request: Request, status: str = "", page: int = Query(1,
     rows, total = list_subject_matches(page=page, page_size=page_size, status=status)
     return paginated(add_labels(rows), Pagination(page, page_size, total))
 
-
+@router.post("/candidates/{candidate_id}/publish", summary="Publish an approved evidence-backed candidate")
+def api_publish_candidate(request: Request, candidate_id: int):
+    user = require_permission(request, "review_data")
+    try:
+        product = IntelligenceProductService().publish_candidate(
+            candidate_id,
+            actor=str(user.get("username") or "api"),
+            permissions={"review_data"},
+        )
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=409, detail={"code": "CANDIDATE_PUBLISH_FAILED", "message": str(exc), "details": {}}) from exc
+    return single(add_labels(product))
