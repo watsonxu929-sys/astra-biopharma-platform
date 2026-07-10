@@ -30,7 +30,7 @@ def test_temp_database_used_for_writes(temp_database):
         initial_count = conn.execute("SELECT COUNT(*) FROM v05a_users").fetchone()[0]
         now_str = datetime.now().isoformat()
         conn.execute("INSERT INTO v05a_users (username, password_hash, display_name, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                     ("test_user", "dummy_hash", "Test User", "user", "active", now_str, now_str))
+                     ("test_user", "dummy_hash", "Test User", "viewer", "active", now_str, now_str))
         conn.commit()
         final_count = conn.execute("SELECT COUNT(*) FROM v05a_users").fetchone()[0]
     

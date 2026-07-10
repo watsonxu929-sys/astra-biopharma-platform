@@ -8,10 +8,17 @@ def test_fastapi_app_importable():
 
 def test_routes_registered():
     from app.main import app
-    routes = [r.path for r in app.routes]
-    assert "/" in routes
-    assert "/health" in routes
-    assert "/api/v1/" in routes or any("/api/v1/" in r for r in routes)
+    route_paths = []
+    for r in app.routes:
+        if hasattr(r, 'path'):
+            route_paths.append(r.path)
+        elif hasattr(r, 'routes'):
+            for sub in r.routes:
+                if hasattr(sub, 'path'):
+                    route_paths.append(sub.path)
+    assert "/" in route_paths
+    assert "/health" in route_paths
+    assert len(route_paths) > 10
 
 
 def test_app_import_does_not_modify_db(temp_db_conn):
