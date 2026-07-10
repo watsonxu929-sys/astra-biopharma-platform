@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 from typing import Any
 
 from fastapi import HTTPException
@@ -55,6 +56,9 @@ class UnifiedIntelligenceService:
             intel_type=row.get("source_type") or "raw",
             source_name="raw_intelligence",
             source_url=row.get("source_url"),
+            source_record_type="raw_intelligence",
+            source_record_id=int(raw_id),
+            evidence_hash=hashlib.sha256((row.get("content") or "").encode("utf-8")).hexdigest(),
             published_at=datetime.now(),
             visibility=row.get("visibility") or "public",
             status="published",
@@ -75,6 +79,9 @@ class UnifiedIntelligenceService:
             "intel_type": item.intel_type,
             "source_name": item.source_name,
             "source_url": item.source_url,
+            "source_record_type": item.source_record_type,
+            "source_record_id": item.source_record_id,
+            "evidence_hash": item.evidence_hash,
             "published_at": item.published_at,
             "importance": item.importance,
             "credibility": item.credibility,

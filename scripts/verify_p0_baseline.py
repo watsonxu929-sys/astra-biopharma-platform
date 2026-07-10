@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
 LIVE_DB = ROOT / "data" / "app.db"
 CORE_TABLES = {"raw_intelligence", "organizations", "people", "projects", "events", "resources", "relations", "actions"}
-PAGES = ["/", "/subjects", "/organizations", "/people", "/projects", "/events", "/resources", "/intelligence", "/club", "/reports", "/pipeline"]
+PAGES = ["/", "/subjects", "/organizations", "/people", "/projects", "/events", "/resources", "/intelligence", "/club", "/reports", "/pipeline", "/opportunities", "/workspace", "/system/operations", "/actions"]
 APIS = ["/api/v1/system/health", "/api/v1/dashboard", "/api/v1/organizations", "/api/v1/intelligence"]
 
 

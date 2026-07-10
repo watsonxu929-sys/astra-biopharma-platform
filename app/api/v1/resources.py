@@ -15,6 +15,10 @@ class ResourceCreate(BaseModel):
     title: str
     direction: str = "supply"
     resource_type: str = "other"
+    category: str | None = None
+    owner_person_id: int | None = None
+    owner_organization_id: int | None = None
+    visibility: str = "organization"
     summary: str | None = None
     description: str | None = None
     region: str | None = None

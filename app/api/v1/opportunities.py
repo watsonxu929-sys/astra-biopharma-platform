@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -22,6 +24,15 @@ class OpportunityCreate(BaseModel):
     target_person_id: int | None = None
     target_organization_id: int | None = None
     related_resource_id: int | None = None
+    demand_organization_id: int | None = None
+    supply_organization_id: int | None = None
+    owner_id: int | None = None
+    participants: str | None = None
+    priority: str = "P2"
+    estimated_amount: str | None = None
+    next_action: str | None = None
+    next_follow_at: datetime | None = None
+    human_confirmed: bool = False
 
 
 class StageUpdate(BaseModel):

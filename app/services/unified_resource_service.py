@@ -58,11 +58,16 @@ class UnifiedResourceService:
         resource = MarketResource(
             title=str(fields.get("title") or "").strip() or "未命名资源",
             direction=direction,
-            resource_type=str(fields.get("resource_type") or "其他"),
+            resource_type=str(fields.get("resource_type") or fields.get("category") or "其他"),
+            category=fields.get("category") or fields.get("resource_type"),
             summary=fields.get("summary"),
             description=fields.get("description"),
             publisher_id=int(actor_user_id),
-            organization_id=fields.get("organization_id"),
+            owner_person_id=fields.get("owner_person_id"),
+            organization_id=fields.get("owner_organization_id") or fields.get("organization_id"),
+            visibility=fields.get("visibility") or "organization",
+            legacy_source_type=fields.get("legacy_source_type"),
+            legacy_source_id=str(fields.get("legacy_source_id")) if fields.get("legacy_source_id") is not None else None,
             region=fields.get("region"),
             industry_direction=fields.get("industry_direction"),
             tags=fields.get("tags"),
@@ -87,6 +92,17 @@ class UnifiedResourceService:
         resource.updated_at = datetime.now()
         self.db.commit()
         return resource
+
+    def find_duplicates(self, fields: dict[str, Any], limit: int = 20) -> list[MarketResource]:
+        title = str(fields.get("title") or "").strip()
+        direction = str(fields.get("direction") or "supply")
+        if not title:
+            return []
+        stmt = select(MarketResource).where(MarketResource.direction == direction, MarketResource.title == title)
+        owner_org = fields.get("owner_organization_id") or fields.get("organization_id")
+        if owner_org is not None:
+            stmt = stmt.where(MarketResource.organization_id == int(owner_org))
+        return list(self.db.scalars(stmt.limit(limit)).all())
 
     def match(self, resource_id: int, limit: int = 10) -> list[dict[str, Any]]:
         resource = self.detail(resource_id)
@@ -129,4 +145,4 @@ class UnifiedResourceService:
     def to_api(self, resource: MarketResource | dict[str, Any]) -> dict[str, Any]:
         if isinstance(resource, dict):
             return resource
-        return {"id": resource.id, "canonical_id": f"resource:{resource.id}", "title": resource.title, "direction": resource.direction, "resource_type": resource.resource_type, "summary": resource.summary, "description": resource.description, "publisher_id": resource.publisher_id, "organization_id": resource.organization_id, "region": resource.region, "industry_direction": resource.industry_direction, "tags": resource.tags, "cooperation_mode": resource.cooperation_mode, "budget_note": resource.budget_note, "valid_until": resource.valid_until, "status": resource.status}
+        return {"id": resource.id, "canonical_id": f"resource:{resource.id}", "title": resource.title, "direction": resource.direction, "resource_type": resource.resource_type, "category": resource.category, "summary": resource.summary, "description": resource.description, "publisher_id": resource.publisher_id, "owner_person_id": resource.owner_person_id, "owner_organization_id": resource.organization_id, "visibility": resource.visibility, "region": resource.region, "industry_direction": resource.industry_direction, "tags": resource.tags, "cooperation_mode": resource.cooperation_mode, "budget_note": resource.budget_note, "valid_until": resource.valid_until, "status": resource.status, "legacy_source_type": resource.legacy_source_type, "legacy_source_id": resource.legacy_source_id}

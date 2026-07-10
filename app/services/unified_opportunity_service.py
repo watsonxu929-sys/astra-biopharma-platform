@@ -69,6 +69,8 @@ class UnifiedOpportunityService:
         return opp
 
     def create(self, *, actor_user_id: int, fields: dict[str, Any]) -> CooperationOpportunity:
+        if fields.get("human_confirmed") is not True:
+            raise HTTPException(status_code=409, detail={"code": "OPPORTUNITY_HUMAN_CONFIRMATION_REQUIRED", "message": "正式商机必须由人工确认", "details": {}})
         source_type = fields.get("source_type")
         source_id = fields.get("source_id")
         if source_type and source_id:
@@ -85,12 +87,20 @@ class UnifiedOpportunityService:
             target_person_id=fields.get("target_person_id"),
             target_organization_id=fields.get("target_organization_id"),
             related_resource_id=fields.get("related_resource_id"),
+            demand_organization_id=fields.get("demand_organization_id"),
+            supply_organization_id=fields.get("supply_organization_id"),
             description=fields.get("description"),
             expected_outcome=fields.get("expected_outcome"),
+            priority=fields.get("priority") or "P2",
+            estimated_amount=fields.get("estimated_amount"),
+            next_action=fields.get("next_action"),
+            next_follow_at=fields.get("next_follow_at"),
             owner_id=fields.get("owner_id") or int(actor_user_id),
             participants=fields.get("participants"),
             status=fields.get("status") or "active",
             visibility=fields.get("visibility") or "organization",
+            human_confirmed_by=int(actor_user_id),
+            human_confirmed_at=datetime.now(),
         )
         self.db.add(opp)
         self.db.flush()
@@ -151,10 +161,10 @@ class UnifiedOpportunityService:
             raise HTTPException(status_code=409, detail={"code": "CONTACT_INTENT_NOT_ACCEPTED", "message": "只有已接受的联系意向可以转化", "details": {}})
         if intent.from_user_id != actor_user_id and intent.responded_by != actor_user_id and not is_admin:
             raise HTTPException(status_code=403, detail={"code": "CONVERT_FORBIDDEN", "message": "无权转化该联系意向", "details": {}})
-        return self.create(actor_user_id=actor_user_id, fields={"title": f"联系意向转化: {intent.intent_type}", "opp_type": "contact", "source_type": "contact_intent", "source_id": intent.id, "description": intent.message, "status": "active", "visibility": "organization", "target_person_id": intent.target_id if intent.target_type == "person" else None, "target_organization_id": intent.target_id if intent.target_type == "organization" else None})
+        return self.create(actor_user_id=actor_user_id, fields={"title": f"联系意向转化: {intent.intent_type}", "opp_type": "contact", "source_type": "contact_intent", "source_id": intent.id, "description": intent.message, "status": "active", "visibility": "organization", "target_person_id": intent.target_id if intent.target_type == "person" else None, "target_organization_id": intent.target_id if intent.target_type == "organization" else None, "human_confirmed": True})
 
     def to_api(self, opp: CooperationOpportunity) -> dict[str, Any]:
-        return {"id": opp.id, "canonical_id": f"opportunity:{opp.id}", "title": opp.title, "opp_type": opp.opp_type, "source_type": opp.source_type, "source_id": opp.source_id, "initiator_id": opp.initiator_id, "organization_id": opp.organization_id, "target_person_id": opp.target_person_id, "target_organization_id": opp.target_organization_id, "related_resource_id": opp.related_resource_id, "stage": opp.stage, "status": opp.status, "visibility": opp.visibility, "owner_id": opp.owner_id, "participants": opp.participants}
+        return {"id": opp.id, "canonical_id": f"opportunity:{opp.id}", "title": opp.title, "opp_type": opp.opp_type, "source_type": opp.source_type, "source_id": opp.source_id, "initiator_id": opp.initiator_id, "organization_id": opp.organization_id, "target_person_id": opp.target_person_id, "target_organization_id": opp.target_organization_id, "related_resource_id": opp.related_resource_id, "demand_organization_id": opp.demand_organization_id, "supply_organization_id": opp.supply_organization_id, "stage": opp.stage, "priority": opp.priority, "estimated_amount": opp.estimated_amount, "next_action": opp.next_action, "next_follow_at": opp.next_follow_at, "status": opp.status, "visibility": opp.visibility, "owner_id": opp.owner_id, "participants": opp.participants, "human_confirmed_by": opp.human_confirmed_by, "human_confirmed_at": opp.human_confirmed_at}
 
 
 

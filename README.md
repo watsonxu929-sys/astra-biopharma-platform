@@ -35,3 +35,7 @@ verify_all_windows.bat
 ```
 
 当前状态与风险见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[KNOWN_ISSUES.md](KNOWN_ISSUES.md)、[架构](docs/ARCHITECTURE.md)、[数据模型](docs/DATA_MODEL.md)、[启动与验证](docs/STARTUP_AND_VERIFICATION.md)。
+
+## P1 领域迁移
+
+先运行 `.venv\Scripts\python.exe scripts\migrations\001_core_domain_unification.py --dry-run`，确认冲突后再运行 `--apply`。迁移自动创建一致性备份。
