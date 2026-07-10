@@ -27,6 +27,7 @@ from app.security import (
 from app.v04c_review import db_connection, default_db_path
 from app.v04f_operations import _next_no as v04f_next_no
 from app.services.membership_access_service import get_membership_summary, get_user_memberships
+from app.services.unified_identity_service import UnifiedIdentityService, UnifiedIdentityServiceError
 from app.v05b_member_import import MAX_UPLOAD_BYTES, SUPPORTED_IMAGES, _bind_asset, _insert_asset
 from app.v05c_club_events import ensure_schema as ensure_v05c_schema
 from scripts.migrate_v05d import SCHEMA_SQL as V05D_SCHEMA_SQL
@@ -489,38 +490,19 @@ async def submit_membership_link_request(request: Request):
     if not member_no and not invite_code:
         return RedirectResponse("/member/request-membership-link?error=请输入会员编号或邀请码", status_code=303)
     
-    with db_connection() as conn:
-        user_id = conn.execute("SELECT user_id FROM v04f_club_memberships WHERE id=?", (mid,)).fetchone()[0]
-        if user_id:
+    try:
+        svc = UnifiedIdentityService()
+        svc.request_membership_link(user_id=None, membership_id=mid, member_no=member_no, invite_code=invite_code, reason=reason)
+        return RedirectResponse("/member?message=关联申请已提交，请等待管理员审核", status_code=303)
+    except UnifiedIdentityServiceError as e:
+        if e.code == "ALREADY_LINKED":
             return RedirectResponse("/member?error=会员身份已关联账号", status_code=303)
-        
-        existing_req = conn.execute("SELECT 1 FROM membership_user_link_requests WHERE membership_id=? AND status='pending'", (mid,)).fetchone()
-        if existing_req:
+        elif e.code == "DUPLICATE_REQUEST":
             return RedirectResponse("/member?error=已有待审核的关联申请", status_code=303)
-        
-        target_member = None
-        if member_no:
-            target_member = conn.execute("SELECT id FROM v04f_club_memberships WHERE member_no=?", (member_no,)).fetchone()
-        elif invite_code:
-            target_member = conn.execute("SELECT id FROM v04f_club_memberships WHERE invite_code=?", (invite_code,)).fetchone()
-        
-        if not target_member:
+        elif e.code == "MEMBERSHIP_NOT_FOUND":
             return RedirectResponse("/member/request-membership-link?error=未找到对应的会员身份", status_code=303)
-        
-        target_id = int(target_member["id"])
-        if target_id != mid:
-            return RedirectResponse("/member/request-membership-link?error=只能申请关联当前登录的会员身份", status_code=303)
-        
-        ts = now_iso()
-        conn.execute(
-            """
-            INSERT INTO membership_user_link_requests(membership_id,user_id,member_no,invite_code,reason,status,created_at,updated_at)
-            VALUES (?,?,?,?,?,'pending',?,?)
-            """,
-            (mid, None, member_no, invite_code, reason, ts, ts)
-        )
-    
-    return RedirectResponse("/member?message=关联申请已提交，请等待管理员审核", status_code=303)
+        else:
+            return RedirectResponse(f"/member/request-membership-link?error={e.message}", status_code=303)
 
 
 @router.get("/member", response_class=HTMLResponse)

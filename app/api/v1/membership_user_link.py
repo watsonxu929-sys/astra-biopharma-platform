@@ -25,6 +25,7 @@ from app.services.membership_user_link_service import (
     request_membership_link,
     unbind_user,
 )
+from app.services.unified_identity_service import UnifiedIdentityService, UnifiedIdentityServiceError
 
 router = APIRouter(tags=["Membership User Link"])
 
@@ -103,11 +104,13 @@ def bind_membership_user(membership_id: int, payload: BindUserPayload, request: 
     actor = require_permission(request, "manage_club")
     try:
         require_membership_admin(actor)
-        return single(bind_user(membership_id, payload.user_id, payload.reason, actor.get("username")))
+        svc = UnifiedIdentityService()
+        result = svc.bind_user_to_membership(membership_id=membership_id, user_id=payload.user_id, reason=payload.reason, actor=actor.get("username"))
+        return single(result)
     except MembershipAccessError as exc:
         _handle_access(exc)
-    except MembershipUserLinkError as exc:
-        _handle(exc)
+    except UnifiedIdentityServiceError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
 
 
 @router.delete("/memberships/{membership_id}/user-link")
@@ -115,11 +118,13 @@ def unbind_membership_user(membership_id: int, payload: UnlinkPayload, request: 
     actor = require_permission(request, "manage_club")
     try:
         require_membership_admin(actor)
-        return single(unbind_user(membership_id, payload.reason, actor.get("username")))
+        svc = UnifiedIdentityService()
+        result = svc.unbind_user_from_membership(membership_id=membership_id, reason=payload.reason, actor=actor.get("username"))
+        return single(result)
     except MembershipAccessError as exc:
         _handle_access(exc)
-    except MembershipUserLinkError as exc:
-        _handle(exc)
+    except UnifiedIdentityServiceError as exc:
+        raise_api_error(exc.status_code, exc.code, exc.message)
 
 
 @router.post("/me/membership-link-requests")
