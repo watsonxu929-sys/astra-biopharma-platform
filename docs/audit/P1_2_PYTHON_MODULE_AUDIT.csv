@@ -1,0 +1,1350 @@
+path,category,imported_by,route_registered,script_referenced,template_referenced,replacement,risk_level,recommended_action,evidence
+check_account.py,C,,否,否,否,,高,需验证,no static references found
+app/analyzer.py,C,,否,否,否,,高,需验证,no static references found
+app/crud_config.py,C,,否,否,否,,高,需验证,no static references found
+app/database.py,C,,否,否,否,,高,需验证,no static references found
+app/entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+app/identity.py,A,,是,否,否,,低,保留,route registered
+app/main.py,A,,是,否,否,,低,保留,route registered
+app/models.py,A,,否,否,否,,低,保留,database models
+app/models_platform.py,A,,否,否,否,,低,保留,database models
+app/navigation.py,C,,否,否,否,,高,需验证,no static references found
+app/paste_router.py,A,,是,否,否,,低,保留,route registered
+app/routes_platform.py,A,,是,否,否,,低,保留,route registered
+app/security.py,C,,否,否,否,,高,需验证,no static references found
+app/settings.py,C,,否,否,否,,高,需验证,no static references found
+app/v04c1_ingestion.py,A,,是,否,否,,低,保留,route registered
+app/v04c_review.py,A,,是,否,否,,低,保留,route registered
+app/v04db_prestructure.py,A,,是,否,否,,低,保留,route registered
+app/v04d_structuring.py,A,,是,否,否,,低,保留,route registered
+app/v04e_entity_resolution.py,A,,是,否,否,,低,保留,route registered
+app/v04f_operations.py,A,,是,否,否,,低,保留,route registered
+app/v04g_monitoring.py,A,,是,否,否,,低,保留,route registered
+app/v04h_recommendations.py,A,,是,否,否,,低,保留,route registered
+app/v05a_security.py,A,,是,否,否,,低,保留,route registered
+app/v05b_member_import.py,A,,是,否,否,,低,保留,route registered
+app/v05c_club_events.py,A,,是,否,否,,低,保留,route registered
+app/v05d_member_portal.py,A,,是,否,否,,低,保留,route registered
+app/v05e_intelligence.py,A,,是,否,否,,低,保留,route registered
+app/v05f_collection.py,A,,是,否,否,,低,保留,route registered
+app/v05g_processing.py,A,,是,否,否,,低,保留,route registered
+app/v05h_reports.py,A,,是,否,否,,低,保留,route registered
+app/v05i_pipeline.py,A,,是,否,否,,低,保留,route registered
+app/v05j_research.py,A,,是,否,否,,低,保留,route registered
+app/v05kl_operations.py,A,,是,否,否,,低,保留,route registered
+app/web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+app/__init__.py,C,,否,否,否,,高,需验证,no static references found
+scripts/apply_direct_route_fix.py,A,,是,否,否,,低,保留,route registered
+scripts/apply_v03b.py,A,,是,否,否,,低,保留,route registered
+scripts/apply_v03c.py,A,,是,否,否,,低,保留,route registered
+scripts/apply_v04a.py,A,,是,否,否,,低,保留,route registered
+scripts/apply_v04b.py,C,,否,否,否,,高,需验证,no static references found
+scripts/audit_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+scripts/audit_suspicious_entities.py,C,,否,否,否,,高,需验证,no static references found
+scripts/backup_database.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/build_release_v1.py,C,,否,否,否,,高,需验证,no static references found
+scripts/check_all_templates.py,C,,否,否,否,,高,需验证,no static references found
+scripts/check_database_config_v1.py,C,,否,否,否,,高,需验证,no static references found
+scripts/check_mojibake.py,C,,否,否,否,,高,需验证,no static references found
+scripts/check_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+scripts/check_source_encoding.py,C,,否,否,否,,高,需验证,no static references found
+scripts/check_user_visible_english.py,C,,否,否,否,,高,需验证,no static references found
+scripts/cleanup_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+scripts/cleanup_test_data.py,C,,否,否,否,,高,需验证,no static references found
+scripts/collect_v04d_context.py,C,,否,否,否,,高,需验证,no static references found
+scripts/create_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+scripts/export_database.py,C,,否,否,否,,高,需验证,no static references found
+scripts/generate_historical_signals.py,C,,否,否,否,,高,需验证,no static references found
+scripts/import_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+scripts/init_database.py,C,,否,否,否,,高,需验证,no static references found
+scripts/migrate_all.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_domain_consolidation_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_identity_link_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_membership_person_link_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_organization_core_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_platform_mvp_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_rbac_core_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_sqlite_to_postgres.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_user_membership_link_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04c.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04c1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04d.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04db.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04e.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04f.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04g.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v04h.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05a.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05b.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05c.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05d.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05e.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05f.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05g.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05h.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05i.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05j.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/migrate_v05kl.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/pilot_real_sources.py,C,,否,否,否,,高,需验证,no static references found
+scripts/queue_historical_processing.py,C,,否,否,否,,高,需验证,no static references found
+scripts/refresh_v04h_recommendations.py,C,,否,否,否,,高,需验证,no static references found
+scripts/repair_remaining_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+scripts/report_membership_person_candidates.py,C,,否,否,否,,高,需验证,no static references found
+scripts/report_user_membership_candidates.py,C,,否,否,否,,高,需验证,no static references found
+scripts/restore_backup.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/run_collection_worker.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_monitoring_once.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_operational_pilot.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_pipeline_worker.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_processing_worker.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_report_worker.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_scheduler.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_signal_worker.py,C,,否,否,否,,高,需验证,no static references found
+scripts/run_worker.py,C,,否,否,否,,高,需验证,no static references found
+scripts/seed_demo_platform_v1.py,C,,否,否,否,,高,需验证,no static references found
+scripts/seed_v04c1_demo.py,C,,否,否,否,,高,需验证,no static references found
+scripts/seed_v04c_demo.py,C,,否,否,否,,高,需验证,no static references found
+scripts/seed_v04db_demo.py,C,,否,否,否,,高,需验证,no static references found
+scripts/seed_v04d_demo.py,C,,否,否,否,,高,需验证,no static references found
+scripts/seed_v04e_demo.py,C,,否,否,否,,高,需验证,no static references found
+scripts/self_check.py,C,,否,否,否,,高,需验证,no static references found
+scripts/self_check_v03c.py,C,,否,否,否,,高,需验证,no static references found
+scripts/self_check_v04a.py,C,,否,否,否,,高,需验证,no static references found
+scripts/test_db_utils.py,C,,否,否,否,,高,需验证,no static references found
+scripts/test_entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+scripts/test_paste_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+scripts/test_web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+scripts/verify_all.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_backup_restore.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_core_pages.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_data_integrity_workflow_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_domain_consolidation_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_identity_link_e2e.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_identity_link_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_identity_membership_access_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_intelligence_crawl_visibility_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_intelligence_full_chain.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_intelligence_pipeline_e2e_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_manual_ingestion.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_membership_access_scope_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_membership_person_link_ui_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_membership_person_link_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_navigation_consistency_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_navigation_product_shell_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_organization_core_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_p0_baseline.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_p0_stability_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_p1_domain_unification.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_platform_integration_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_platform_mvp_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_product_recovery_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_product_usability_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_rbac_authorization_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_route_registry_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_user_membership_link_v1.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04c.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04c1.py,D,,是,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04d.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04d3_batch_people.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04d4_links_and_review.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04db.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04d_search.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04e.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04f.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04g.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v04h.py,D,,是,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05a.py,D,,是,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05b.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05c.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05d.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05e.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05f.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05g.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05h.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05i.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05j.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05kl.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+scripts/verify_v05m.py,D,,否,否,否,,低,保留,migrations/verification/backup scripts
+tests/conftest.py,D,,否,否,否,,低,保留,test files
+tests/test_app_import.py,D,,否,否,否,,低,保留,test files
+tests/test_domain_integrity_repair.py,D,,否,否,否,,低,保留,test files
+tests/test_opportunity_confirmation.py,D,,否,否,否,,低,保留,test files
+tests/test_p1_migration_idempotency.py,D,,否,否,否,,低,保留,test files
+tests/test_real_database_protection.py,D,,否,否,否,,低,保留,test files
+scripts/audit/audit_redundancy.py,C,,否,否,否,,高,需验证,no static references found
+scripts/migrations/001_core_domain_unification.py,C,,否,否,否,,高,需验证,no static references found
+scripts/migrations/002_repair_domain_integrity.py,C,,否,否,否,,高,需验证,no static references found
+scripts/migrations/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/main.py,A,,是,否,否,,低,保留,route registered
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/navigation.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/scripts/check_user_visible_english.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/scripts/verify_v05m.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/i18n/helpers.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/i18n/zh_cn.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/services/reports/report_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/api/v1/collection.py,A,,是,否,否,,低,保留,route registered
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/api/v1/pipeline.py,A,,是,否,否,,低,保留,route registered
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/api/v1/processing.py,A,,是,否,否,,低,保留,route registered
+patches/v05M_全站产品化收口中文化入口整合与核心流程重构_完整覆盖补丁_staging/app/api/v1/reports.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/analyzer.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/crud_config.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/database.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/main.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/models.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/navigation.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/paste_router.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/security.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04c1_ingestion.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04c_review.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04db_prestructure.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04d_structuring.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04e_entity_resolution.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04f_operations.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04g_monitoring.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v04h_recommendations.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05a_security.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05b_member_import.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05c_club_events.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05d_member_portal.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05e_intelligence.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05f_collection.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05g_processing.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05h_reports.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05i_pipeline.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05j_research.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/v05kl_operations.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/apply_direct_route_fix.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/apply_v03b.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/apply_v03c.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/apply_v04a.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/apply_v04b.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/audit_suspicious_entities.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/backup_database.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/check_all_templates.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/check_mojibake.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/check_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/check_user_visible_english.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/collect_v04d_context.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/export_database.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/generate_historical_signals.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/import_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/init_database.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_all.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_sqlite_to_postgres.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04c.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04c1.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04d.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04db.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04e.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04f.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04g.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v04h.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05a.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05b.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05c.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05d.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05e.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05f.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05g.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05h.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05i.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05j.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/migrate_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/pilot_real_sources.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/queue_historical_processing.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/refresh_v04h_recommendations.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/restore_backup.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_collection_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_monitoring_once.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_operational_pilot.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_pipeline_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_processing_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_report_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_scheduler.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_signal_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/run_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/seed_v04c1_demo.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/seed_v04c_demo.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/seed_v04db_demo.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/seed_v04d_demo.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/seed_v04e_demo.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/self_check.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/self_check_v03c.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/self_check_v04a.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/test_entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/test_paste_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/test_web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_backup_restore.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_core_pages.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04c.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04c1.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04d.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04d3_batch_people.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04d4_links_and_review.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04db.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04d_search.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04e.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04f.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04g.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v04h.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05a.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05b.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05c.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05d.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05e.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05f.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05g.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05h.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05i.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05j.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/scripts/verify_v05m.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/core/config.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/core/database_compat.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/core/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/i18n/helpers.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/i18n/zh_cn.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/i18n/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/api_common.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/api_subject_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/club_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/collection_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/dashboard_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/data_quality.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/id_generator.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/lead_recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/lead_scoring_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/member_field_classifier.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/member_import_normalizer.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/member_import_parser.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/member_import_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/member_import_validator.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/monitoring_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/relationship_path_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/search_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/signal_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/subject_links.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/subject_profile_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/suspicious_review.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/watchlist_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/operations/backup_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/operations/restore_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/operations/source_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/operations/system_health_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/operations/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/pipeline/pipeline_common.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/pipeline/pipeline_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/pipeline/pipeline_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/pipeline/pipeline_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/pipeline/pipeline_state_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/pipeline/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/processing/confidence_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/processing/content_block_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/processing/document_classifier.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/processing/entity_extraction_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/processing/processing_job_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/processing/subject_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/processing/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/reports/report_citation_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/reports/report_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/reports/report_query_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/reports/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/research/common.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/research/investment_assessment_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/research/research_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/research/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/signals/signal_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/signals/signal_rule_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/signals/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/task_common.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/task_dispatcher.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/task_heartbeat_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/task_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/task_registry.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/task_retry_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/task_runner.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/services/tasks/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/collection.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/dashboard.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/events.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/intelligence.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/investment_assessments.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/navigation.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/pipeline.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/processing.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/relationships.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/reports.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/research.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/router.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/search.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/signals.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/subjects.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/system.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/watchlists.py,A,,是,否,否,,低,保留,route registered
+patches/v05M-R_异常中断恢复模板乱码与全站回归修复_完整覆盖补丁_staging/app/api/v1/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/main.py,A,,是,否,否,,低,保留,route registered
+patches/v05G_semantic_processing_patch_20260701_113851/app/security.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/v05g_processing.py,A,,是,否,否,,低,保留,route registered
+patches/v05G_semantic_processing_patch_20260701_113851/scripts/migrate_all.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/scripts/migrate_v05g.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/scripts/queue_historical_processing.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/scripts/run_processing_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/scripts/verify_v05g.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/services/processing/confidence_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/services/processing/content_block_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/services/processing/document_classifier.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/services/processing/entity_extraction_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/services/processing/processing_job_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/services/processing/subject_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/services/processing/__init__.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05G_semantic_processing_patch_20260701_113851/app/api/v1/processing.py,A,,是,否,否,,低,保留,route registered
+patches/v05G_semantic_processing_patch_20260701_113851/app/api/v1/router.py,A,,是,否,否,,低,保留,route registered
+patches/v05F_multisource_collection_patch_20260701_093910/app/main.py,A,,是,否,否,,低,保留,route registered
+patches/v05F_multisource_collection_patch_20260701_093910/app/security.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05F_multisource_collection_patch_20260701_093910/app/v05f_collection.py,A,,是,否,否,,低,保留,route registered
+patches/v05F_multisource_collection_patch_20260701_093910/scripts/migrate_all.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05F_multisource_collection_patch_20260701_093910/scripts/migrate_v05f.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05F_multisource_collection_patch_20260701_093910/scripts/run_collection_worker.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05F_multisource_collection_patch_20260701_093910/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05F_multisource_collection_patch_20260701_093910/scripts/verify_v05f.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05F_multisource_collection_patch_20260701_093910/app/services/collection_service.py,C,,否,否,否,,高,需验证,no static references found
+patches/v05F_multisource_collection_patch_20260701_093910/app/api/v1/collection.py,A,,是,否,否,,低,保留,route registered
+patches/v05F_multisource_collection_patch_20260701_093910/app/api/v1/router.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/crud_config.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/database.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/main.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/models.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/navigation.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/paste_router.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/security.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/v04c1_ingestion.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v04c_review.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v04db_prestructure.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v04d_structuring.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v04e_entity_resolution.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v04f_operations.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v04g_monitoring.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v04h_recommendations.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05a_security.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05b_member_import.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05c_club_events.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05d_member_portal.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05e_intelligence.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05f_collection.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05g_processing.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05h_reports.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05i_pipeline.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05j_research.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/v05kl_operations.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/apply_direct_route_fix.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/scripts/apply_v03b.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/scripts/apply_v03c.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/scripts/apply_v04a.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/scripts/apply_v04b.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/audit_suspicious_entities.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/backup_database.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/check_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/check_user_visible_english.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/collect_v04d_context.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/export_database.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/generate_historical_signals.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/import_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/init_database.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_all.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_sqlite_to_postgres.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04c1.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v04h.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05a.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/migrate_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/pilot_real_sources.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/queue_historical_processing.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/refresh_v04h_recommendations.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/restore_backup.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_collection_worker.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_monitoring_once.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_operational_pilot.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_pipeline_worker.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_processing_worker.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_report_worker.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_scheduler.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_signal_worker.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/run_worker.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/seed_v04c1_demo.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/seed_v04c_demo.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/seed_v04db_demo.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/seed_v04d_demo.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/seed_v04e_demo.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/self_check.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/self_check_v03c.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/self_check_v04a.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/test_entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/test_paste_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/test_web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_backup_restore.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04c1.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04d3_batch_people.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04d4_links_and_review.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04d_search.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v04h.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05a.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/scripts/verify_v05m.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/api/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/core/config.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/core/database_compat.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/core/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/i18n/helpers.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/i18n/zh_cn.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/i18n/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/api_common.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/api_subject_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/club_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/collection_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/dashboard_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/data_quality.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/id_generator.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/lead_recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/lead_scoring_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/member_field_classifier.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/member_import_normalizer.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/member_import_parser.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/member_import_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/member_import_validator.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/monitoring_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/relationship_path_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/search_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/signal_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/subject_links.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/subject_profile_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/suspicious_review.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/watchlist_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/operations/backup_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/operations/restore_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/operations/source_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/operations/system_health_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/operations/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/pipeline/pipeline_common.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/pipeline/pipeline_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/pipeline/pipeline_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/pipeline/pipeline_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/pipeline/pipeline_state_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/pipeline/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/processing/confidence_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/processing/content_block_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/processing/document_classifier.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/processing/entity_extraction_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/processing/processing_job_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/processing/subject_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/processing/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/reports/report_citation_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/reports/report_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/reports/report_query_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/reports/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/research/common.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/research/investment_assessment_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/research/research_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/research/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/signals/signal_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/signals/signal_rule_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/signals/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/task_common.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/task_dispatcher.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/task_heartbeat_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/task_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/task_registry.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/task_retry_service.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/task_runner.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/services/tasks/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/api/v1/collection.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/dashboard.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/events.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/intelligence.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/investment_assessments.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/navigation.py,C,,否,否,否,,高,需验证,no static references found
+backup_before_v05m_recovery_20260702_091828/app/api/v1/pipeline.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/processing.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/relationships.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/reports.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/research.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/router.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/search.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/signals.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/subjects.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/system.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/watchlists.py,A,,是,否,否,,低,保留,route registered
+backup_before_v05m_recovery_20260702_091828/app/api/v1/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06h_20260706_145146/routes_platform.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06h_20260706_145146/verify_product_usability_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/routes_platform.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/app/navigation.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/app/routes_platform.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/apply_direct_route_fix.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/apply_v03b.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/apply_v03c.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/apply_v04a.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/apply_v04b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/audit_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/audit_suspicious_entities.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/backup_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/build_release_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/check_all_templates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/check_database_config_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/check_mojibake.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/check_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/check_user_visible_english.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/cleanup_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/cleanup_test_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/collect_v04d_context.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/create_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/export_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/generate_historical_signals.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/import_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/init_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_all.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_domain_consolidation_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_identity_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_membership_person_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_organization_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_platform_mvp_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_rbac_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_sqlite_to_postgres.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_user_membership_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04c1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v04h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05a.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/migrate_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/pilot_real_sources.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/queue_historical_processing.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/refresh_v04h_recommendations.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/repair_remaining_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/report_membership_person_candidates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/report_user_membership_candidates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/restore_backup.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_collection_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_monitoring_once.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_operational_pilot.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_pipeline_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_processing_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_report_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_scheduler.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_signal_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/run_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/seed_demo_platform_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/seed_v04c1_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/seed_v04c_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/seed_v04db_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/seed_v04d_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/seed_v04e_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/self_check.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/self_check_v03c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/self_check_v04a.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/test_db_utils.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/test_entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/test_paste_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/test_web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_backup_restore.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_core_pages.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_data_integrity_workflow_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_domain_consolidation_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_identity_link_e2e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_identity_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_identity_membership_access_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_intelligence_full_chain.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_intelligence_pipeline_e2e_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_membership_access_scope_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_membership_person_link_ui_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_membership_person_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_navigation_product_shell_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_organization_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_p0_stability_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_platform_integration_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_platform_mvp_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_product_recovery_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_product_usability_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_rbac_authorization_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_route_registry_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_user_membership_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04c1.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04d3_batch_people.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04d4_links_and_review.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04d_search.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v04h.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05a.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/scripts/verify_v05m.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/app/platform/capability_registry.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/app/services/navigation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_nav_crawl_20260706_162150/app/services/product_recovery_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/apply_direct_route_fix.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_intelligence_20260706_151858/scripts/apply_v03b.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_intelligence_20260706_151858/scripts/apply_v03c.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_intelligence_20260706_151858/scripts/apply_v04a.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_intelligence_20260706_151858/scripts/apply_v04b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/audit_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/audit_suspicious_entities.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/backup_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/build_release_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/check_all_templates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/check_database_config_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/check_mojibake.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/check_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/check_user_visible_english.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/cleanup_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/cleanup_test_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/collect_v04d_context.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/create_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/export_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/generate_historical_signals.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/import_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/init_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_all.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_domain_consolidation_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_identity_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_membership_person_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_organization_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_platform_mvp_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_rbac_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_sqlite_to_postgres.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_user_membership_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04c1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v04h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05a.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/migrate_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/pilot_real_sources.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/queue_historical_processing.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/refresh_v04h_recommendations.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/repair_remaining_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/report_membership_person_candidates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/report_user_membership_candidates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/restore_backup.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_collection_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_monitoring_once.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_operational_pilot.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_pipeline_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_processing_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_report_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_scheduler.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_signal_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/run_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/seed_demo_platform_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/seed_v04c1_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/seed_v04c_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/seed_v04db_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/seed_v04d_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/seed_v04e_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/self_check.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/self_check_v03c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/self_check_v04a.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/test_db_utils.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/test_entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/test_paste_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/test_web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_backup_restore.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_core_pages.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_data_integrity_workflow_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_domain_consolidation_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_identity_link_e2e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_identity_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_identity_membership_access_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_intelligence_full_chain.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_membership_access_scope_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_membership_person_link_ui_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_membership_person_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_navigation_product_shell_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_organization_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_p0_stability_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_platform_integration_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_platform_mvp_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_product_recovery_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_product_usability_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_rbac_authorization_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_route_registry_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_user_membership_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04c1.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04d3_batch_people.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04d4_links_and_review.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04d_search.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v04h.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05a.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/scripts/verify_v05m.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/api_common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/api_subject_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/authorization_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/club_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/collection_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/dashboard_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/data_integrity_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/data_quality.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/identity_link_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/id_generator.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/intelligence_flow_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/lead_recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/lead_scoring_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/membership_access_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/membership_person_link_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/membership_user_link_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/member_field_classifier.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/member_import_normalizer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/member_import_parser.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/member_import_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/member_import_validator.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/monitoring_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/navigation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/organization_access_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/platform_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/product_recovery_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/relationship_path_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/search_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/signal_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/subject_links.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/subject_profile_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/suspicious_review.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/unified_intelligence_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/unified_opportunity_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/unified_resource_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/unified_search_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/watchlist_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/operations/backup_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/operations/restore_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/operations/source_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/operations/system_health_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/operations/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/pipeline/pipeline_common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/pipeline/pipeline_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/pipeline/pipeline_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/pipeline/pipeline_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/pipeline/pipeline_state_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/pipeline/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/processing/confidence_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/processing/content_block_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/processing/document_classifier.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/processing/entity_extraction_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/processing/processing_job_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/processing/subject_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/processing/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/reports/report_citation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/reports/report_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/reports/report_query_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/reports/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/research/common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/research/investment_assessment_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/research/research_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/research/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/signals/signal_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/signals/signal_rule_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/signals/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/task_common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/task_dispatcher.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/task_heartbeat_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/task_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/task_registry.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/task_retry_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/task_runner.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06i_intelligence_20260706_151858/services/tasks/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06f_20260706_130354/app/navigation.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06f_20260706_130354/app/routes_platform.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06f_20260706_130354/app/platform/capability_registry.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06f_20260706_130354/app/services/navigation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/crud_config.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/identity.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/main.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/models.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/models_platform.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/navigation.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/paste_router.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/routes_platform.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/security.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/settings.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/v04c1_ingestion.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v04c_review.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v04db_prestructure.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v04d_structuring.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v04e_entity_resolution.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v04f_operations.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v04g_monitoring.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v04h_recommendations.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05a_security.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05b_member_import.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05c_club_events.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05d_member_portal.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05e_intelligence.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05f_collection.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05g_processing.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05h_reports.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05i_pipeline.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05j_research.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/v05kl_operations.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/apply_direct_route_fix.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/scripts/apply_v03b.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/scripts/apply_v03c.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/scripts/apply_v04a.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/scripts/apply_v04b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/audit_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/audit_suspicious_entities.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/backup_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/build_release_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/check_all_templates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/check_database_config_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/check_mojibake.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/check_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/check_user_visible_english.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/cleanup_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/cleanup_test_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/collect_v04d_context.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/create_identity_test_accounts.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/export_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/generate_historical_signals.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/import_seed_data.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/init_database.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_all.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_domain_consolidation_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_identity_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_membership_person_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_organization_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_platform_mvp_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_rbac_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_sqlite_to_postgres.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_user_membership_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04c1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v04h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05a.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/migrate_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/pilot_real_sources.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/queue_historical_processing.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/refresh_v04h_recommendations.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/repair_remaining_foreign_keys_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/report_membership_person_candidates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/report_user_membership_candidates.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/restore_backup.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_collection_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_monitoring_once.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_operational_pilot.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_pipeline_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_processing_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_report_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_scheduler.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_signal_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/run_worker.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/seed_demo_platform_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/seed_v04c1_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/seed_v04c_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/seed_v04db_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/seed_v04d_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/seed_v04e_demo.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/self_check.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/self_check_v03c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/self_check_v04a.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/test_db_utils.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/test_entity_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/test_paste_analyzer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/test_web_extractor.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_all.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_backup_restore.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_core_pages.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_data_integrity_workflow_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_domain_consolidation_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_identity_link_e2e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_identity_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_identity_membership_access_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_intelligence_full_chain.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_membership_access_scope_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_membership_person_link_ui_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_membership_person_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_navigation_product_shell_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_organization_core_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_p0_stability_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_platform_integration_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_platform_mvp_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_rbac_authorization_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_route_registry_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_user_membership_link_v1.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04c1.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/scripts/verify_v04d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04d3_batch_people.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04d4_links_and_review.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04db.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04d_search.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v04h.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/scripts/verify_v05a.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/scripts/verify_v05b.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05c.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05d.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05e.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05f.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05g.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05h.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05i.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05j.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05kl.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/scripts/verify_v05m.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/api/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/core/config.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/core/database_compat.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/core/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/i18n/helpers.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/i18n/zh_cn.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/i18n/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/platform/capability_registry.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/platform/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/api_common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/api_subject_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/authorization_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/club_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/collection_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/dashboard_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/data_integrity_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/data_quality.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/identity_link_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/id_generator.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/intelligence_flow_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/lead_recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/lead_scoring_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/manual_ingestion.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/membership_access_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/membership_person_link_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/membership_user_link_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/member_field_classifier.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/member_import_normalizer.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/member_import_parser.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/member_import_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/member_import_validator.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/monitoring_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/navigation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/organization_access_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/platform_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/recommendation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/relationship_path_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/search_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/signal_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/subject_links.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/subject_profile_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/suspicious_review.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/unified_intelligence_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/unified_opportunity_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/unified_resource_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/unified_search_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/watchlist_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/operations/backup_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/operations/restore_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/operations/source_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/operations/system_health_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/operations/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/pipeline/pipeline_common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/pipeline/pipeline_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/pipeline/pipeline_quality_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/pipeline/pipeline_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/pipeline/pipeline_state_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/pipeline/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/processing/confidence_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/processing/content_block_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/processing/document_classifier.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/processing/entity_extraction_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/processing/processing_job_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/processing/subject_matching_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/processing/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/reports/report_citation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/reports/report_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/reports/report_query_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/reports/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/research/common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/research/investment_assessment_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/research/research_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/research/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/signals/signal_generation_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/signals/signal_rule_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/signals/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/task_common.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/task_dispatcher.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/task_heartbeat_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/task_metrics_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/task_registry.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/task_retry_service.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/task_runner.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/services/tasks/__init__.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/api/v1/auth.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/client.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/clubs.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/collection.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/dashboard.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/events.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/identity.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/intelligence.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/investment_assessments.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/membership_person_link.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/membership_user_link.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/navigation.py,C,,否,否,否,,高,需验证,no static references found
+backups/code_before_v06e_20260706_115352/app/api/v1/network.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/opportunities.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/organizations.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/pipeline.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/processing.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/relationships.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/reports.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/research.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/resources.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/router.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/search.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/signals.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/subjects.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/system.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/watchlists.py,A,,是,否,否,,低,保留,route registered
+backups/code_before_v06e_20260706_115352/app/api/v1/__init__.py,C,,否,否,否,,高,需验证,no static references found
+app/api/__init__.py,A,,否,否,否,,低,保留,API module
+app/core/config.py,C,,否,否,否,,高,需验证,no static references found
+app/core/database_compat.py,C,,否,否,否,,高,需验证,no static references found
+app/core/__init__.py,C,,否,否,否,,高,需验证,no static references found
+app/i18n/helpers.py,C,,否,否,否,,高,需验证,no static references found
+app/i18n/zh_cn.py,C,,否,否,否,,高,需验证,no static references found
+app/i18n/__init__.py,C,,否,否,否,,高,需验证,no static references found
+app/platform/capability_registry.py,C,,否,否,否,,高,需验证,no static references found
+app/platform/__init__.py,C,,否,否,否,,高,需验证,no static references found
+app/services/api_common.py,A,,否,否,否,,低,保留,service layer
+app/services/api_subject_service.py,A,,否,否,否,,低,保留,service layer
+app/services/authorization_service.py,A,,否,否,否,,低,保留,service layer
+app/services/club_matching_service.py,A,,否,否,否,,低,保留,service layer
+app/services/collection_service.py,A,,否,否,否,,低,保留,service layer
+app/services/dashboard_service.py,A,,否,否,否,,低,保留,service layer
+app/services/data_integrity_service.py,A,,否,否,否,,低,保留,service layer
+app/services/data_quality.py,A,,否,否,否,,低,保留,service layer
+app/services/identity_link_service.py,A,,否,否,否,,低,保留,service layer
+app/services/id_generator.py,A,,否,否,否,,低,保留,service layer
+app/services/intelligence_flow_service.py,A,,否,否,否,,低,保留,service layer
+app/services/lead_recommendation_service.py,A,,否,否,否,,低,保留,service layer
+app/services/lead_scoring_service.py,A,,否,否,否,,低,保留,service layer
+app/services/manual_ingestion.py,A,,否,否,否,,低,保留,service layer
+app/services/membership_access_service.py,A,,否,否,否,,低,保留,service layer
+app/services/membership_person_link_service.py,A,,否,否,否,,低,保留,service layer
+app/services/membership_user_link_service.py,A,,否,否,否,,低,保留,service layer
+app/services/member_field_classifier.py,A,,否,否,否,,低,保留,service layer
+app/services/member_import_normalizer.py,A,,否,否,否,,低,保留,service layer
+app/services/member_import_parser.py,A,,否,否,否,,低,保留,service layer
+app/services/member_import_service.py,A,,否,否,否,,低,保留,service layer
+app/services/member_import_validator.py,A,,否,否,否,,低,保留,service layer
+app/services/monitoring_service.py,A,,否,否,否,,低,保留,service layer
+app/services/navigation_service.py,A,,否,否,否,,低,保留,service layer
+app/services/organization_access_service.py,A,,否,否,否,,低,保留,service layer
+app/services/platform_service.py,A,,否,否,否,,低,保留,service layer
+app/services/product_recovery_service.py,A,,否,否,否,,低,保留,service layer
+app/services/recommendation_service.py,A,,否,否,否,,低,保留,service layer
+app/services/relationship_path_service.py,A,,否,否,否,,低,保留,service layer
+app/services/search_service.py,A,,否,否,否,,低,保留,service layer
+app/services/signal_service.py,A,,否,否,否,,低,保留,service layer
+app/services/subject_links.py,A,,否,否,否,,低,保留,service layer
+app/services/subject_profile_service.py,A,,否,否,否,,低,保留,service layer
+app/services/suspicious_review.py,A,,否,否,否,,低,保留,service layer
+app/services/unified_intelligence_service.py,A,,否,否,否,,低,保留,service layer
+app/services/unified_opportunity_service.py,A,,否,否,否,,低,保留,service layer
+app/services/unified_resource_service.py,A,,否,否,否,,低,保留,service layer
+app/services/unified_search_service.py,A,,否,否,否,,低,保留,service layer
+app/services/watchlist_service.py,A,,否,否,否,,低,保留,service layer
+app/services/__init__.py,A,,否,否,否,,低,保留,service layer
+app/services/operations/backup_service.py,A,,否,否,否,,低,保留,service layer
+app/services/operations/restore_service.py,A,,否,否,否,,低,保留,service layer
+app/services/operations/source_quality_service.py,A,,否,否,否,,低,保留,service layer
+app/services/operations/system_health_service.py,A,,否,否,否,,低,保留,service layer
+app/services/operations/__init__.py,A,,否,否,否,,低,保留,service layer
+app/services/pipeline/pipeline_common.py,A,,否,否,否,,低,保留,service layer
+app/services/pipeline/pipeline_metrics_service.py,A,,否,否,否,,低,保留,service layer
+app/services/pipeline/pipeline_quality_service.py,A,,否,否,否,,低,保留,service layer
+app/services/pipeline/pipeline_service.py,A,,否,否,否,,低,保留,service layer
+app/services/pipeline/pipeline_state_service.py,A,,否,否,否,,低,保留,service layer
+app/services/pipeline/__init__.py,A,,否,否,否,,低,保留,service layer
+app/services/processing/confidence_service.py,A,,否,否,否,,低,保留,service layer
+app/services/processing/content_block_service.py,A,,否,否,否,,低,保留,service layer
+app/services/processing/document_classifier.py,A,,否,否,否,,低,保留,service layer
+app/services/processing/entity_extraction_service.py,A,,否,否,否,,低,保留,service layer
+app/services/processing/processing_job_service.py,A,,否,否,否,,低,保留,service layer
+app/services/processing/subject_matching_service.py,A,,否,否,否,,低,保留,service layer
+app/services/processing/__init__.py,A,,否,否,否,,低,保留,service layer
+app/services/reports/report_citation_service.py,A,,否,否,否,,低,保留,service layer
+app/services/reports/report_generation_service.py,A,,否,否,否,,低,保留,service layer
+app/services/reports/report_query_service.py,A,,否,否,否,,低,保留,service layer
+app/services/reports/__init__.py,A,,否,否,否,,低,保留,service layer
+app/services/research/common.py,A,,否,否,否,,低,保留,service layer
+app/services/research/investment_assessment_service.py,A,,否,否,否,,低,保留,service layer
+app/services/research/research_service.py,A,,否,否,否,,低,保留,service layer
+app/services/research/__init__.py,A,,否,否,否,,低,保留,service layer
+app/services/signals/signal_generation_service.py,A,,否,否,否,,低,保留,service layer
+app/services/signals/signal_rule_service.py,A,,否,否,否,,低,保留,service layer
+app/services/signals/__init__.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/task_common.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/task_dispatcher.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/task_heartbeat_service.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/task_metrics_service.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/task_registry.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/task_retry_service.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/task_runner.py,A,,否,否,否,,低,保留,service layer
+app/services/tasks/__init__.py,A,,否,否,否,,低,保留,service layer
+app/api/v1/auth.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/client.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/clubs.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/collection.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/dashboard.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/events.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/identity.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/intelligence.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/investment_assessments.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/membership_person_link.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/membership_user_link.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/navigation.py,A,,否,否,否,,低,保留,API module
+app/api/v1/network.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/opportunities.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/organizations.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/pipeline.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/processing.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/relationships.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/reports.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/research.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/resources.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/router.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/search.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/signals.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/subjects.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/system.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/watchlists.py,A,,是,否,否,,低,保留,route registered
+app/api/v1/__init__.py,A,,否,否,否,,低,保留,API module
+.skills/qbay-investment-assistant/scripts/validate_output.py,C,,否,否,否,,高,需验证,no static references found
