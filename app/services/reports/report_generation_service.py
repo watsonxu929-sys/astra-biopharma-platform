@@ -19,7 +19,9 @@ def now() -> str:
     return datetime.now().replace(microsecond=0).isoformat()
 
 
-def ensure_schema(db_path: str | Path | None = None) -> None:
+def ensure_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> None:
+    if not allow_migration:
+        return
     migrate_v05h(Path(db_path) if db_path else None, backup=False) if db_path else migrate_v05h(backup=False)
 
 

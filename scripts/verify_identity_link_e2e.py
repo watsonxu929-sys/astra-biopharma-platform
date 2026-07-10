@@ -58,8 +58,8 @@ def _counts(db_path: Path) -> dict[str, int]:
 def _create_test_data(db_path: Path) -> dict[str, Any]:
     _cleanup_test_data(db_path)
     
-    ensure_security_schema(db_path)
-    ensure_identity_link_schema(db_path)
+    ensure_security_schema(db_path, allow_migration=True)
+    ensure_identity_link_schema(db_path, allow_migration=True)
     
     existing_admin = get_user_by_username("e2e_test_admin", db_path=db_path)
     existing_user = get_user_by_username("e2e_test_user", db_path=db_path)

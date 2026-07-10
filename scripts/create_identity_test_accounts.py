@@ -45,8 +45,8 @@ def main() -> int:
     db_path = settings.sqlite_path
     db_path.parent.mkdir(parents=True, exist_ok=True)
     
-    ensure_security_schema(db_path)
-    ensure_identity_link_schema(db_path)
+    ensure_security_schema(db_path, allow_migration=True)
+    ensure_identity_link_schema(db_path, allow_migration=True)
     
     print("\n=== 创建测试数据 ===")
     

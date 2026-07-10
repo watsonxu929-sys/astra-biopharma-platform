@@ -21,9 +21,9 @@ def now() -> str:
     return datetime.now().replace(microsecond=0).isoformat()
 
 
-def ensure_schema(db_path: str | Path | None = None) -> None:
-    ensure_collection_schema(db_path)
-    ensure_signal_schema(db_path)
+def ensure_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> None:
+    ensure_collection_schema(db_path, allow_migration=allow_migration)
+    ensure_signal_schema(db_path, allow_migration=allow_migration)
 
 
 def schedule_due_collection_jobs(*, limit: int = 20, db_path: str | Path | None = None, operator: str = "scheduler") -> dict[str, Any]:

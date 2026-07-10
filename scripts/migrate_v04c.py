@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import shutil
 import sqlite3
@@ -31,7 +31,7 @@ def main() -> int:
     else:
         print(f"[INFO] database does not exist, creating: {db_path}")
 
-    created_path = ensure_v04c_schema(db_path)
+    created_path = ensure_v04c_schema(db_path, allow_migration=True)
     with sqlite3.connect(created_path) as conn:
         tables = [
             row[0]

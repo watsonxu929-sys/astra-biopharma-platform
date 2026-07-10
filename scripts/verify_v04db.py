@@ -81,7 +81,7 @@ def main() -> int:
             update_rule,
         )
 
-        ensure_v04db_schema(db_path)
+        ensure_v04db_schema(db_path, allow_migration=True)
         with db_connection(db_path) as conn:
             tables = {
                 row["name"]

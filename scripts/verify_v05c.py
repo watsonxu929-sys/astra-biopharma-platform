@@ -64,7 +64,7 @@ def app_checks(work: Path) -> None:
     from app.v05c_club_events import ensure_schema
     from app.v04c_review import db_connection
 
-    ensure_schema(work / "data" / "app.db")
+    ensure_schema(work / "data" / "app.db", allow_migration=True)
     client = TestClient(app)
     check(client.get("/v05c/health").status_code == 200, "v0.5C 健康检查可访问")
 

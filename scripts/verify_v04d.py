@@ -57,7 +57,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="v04d_verify_") as tmp:
         db_path = Path(tmp) / "verify.db"
         create_raw_table(db_path)
-        ensure_v04d_schema(db_path)
+        ensure_v04d_schema(db_path, allow_migration=True)
 
         with db_connection(db_path) as conn:
             table_count = conn.execute(

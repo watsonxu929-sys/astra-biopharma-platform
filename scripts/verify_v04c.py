@@ -29,7 +29,7 @@ def check(condition: bool, message: str) -> None:
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="v04c_verify_", ignore_cleanup_errors=True) as temp_dir:
         db_path = Path(temp_dir) / "test.db"
-        ensure_v04c_schema(db_path)
+        ensure_v04c_schema(db_path, allow_migration=True)
         check(db_path.exists(), "可以独立创建 v0.4C 数据表")
 
         item = create_review_item(

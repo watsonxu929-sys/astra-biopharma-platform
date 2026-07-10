@@ -25,7 +25,7 @@ def main() -> int:
     else:
         print(f"[INFO] 数据库尚不存在，将新建：{db_path}")
 
-    path = ensure_v04c1_schema()
+    path = ensure_v04c1_schema(allow_migration=True)
     print(f"[OK] v0.4C-1 数据表迁移完成：{path}")
     print("[SAFE] 未删除或重建任何原有业务表。")
     return 0

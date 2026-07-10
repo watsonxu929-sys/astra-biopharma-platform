@@ -6,6 +6,13 @@ __pycache__/
 .env
 logs/*
 !logs/.gitkeep
+runtime/
+artifacts/
+backups/
+backup_before_*/
+patches/
+.workbuddy/
+.agents/
 data/backups/
 data/*.db
 data/*.db-shm
@@ -16,6 +23,8 @@ data/*.db-wal
 .DS_Store
 
 data/.session_secret
+data/**
+!data/.gitkeep
 
 data/*.sqlite
 data/*.sqlite3
@@ -25,7 +34,16 @@ data/*.backup*
 data/uploads/
 *.tmp
 *.bak
+*.backup
+*.orig
+*.rej
 *.swp
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+Thumbs.db
+desktop.ini
 .idea/
 dist/
 

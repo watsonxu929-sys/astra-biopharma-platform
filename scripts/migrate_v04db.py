@@ -29,7 +29,7 @@ def main() -> int:
         shutil.copy2(db_path, backup)
         print(f"[BACKUP] {backup}")
 
-    path = ensure_v04db_schema(db_path)
+    path = ensure_v04db_schema(db_path, allow_migration=True)
     expected = {
         "v04db_sequence_counters",
         "v04db_rules",

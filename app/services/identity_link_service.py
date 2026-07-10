@@ -87,9 +87,11 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
 
-def ensure_identity_link_schema(db_path: str | Path | None = None) -> Path:
+def ensure_identity_link_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
     path = _path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         if "person_id" not in _columns(conn, "v05a_users"):
             conn.execute("ALTER TABLE v05a_users ADD COLUMN person_id INTEGER")

@@ -1,4 +1,4 @@
-﻿"""Verify v0.6 Platform MVP against an isolated temporary SQLite database."""
+"""Verify v0.6 Platform MVP against an isolated temporary SQLite database."""
 from __future__ import annotations
 
 import sys

@@ -59,7 +59,9 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     return conn
 
 
-def ensure_schema(conn: sqlite3.Connection) -> None:
+def ensure_schema(conn: sqlite3.Connection, *, allow_migration: bool = False) -> None:
+    if not allow_migration:
+        return
     conn.executescript(SCHEMA_SQL)
 
 

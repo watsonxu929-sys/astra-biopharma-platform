@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -20,8 +20,8 @@ def migrate(db_path: Path = DB_PATH, backup: bool = True) -> dict[str, str]:
     backup_path = backup_database(db_path) if backup else ""
     if backup and db_path.exists() and not backup_path:
         raise RuntimeError("正式数据库备份失败，已停止迁移")
-    ensure_security_schema(db_path)
-    ensure_identity_link_schema(db_path)
+    ensure_security_schema(db_path, allow_migration=True)
+    ensure_identity_link_schema(db_path, allow_migration=True)
     return {"database": str(db_path), "backup": backup_path}
 
 

@@ -1,4 +1,4 @@
-﻿"""v0.6 Platform routes -- product pages for the industry connection platform."""
+"""v0.6 Platform routes -- product pages for the industry connection platform."""
 from datetime import datetime
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -556,7 +556,7 @@ def admin_platform(request: Request, db: Session = Depends(get_db)):
     user_id = get_current_user_id(request)
     sec = request.scope.get("security_context", {})
     if not sec.get("can_manage_users") and "platform:manage" not in sec.get("permissions", []):
-        raise HTTPException(403, "闇€瑕佺鐞嗗憳鏉冮檺")
+        raise HTTPException(403, "需要管理员权限")
     tags = list_tags(db)
     return render(request, "platform/admin.html", tags=tags)
 

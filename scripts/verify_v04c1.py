@@ -33,8 +33,8 @@ def main() -> int:
         from fastapi import FastAPI  # noqa: E402
         from fastapi.testclient import TestClient  # noqa: E402
 
-        ensure_v04c1_schema(db_path)
-        ensure_v04c1_schema(db_path)
+        ensure_v04c1_schema(db_path, allow_migration=True)
+        ensure_v04c1_schema(db_path, allow_migration=True)
         with sqlite3.connect(db_path) as conn:
             names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         required = {

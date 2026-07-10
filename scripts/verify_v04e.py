@@ -148,7 +148,7 @@ def create_resolution_tables(path: Path) -> None:
 
 def verify_entity_resolution(db_path: Path) -> None:
     create_resolution_tables(db_path)
-    ensure_v04e_schema(db_path)
+    ensure_v04e_schema(db_path, allow_migration=True)
 
     result = scan_duplicates("organization", threshold=0.70, db_path=db_path)
     check(result["created"] >= 1, "similar organizations create duplicate candidates")

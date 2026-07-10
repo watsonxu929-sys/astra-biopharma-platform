@@ -26,8 +26,10 @@ def loads(value: str | None, default: Any = None) -> Any:
         return {} if default is None else default
 
 
-def ensure_schema(db_path: str | Path | None = None) -> Path:
+def ensure_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
     path = Path(db_path) if db_path else default_db_path()
+    if not allow_migration:
+        return path
     migrate(path, backup=False)
     return path
 

@@ -189,8 +189,10 @@ def _fact_level(value: Any) -> FactLevel:
     return "unknown"
 
 
-def ensure_v04d_schema(db_path: str | Path | None = None) -> Path:
-    path = ensure_v04c1_schema(db_path)
+def ensure_v04d_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
+    path = ensure_v04c1_schema(db_path, allow_migration=allow_migration)
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         conn.executescript(SCHEMA_SQL)
     return path

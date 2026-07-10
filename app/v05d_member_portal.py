@@ -1,4 +1,4 @@
-﻿﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import hashlib
@@ -45,8 +45,10 @@ def now_iso() -> str:
 def _get_accessible_memberships_for_user(user_id: int, conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return get_user_memberships(user_id)
 
-def ensure_schema(db_path: str | Path | None = None) -> Path:
-    path = ensure_v05c_schema(db_path)
+def ensure_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
+    path = ensure_v05c_schema(db_path, allow_migration=allow_migration)
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         conn.executescript(V05D_SCHEMA_SQL)
         cols = {row["name"] for row in conn.execute("PRAGMA table_info(v04f_club_memberships)").fetchall()}

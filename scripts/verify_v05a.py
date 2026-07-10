@@ -51,7 +51,7 @@ def main() -> int:
         )
         from app.v05a_security import router
 
-        ensure_security_schema(db_path)
+        ensure_security_schema(db_path, allow_migration=True)
         app = FastAPI()
         app.add_middleware(SecurityMiddleware)
         app.mount("/static", StaticFiles(directory=str(ROOT / "app" / "static")), name="static")

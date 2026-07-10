@@ -21,7 +21,7 @@ def main() -> int:
         backup = backup_dir / f"app_before_v04eA_{datetime.now():%Y%m%d_%H%M%S}.db"
         shutil.copy2(db_path, backup)
         print(f"[BACKUP] {backup}")
-    path = ensure_v04e_schema(db_path)
+    path = ensure_v04e_schema(db_path, allow_migration=True)
     expected = {
         "v04e_sequence_counters",
         "v04e_entity_aliases",

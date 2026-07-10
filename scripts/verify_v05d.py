@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import re
@@ -103,7 +103,7 @@ def main() -> int:
         from app.main import app
         from app.v05d_member_portal import _token_hash, ensure_schema
 
-        ensure_schema(tmp_db)
+        ensure_schema(tmp_db, allow_migration=True)
         conn = sqlite3.connect(tmp_db)
         conn.row_factory = sqlite3.Row
         ids = seed(conn)

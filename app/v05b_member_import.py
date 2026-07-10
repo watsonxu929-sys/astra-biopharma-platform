@@ -53,9 +53,11 @@ def now_iso() -> str:
     return datetime.now().replace(microsecond=0).isoformat()
 
 
-def ensure_schema(db_path: str | Path | None = None) -> Path:
-    ensure_v04f_schema(db_path)
+def ensure_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
+    ensure_v04f_schema(db_path, allow_migration=allow_migration)
     path = Path(db_path) if db_path else default_db_path()
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         conn.executescript(SCHEMA_SQL)
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(v05b_import_drafts)").fetchall()}

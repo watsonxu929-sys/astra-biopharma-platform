@@ -231,8 +231,10 @@ def db_connection(db_path: str | Path | None = None) -> Iterator[sqlite3.Connect
         conn.close()
 
 
-def ensure_v04c_schema(db_path: str | Path | None = None) -> Path:
+def ensure_v04c_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
     path = Path(db_path) if db_path else default_db_path()
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         conn.executescript(SCHEMA_SQL)
     return path
@@ -511,9 +513,9 @@ def resolve_review_item(
     db_path: str | Path | None = None,
 ) -> dict[str, Any]:
     if decision not in {"in_review", "approved", "rejected", "deferred"}:
-        raise ValueError("涓嶆敮鎸佺殑瀹℃牳鍐冲畾")
+        raise ValueError("不支持的审核决定")
     if decision in {"approved", "rejected"} and not note.strip():
-        raise ValueError("閫氳繃鎴栭┏鍥炴椂蹇呴』濉啓瀹℃牳璇存槑")
+        raise ValueError("通过或驳回时必须填写审核说明")
 
     ensure_v04c_schema(db_path)
     with db_connection(db_path) as conn:
@@ -625,7 +627,7 @@ def create_pending_relation(
     ensure_v04c_schema(db_path)
     confidence_value = None if confidence is None else max(0.0, min(1.0, float(confidence)))
     now = utc_now()
-    # 鍏堟彁浜ゅ叧鑱旇褰曪紝鍐嶅垱寤哄搴斿鏍搁」锛岄伩鍏?SQLite 宓屽鍐欒繛鎺ラ€犳垚閿佸畾銆?
+    # 先提交关联记录，再创建对应审核项，避免 SQLite 嵌套写连接造成锁定。
     with db_connection(db_path) as conn:
         relation_no = next_number(conn, "REL")
         cursor = conn.execute(
@@ -708,7 +710,7 @@ def decide_pending_relation(
             (decision, reviewer or "manual", note.strip() or None, now, now, decision, relation_id),
         )
 
-    # 鍏宠仈璁板綍鎻愪氦鍚庯紝鍐嶅悓姝ュ搴斿鏍搁」锛岄伩鍏嶅祵濂楀啓杩炴帴銆?
+    # 关联记录提交后，再同步对应审核项，避免嵌套写连接。
     if source_review_item_id:
         resolve_review_item(
             int(source_review_item_id),
@@ -743,7 +745,7 @@ def register_claim(
     ensure_v04c_schema(db_path)
     now = utc_now()
     confidence_value = None if confidence is None else max(0.0, min(1.0, float(confidence)))
-    # 鍏堢櫥璁颁富寮狅紝鍐嶅崟鐙垱寤哄鏍搁」锛岄伩鍏嶅祵濂楀啓杩炴帴銆?
+    # 先登记主张，再单独创建审核项，避免嵌套写连接。
     with db_connection(db_path) as conn:
         claim_no = next_number(conn, "CLM")
         cursor = conn.execute(
@@ -773,7 +775,7 @@ def register_claim(
         )
         claim_id = int(cursor.lastrowid)
 
-    # 鎺ㄦ祴姘镐笉鑷姩褰撲綔浜嬪疄锛涗簨瀹炰篃鍏堣繘鍏ュ鏍搁槦鍒椼€?
+    # 推测永不自动视为事实；事实也先进入审核队列。
     create_review_item(
         item_type="fact_check",
         subject_type=subject_type,

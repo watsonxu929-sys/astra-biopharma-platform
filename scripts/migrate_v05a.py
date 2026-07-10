@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import shutil
 import sys
@@ -24,7 +24,7 @@ def migrate(db_path: Path = DB_PATH, backup: bool = True) -> dict[str, str]:
         target = BACKUP_DIR / f"app_before_v05a_{datetime.now():%Y%m%d_%H%M%S}.db"
         shutil.copy2(db_path, target)
         backup_path = str(target)
-    ensure_security_schema(db_path)
+    ensure_security_schema(db_path, allow_migration=True)
     return {"database": str(db_path), "backup": backup_path}
 
 

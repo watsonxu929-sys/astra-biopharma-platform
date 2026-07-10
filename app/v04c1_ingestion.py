@@ -283,9 +283,11 @@ def _json_dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
-def ensure_v04c1_schema(db_path: str | Path | None = None) -> Path:
-    ensure_v04c_schema(db_path)
+def ensure_v04c1_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
+    ensure_v04c_schema(db_path, allow_migration=allow_migration)
     path = Path(db_path) if db_path else default_db_path()
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         conn.executescript(SCHEMA_SQL)
         _ensure_column(conn, "v04c1_ingest_batches", "success_records", "INTEGER NOT NULL DEFAULT 0")

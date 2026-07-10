@@ -149,10 +149,11 @@ def now_iso() -> str:
     return datetime.now().replace(microsecond=0).isoformat()
 
 
-def ensure_security_schema(db_path: str | Path | None = None) -> Path:
+def ensure_security_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
     path = Path(db_path) if db_path else default_db_path()
-    with db_connection(path) as conn:
-        conn.executescript(SCHEMA_SQL)
+    if allow_migration:
+        with db_connection(path) as conn:
+            conn.executescript(SCHEMA_SQL)
     return path
 
 
@@ -764,7 +765,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 if not user:
                     if path.startswith("/api/"):
                         return JSONResponse(
-                            {"error": {"code": "AUTH_REQUIRED", "message": "璇峰厛鐧诲綍鍚庤闂?API", "details": {}}},
+                            {"error": {"code": "AUTH_REQUIRED", "message": "请先登录后访问 API", "details": {}}},
                             status_code=401,
                         )
                     if request.method.upper() in {"GET", "HEAD"}:

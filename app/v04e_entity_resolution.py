@@ -229,8 +229,10 @@ def _next_number(conn: sqlite3.Connection, prefix: str) -> str:
     return f"{prefix}-{today}-{int(row['seq_value']):04d}"
 
 
-def ensure_v04e_schema(db_path: str | Path | None = None) -> Path:
+def ensure_v04e_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
     path = Path(db_path) if db_path else default_db_path()
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         conn.executescript(SCHEMA_SQL)
     return path

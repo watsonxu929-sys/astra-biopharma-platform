@@ -24,7 +24,7 @@ def main() -> int:
     else:
         print(f"[INFO] Database does not exist yet; it will be created: {db_path}")
 
-    path = ensure_v04d_schema(db_path)
+    path = ensure_v04d_schema(db_path, allow_migration=True)
     expected = {
         "v04d_sequence_counters",
         "v04d_structuring_tasks",

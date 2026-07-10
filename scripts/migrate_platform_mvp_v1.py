@@ -1,4 +1,4 @@
-﻿"""v0.6 Platform MVP migration -- raw SQL, idempotent, safe for repeat execution."""
+"""v0.6 Platform MVP migration -- raw SQL, idempotent, safe for repeat execution."""
 import shutil
 import sys
 from datetime import datetime
@@ -270,7 +270,7 @@ def run_migration():
 
     backup_database()
 
-    # Execute raw SQL 鈥?use raw sqlite3 connection's executescript for multi-statement DDL
+    # Execute multi-statement DDL through sqlite3.Connection.executescript.
     import sqlite3
     raw_conn = sqlite3.connect(str(DB_PATH))
     try:

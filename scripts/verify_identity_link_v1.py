@@ -1,4 +1,4 @@
-﻿﻿﻿﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import sqlite3
@@ -80,8 +80,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="identity_link_v1_", ignore_cleanup_errors=True) as tmp:
         db_path = Path(tmp) / "app.db"
         seed_people(db_path)
-        ensure_security_schema(db_path)
-        ensure_identity_link_schema(db_path)
+        ensure_security_schema(db_path, allow_migration=True)
+        ensure_identity_link_schema(db_path, allow_migration=True)
 
         admin = create_user("admin_user", "管理员", "IdentityPass2026", "admin", db_path=db_path)
         reviewer = create_user("reviewer_user", "审核员", "IdentityPass2026", "reviewer", db_path=db_path)

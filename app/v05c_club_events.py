@@ -29,8 +29,10 @@ def now_iso() -> str:
     return datetime.now().replace(microsecond=0).isoformat()
 
 
-def ensure_schema(db_path: str | Path | None = None) -> Path:
-    path = ensure_v05b_schema(db_path)
+def ensure_schema(db_path: str | Path | None = None, *, allow_migration: bool = False) -> Path:
+    path = ensure_v05b_schema(db_path, allow_migration=allow_migration)
+    if not allow_migration:
+        return path
     with db_connection(path) as conn:
         conn.executescript(V05C_SCHEMA_SQL)
     return path
