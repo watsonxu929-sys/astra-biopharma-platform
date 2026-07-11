@@ -1,3 +1,3 @@
-from .playwright_adapter import DynamicFetchResult, PlaywrightAdapter, PlaywrightUnavailable
+from .playwright_adapter import DynamicFetchResult, PlaywrightAdapter, PlaywrightCollectionError, PlaywrightUnavailable
 
-__all__ = ["DynamicFetchResult", "PlaywrightAdapter", "PlaywrightUnavailable"]
+__all__ = ["DynamicFetchResult", "PlaywrightAdapter", "PlaywrightCollectionError", "PlaywrightUnavailable"]

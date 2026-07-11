@@ -18,6 +18,8 @@ from urllib.robotparser import RobotFileParser
 import httpx
 from bs4 import BeautifulSoup
 
+from app.services.collectors import PlaywrightAdapter, PlaywrightCollectionError, PlaywrightUnavailable
+from app.services.content_quality_service import assess_content_quality
 from app.v04c_review import db_connection, default_db_path
 from scripts.migrate_v05f import migrate as migrate_v05f
 
@@ -419,15 +421,38 @@ def _inline_payload(url: str) -> str | None:
     return None
 
 
-def _http_get(url: str, timeout: int = 15) -> tuple[str, int, str, dict[str, str]]:
+def _http_get(
+    url: str,
+    timeout: int = 15,
+    conditional_headers: dict[str, str] | None = None,
+    retries: int = 2,
+) -> tuple[str, int, str, dict[str, str]]:
     payload = _inline_payload(url)
     if payload is not None:
         return payload, 200, "text/html; charset=utf-8", {}
-    headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,application/rss+xml,application/xml,application/json;q=0.9,*/*;q=0.5"}
-    with httpx.Client(follow_redirects=True, timeout=httpx.Timeout(float(timeout), connect=min(float(timeout), 8.0)), headers=headers) as client:
-        response = client.get(url)
-        response.raise_for_status()
-        return response.text, response.status_code, response.headers.get("content-type", ""), dict(response.headers)
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/rss+xml,application/xml,application/json;q=0.9,*/*;q=0.5",
+        **(conditional_headers or {}),
+    }
+    with httpx.Client(
+        follow_redirects=True,
+        timeout=httpx.Timeout(float(timeout), connect=min(float(timeout), 8.0)),
+        headers=headers,
+    ) as client:
+        for attempt in range(max(0, min(retries, 2)) + 1):
+            try:
+                response = client.get(url)
+                if response.status_code == 304:
+                    return "", 304, response.headers.get("content-type", ""), dict(response.headers)
+                response.raise_for_status()
+                return response.text, response.status_code, response.headers.get("content-type", ""), dict(response.headers)
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError):
+                retryable = "response" not in locals() or response.status_code in {408, 429, 500, 502, 503, 504}
+                if attempt >= min(retries, 2) or not retryable:
+                    raise
+                time.sleep(min(4.0, 0.5 * (2 ** attempt)))
+    raise RuntimeError("http_fetch_failed")
 
 
 def check_robots(url: str, user_agent: str = USER_AGENT, timeout: int = 8) -> dict[str, Any]:
@@ -680,6 +705,18 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
         change_status = "changed"
         processing_status = "queued"
 
+    quality = assess_content_quality(
+        title=page.title,
+        text=page.text,
+        source_url=page.url,
+        published_at=page.published_at,
+        language=page.language,
+        duplicate_score=0.99 if dedup_status in {"duplicate", "unchanged"} else 0.0,
+        http_status=page.http_status,
+    )
+    if not quality.accepted_for_analysis and processing_status == "queued":
+        processing_status = "ignored"
+
     old_snapshot = conn.execute(
         "SELECT * FROM v04g_source_snapshots WHERE monitoring_source_id=? AND normalized_url=? ORDER BY id DESC LIMIT 1",
         (source["id"], page.normalized_url),
@@ -708,6 +745,13 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             ),
         )
         snapshot_id = int(cur.lastrowid)
+
+    snapshot_columns = {row[1] for row in conn.execute("PRAGMA table_info(v04g_source_snapshots)")}
+    if "quality_status" in snapshot_columns:
+        conn.execute(
+            "UPDATE v04g_source_snapshots SET quality_status=?,quality_json=? WHERE id=?",
+            (quality.status, _json(quality.to_dict()), snapshot_id),
+        )
 
     cur = conn.execute(
         """
@@ -739,7 +783,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             """,
             (int(duplicate_of), item_id, "same_url" if previous else "duplicate", dedup_status, ts),
         )
-    return {"item_id": item_id, "snapshot_id": snapshot_id, "dedup_status": dedup_status, "change_status": change_status, "processing_status": processing_status}
+    return {"item_id": item_id, "snapshot_id": snapshot_id, "dedup_status": dedup_status, "change_status": change_status, "processing_status": processing_status, "quality_status": quality.status}
 
 
 def _source_allowed_domains(source: sqlite3.Row) -> list[str]:
@@ -770,8 +814,6 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
             mode = source["collection_mode"] or "auto"
             if mode == "auto":
                 mode = "rss" if source_type == "rss" else "api" if source_type == "api" else "http"
-            if mode == "playwright":
-                raise RuntimeError("playwright_unavailable")
 
             robots = check_robots(source["url"])
             conn.execute(
@@ -783,9 +825,76 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
 
             pages: list[tuple[ExtractedPage, int | None]] = []
             discovered_count = 0
-            raw, http_status, content_type, headers = _http_get(source["url"], int(source["request_timeout_seconds"] or 15))
+            source_columns = set(source.keys())
+            conditional: dict[str, str] = {}
+            if "last_etag" in source_columns and source["last_etag"]:
+                conditional["If-None-Match"] = str(source["last_etag"])
+            if "last_modified_header" in source_columns and source["last_modified_header"]:
+                conditional["If-Modified-Since"] = str(source["last_modified_header"])
+            if mode == "playwright":
+                adapter = PlaywrightAdapter()
+                try:
+                    dynamic_result = adapter.fetch(
+                        source["url"],
+                        dynamic=True,
+                        timeout_ms=int(source["request_timeout_seconds"] or 15) * 1000,
+                        wait_selector=str(source["wait_selector"] or "") if "wait_selector" in source_columns else "",
+                    )
+                except PlaywrightUnavailable as exc:
+                    raise RuntimeError("parser_or_collector_unavailable") from exc
+                except PlaywrightCollectionError as exc:
+                    raise RuntimeError(exc.code) from exc
+                raw, http_status, content_type, headers = dynamic_result.html, 200, "text/html; charset=utf-8", {}
+            else:
+                raw, http_status, content_type, headers = _http_get(
+                    source["url"],
+                    int(source["request_timeout_seconds"] or 15),
+                    conditional_headers=conditional,
+                    retries=2,
+                )
+            if http_status == 304:
+                conn.execute(
+                    "UPDATE v04g_monitoring_runs SET status='unchanged',finished_at=? WHERE id=?",
+                    (now(), run_id),
+                )
+                conn.execute(
+                    "UPDATE v04g_monitoring_sources SET last_checked_at=?,updated_at=? WHERE id=?",
+                    (now(), now(), source["id"]),
+                )
+                _release_lock(conn, source["id"], token)
+                return {"run_id": run_id, "status": "unchanged", "not_modified": True}
+            if "last_etag" in source_columns:
+                conn.execute(
+                    "UPDATE v04g_monitoring_sources SET last_etag=?,last_modified_header=? WHERE id=?",
+                    (headers.get("etag"), headers.get("last-modified"), source["id"]),
+                )
             if source_type == "rss" or "xml" in content_type or "<rss" in raw[:200].lower() or "<feed" in raw[:200].lower():
-                pages.extend((p, None) for p in _parse_rss(raw, source["url"], int(source["max_links"] or 20)))
+                for feed_page in _parse_rss(raw, source["url"], int(source["max_links"] or 20)):
+                    link = {
+                        "url": feed_page.url,
+                        "normalized_url": feed_page.normalized_url,
+                        "link_text": feed_page.title,
+                        "title_candidate": feed_page.title,
+                        "published_at_candidate": feed_page.published_at,
+                    }
+                    link_id = _record_link(conn, source["id"], run_id, link)
+                    discovered_count += 1
+                    if source["crawl_detail_pages"] and feed_page.url != source["url"]:
+                        try:
+                            interval = float(source["request_interval_seconds"] or 1.0) if "request_interval_seconds" in source_columns else float(source["min_interval_seconds"] or 0)
+                            time.sleep(max(0.0, min(interval, 10.0)))
+                            detail_raw, detail_status, detail_type, _ = _http_get(
+                                feed_page.url, int(source["request_timeout_seconds"] or 15), retries=2
+                            )
+                            feed_page = extract_html(detail_raw, feed_page.url)
+                            feed_page.http_status = detail_status
+                            feed_page.content_type = detail_type
+                        except Exception:
+                            conn.execute(
+                                "UPDATE v05f_discovered_links SET status='failed',reason=?,updated_at=? WHERE id=?",
+                                ("detail_fetch_failed", now(), link_id),
+                            )
+                    pages.append((feed_page, link_id))
             elif source_type == "api" or "json" in content_type:
                 payload = json.loads(raw)
                 records = payload if isinstance(payload, list) else payload.get("data") or payload.get("items") or payload.get("results") or []

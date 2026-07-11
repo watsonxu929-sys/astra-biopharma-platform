@@ -1,0 +1,14 @@
+{
+  "pilot_version": "p2.2-v1",
+  "total_content_limit": 30,
+  "ai_call_limit": 20,
+  "sources": [
+    {"id":"fda_press","name":"FDA Press Announcements","organization":"U.S. Food and Drug Administration","url":"https://www.fda.gov/news-events/fda-newsroom/press-announcements","source_type":"webpage","collection_mode":"http","topic":"regulatory and product news","dynamic":false,"attachment":false,"max_items":3,"credibility":5},
+    {"id":"ema_news","name":"EMA News","organization":"European Medicines Agency","url":"https://www.ema.europa.eu/en/news?page=1","source_type":"webpage","collection_mode":"http","topic":"European medicines regulation","dynamic":false,"attachment":false,"max_items":3,"credibility":5},
+    {"id":"bio_press","name":"BIO Press Releases","organization":"Biotechnology Innovation Organization","url":"https://www.bio.org/press-releases","source_type":"webpage","collection_mode":"http","topic":"biotechnology industry policy and organization news","dynamic":false,"attachment":false,"max_items":3,"credibility":4},
+    {"id":"ema_rss","name":"EMA News RSS","organization":"European Medicines Agency","url":"https://www.ema.europa.eu/en/news.xml","source_type":"rss","collection_mode":"rss","topic":"European medicines news feed","dynamic":false,"attachment":false,"crawl_detail_pages":true,"max_items":5,"credibility":5},
+    {"id":"ctgov_dynamic","name":"ClinicalTrials.gov Search","organization":"U.S. National Library of Medicine","url":"https://clinicaltrials.gov/search?cond=biopharma&format=json","source_type":"dynamic_page","collection_mode":"playwright","topic":"public clinical trial search","dynamic":true,"attachment":false,"wait_selector":"body","max_items":3,"credibility":5},
+    {"id":"fda_2025_pdf","name":"2025 New Drug Therapy Approvals","organization":"U.S. Food and Drug Administration","url":"https://www.fda.gov/media/190705/download?attachment=","source_type":"document","collection_mode":"http","topic":"annual novel therapy approvals","dynamic":false,"attachment":true,"mime_type":"application/pdf","max_items":1,"credibility":5},
+    {"id":"fda_nme_xlsx","name":"Compilation of CDER New Molecular Entity Drug and New Biologic Approvals","organization":"U.S. Food and Drug Administration","url":"https://www.fda.gov/media/177921/download?attachment=","source_type":"document","collection_mode":"http","topic":"historical novel drug approvals","dynamic":false,"attachment":true,"mime_type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","max_items":1,"credibility":5}
+  ]
+}
