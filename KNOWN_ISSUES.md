@@ -9,3 +9,4 @@
 
 | KI-005 | `v06_timeline_entries` | 12 条历史记录引用不存在的机会（ID 1、12、13） | 高 | 待人工核对，不自动修复 | `PRAGMA foreign_key_check` | 否，迁移未增加 |
 | KI-006 | 俱乐部板块 | 某页面进入统一错误页（500） | 中 | 待定位根因 | 人工验收 | 否 |
+| KI-007 | 俱乐部运营与活动指标 | 数据键仍使用 `successful_matches`、`recent_events`、`event_registrations`、`today_checkins`、`post_event_followups`；不属于 P2.1 情报链 | 低 | 待俱乐部模块本地化任务处理 | 检查俱乐部运营页面指标标签 | 否 |

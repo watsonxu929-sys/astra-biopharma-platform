@@ -3,8 +3,23 @@
 {% block platform_content %}
 {% set sec = request.scope.get('security_context', {}) %}
 {% set perms = sec.get('permissions', []) %}
-<a href="/intelligence" class="text-sm">返回情报中心</a>
-<h1 class="page-title mt-16">{{ item.title }}</h1>
+{% if product_context|default(false) %}
+  {% set workflow_step = '8 / 8' %}
+  {% set workflow_stage = '正式产品详情' %}
+  {% set workflow_status = '已发布' %}
+  {% set workflow_is_pilot = item.is_pilot %}
+  {% set workflow_pilot_batch = item.pilot_batch_id %}
+  {% set workflow_previous_url = '/processing/review-queue' %}
+  {% set workflow_previous_label = '情报审核' %}
+  {% set workflow_next_url = '' %}
+  {% set workflow_next_label = '' %}
+  {% set workflow_list_url = '/reports' %}
+  {% set workflow_action_requires_review = false %}
+  {% include "partials/p2_workflow_nav.html" %}
+{% else %}
+  <a href="/intelligence" class="text-sm">返回情报中心</a>
+{% endif %}
+<h1 class="page-title mt-16">{{ item.title }} {% if item.is_pilot %}<span class="badge">P2.1 试点</span>{% endif %}</h1>
 <div class="opp-meta">
   <span class="badge badge-info">{{ item.intel_type }}</span>
   <span>可信度：{{ item.credibility }}/5</span>

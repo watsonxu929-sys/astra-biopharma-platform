@@ -16,6 +16,7 @@ from app.services.processing import (
     dashboard,
     list_candidates,
     list_jobs,
+    list_review_queue,
     list_subject_matches,
     process_job,
     run_worker,
@@ -31,9 +32,9 @@ def processing_home(request: Request):
 
 
 @router.get("/processing/jobs", response_class=HTMLResponse)
-def processing_jobs(request: Request, page: int = 1, status: str = "", message: str = "", error: str = ""):
+def processing_jobs(request: Request, page: int = 1, status: str = "", item_id: int = 0, message: str = "", error: str = ""):
     rows, total = list_jobs(page=page, status=status)
-    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "jobs", "jobs": rows, "total": total, "page": page, "status": status, "message": message, "error": error})
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "jobs", "jobs": rows, "total": total, "page": page, "status": status, "item_id": item_id, "message": message, "error": error})
 
 
 @router.post("/processing/jobs")
@@ -80,16 +81,50 @@ def processing_candidates(request: Request, page: int = 1, review_status: str = 
     return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidates", "candidates": rows, "total": total, "page": page, "review_status": review_status, "candidate_type": candidate_type, "q": q, "message": message, "error": error})
 
 
+@router.get("/processing/review-queue", response_class=HTMLResponse)
+def processing_review_queue(request: Request, page: int = 1, message: str = "", error: str = ""):
+    rows, total = list_review_queue(page=page)
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "review_queue", "candidates": rows, "total": total, "page": page, "message": message, "error": error})
+
+
+
+
 @router.get("/processing/candidates/{candidate_id}", response_class=HTMLResponse)
-def processing_candidate_detail(request: Request, candidate_id: int):
+def processing_candidate_detail(request: Request, candidate_id: int, message: str = "", error: str = ""):
     detail = candidate_detail(candidate_id)
     if not detail:
         raise HTTPException(status_code=404, detail="候选数据不存在")
-    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidate_detail", **detail})
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidate_detail", "message": message, "error": error, **detail})
+
+
+@router.get("/processing/candidates/{candidate_id}/matches", response_class=HTMLResponse)
+def processing_candidate_matches(request: Request, candidate_id: int):
+    detail = candidate_detail(candidate_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="???????")
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidate_matches", **detail})
+
+
+@router.get("/processing/candidates/{candidate_id}/evidence", response_class=HTMLResponse)
+def processing_candidate_evidence(request: Request, candidate_id: int):
+    detail = candidate_detail(candidate_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="???????")
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidate_evidence", **detail})
+
+
+@router.post("/processing/candidates/{candidate_id}/submit")
+def processing_submit_candidate(request: Request, candidate_id: int):
+    context = request.scope.get("security_context", {})
+    try:
+        IntelligenceReviewService().submit_candidate(candidate_id, actor=current_username(request), permissions=set(context.get("permissions") or []))
+        return RedirectResponse("/processing/review-queue?message=submitted", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
 
 
 @router.post("/processing/candidates/{candidate_id}/review")
-def processing_review_candidate(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form(""), final_value: str = Form("")):
+def processing_review_candidate(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form(""), final_value: str = Form(""), return_to: str = Form("")):
     try:
         context = request.scope.get("security_context", {})
         row = IntelligenceReviewService().review_candidate(
@@ -97,7 +132,8 @@ def processing_review_candidate(request: Request, candidate_id: int, decision: s
             permissions=set(context.get("permissions") or []), note=note,
             final_value=final_value,
         )
-        return RedirectResponse(f"/processing/candidates/{candidate_id}?message=已审核 {row['review_status']}", status_code=303)
+        target = "/processing/review-queue" if return_to == "/processing/review-queue" else f"/processing/candidates/{candidate_id}"
+        return RedirectResponse(f"{target}?message=reviewed", status_code=303)
     except Exception as exc:
         return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
 
@@ -111,7 +147,7 @@ def processing_publish_candidate(request: Request, candidate_id: int):
             actor=current_username(request),
             permissions=set(context.get("permissions") or []),
         )
-        return RedirectResponse(f"/intelligence/{product['id']}", status_code=303)
+        return RedirectResponse(f"/reports/products/{product['id']}", status_code=303)
     except Exception as exc:
         return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
 

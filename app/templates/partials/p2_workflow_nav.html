@@ -1,0 +1,20 @@
+{% set sec = request.scope.get('security_context', {}) %}
+{% set perms = sec.get('permissions', []) %}
+{% set can_review = sec.get('can_manage_users') or 'review_data' in perms %}
+<section class="panel" aria-label="情报生产链阶段">
+  <p class="eyebrow">情报生产链 · 第 {{ workflow_step }} 阶段</p>
+  <div class="section-head">
+    <div>
+      <h2>{{ workflow_stage }}</h2>
+      <p>当前状态：<span class="badge">{{ workflow_status }}</span>{% if workflow_is_pilot %} <span class="badge">P2.1 试点{% if workflow_pilot_batch %} · {{ workflow_pilot_batch }}{% endif %}</span>{% endif %}</p>
+    </div>
+    <div class="actions">
+      {% if workflow_previous_url %}<a class="button secondary" href="{{ workflow_previous_url }}">上一步：{{ workflow_previous_label }}</a>{% endif %}
+      {% if workflow_next_url %}<a class="button primary" href="{{ workflow_next_url }}">下一步：{{ workflow_next_label }}</a>{% endif %}
+      <a class="button secondary" href="{{ workflow_list_url }}">返回列表</a>
+    </div>
+  </div>
+  {% if workflow_action_requires_review and not can_review %}
+  <div class="warning-box">当前账号可以查看本页，但没有情报审核权限，审核、发布等操作不可用。请联系管理员授予“审核数据”权限。</div>
+  {% endif %}
+</section>

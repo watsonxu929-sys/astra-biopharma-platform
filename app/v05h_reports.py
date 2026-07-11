@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.services.intelligence_product_service import IntelligenceProductService
+from app.services.unified_intelligence_service import UnifiedIntelligenceService
 
 from app.security import current_username
 from app.services.reports import archive_report, approve_report, create_report_job, generate_report, get_report, list_report_jobs, list_reports, report_citations, submit_report, update_report
@@ -14,10 +19,11 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "tem
 
 
 @router.get("/reports", response_class=HTMLResponse)
-def reports_page(request: Request, page: int = 1, status: str = "", report_type: str = "", message: str = "", error: str = ""):
+def reports_page(request: Request, page: int = 1, status: str = "", report_type: str = "", message: str = "", error: str = "", db: Session = Depends(get_db)):
     result = list_reports(page=page, status=status, report_type=report_type)
     jobs = list_report_jobs(page=1, page_size=10)
-    return templates.TemplateResponse(request, "v05h_reports.html", {"mode": "list", "result": result, "jobs": jobs, "status": status, "report_type": report_type, "message": message, "error": error})
+    products = UnifiedIntelligenceService(db).list(page=1, page_size=100)["items"]
+    return templates.TemplateResponse(request, "v05h_reports.html", {"mode": "list", "result": result, "jobs": jobs, "products": products, "status": status, "report_type": report_type, "message": message, "error": error})
 
 
 @router.post("/reports/jobs")
@@ -39,6 +45,17 @@ def report_jobs_page(request: Request, page: int = 1, status: str = "", message:
 
 
 @router.get("/reports/{report_id:int}", response_class=HTMLResponse)
+
+@router.get("/reports/products/{product_id:int}", response_class=HTMLResponse)
+def intelligence_product_detail(request: Request, product_id: int, db: Session = Depends(get_db)):
+    item = UnifiedIntelligenceService(db).detail(product_id)
+    trace = IntelligenceProductService().trace(product_id)
+    return templates.TemplateResponse(
+        request,
+        "platform/intelligence_detail.html",
+        {"item": item, "evidence": trace["evidence"], "candidates": trace["candidates"], "is_favorited": False, "product_context": True},
+    )
+
 def report_detail(request: Request, report_id: int, message: str = "", error: str = ""):
     report = get_report(report_id)
     if not report:

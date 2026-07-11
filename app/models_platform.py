@@ -116,6 +116,8 @@ class IntelligenceItem(Base):
     created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)  # FK: v05a_users.id
     organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # FK: organizations.id
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_pilot: Mapped[bool] = mapped_column(Boolean, default=False)
+    pilot_batch_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 

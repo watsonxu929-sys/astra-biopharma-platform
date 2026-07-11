@@ -1,7 +1,5 @@
 {% extends "platform/base.html" %}
-{% block platform_title %}信息采集中心
-<section class="panel"><h2>采集状态说明</h2><div class="explain-grid"><div><strong>robots_denied</strong><p>目标网站限制自动抓取。系统不会绕过该限制，可改用RSS、公开API、手工录入或获得授权的数据源。</p></div><div><strong>source_disabled</strong><p>该数据源已暂停，不会自动采集。启用后可重新创建任务。</p></div><div><strong>network_error</strong><p>访问目标网站失败，可能是网络、证书或目标站点不可用。</p></div><div><strong>parse_error</strong><p>页面已访问，但内容结构无法解析，需要调整采集规则或改为手工来源。</p></div><div><strong>duplicate</strong><p>采集内容已存在，系统未重复入库。</p></div><div><strong>skipped</strong><p>任务被跳过，请查看具体原因。</p></div></div></section>
-{% endblock %}
+{% block platform_title %}信息采集中心{% endblock %}
 {% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/intelligence">情报中心</a><span class="sep">/</span><span class="current">信息采集</span></span>{% endblock %}
 {% block page_header %}
 <section class="page-header">
@@ -50,10 +48,84 @@
 {% elif mode == "jobs" %}
 <section class="panel"><div class="subject-table"><table><thead><tr><th>任务</th><th>来源</th><th>状态</th><th>数量</th><th>操作</th></tr></thead><tbody>{% for job in jobs %}<tr><td><span class="code">{{ job.run_no }}</span><div class="muted">{{ job.created_at }}</div></td><td><a href="/collection/sources/{{ job.monitoring_source_id }}">{{ job.source_name }}</a></td><td><span class="badge">{{ status_labels.get(job.status, job.status) }}</span>{% if job.error_type %}<div class="warning-box">{{ job.error_label }}：{{ job.status_explanation }}</div>{% else %}<div class="muted">{{ job.status_explanation }}</div>{% endif %}</td><td>新增 {{ job.new_content_count }} 条 / 变化 {{ job.changed_content_count }} 条 / 重复 {{ job.duplicate_content_count }} 条 / 排队 {{ job.queued_item_count }} 条 / 失败 {{ job.failed_content_count }} 条<div class="muted">已生成原始情报 {{ job.created_item_count }} 条，处理任务 {{ job.processing_job_count }} 个</div></td><td>{% if job.status in ["pending","failed","skipped"] %}<form method="post" action="/collection/jobs/{{ job.id }}/run"><button class="button secondary">立即执行一次</button></form>{% endif %}{% if job.next_step_url %}<a class="button primary" href="{{ job.next_step_url }}">{{ job.next_step_label }}</a>{% else %}<span class="muted">{{ job.next_step_label }}</span>{% endif %}<a class="button secondary" href="/processing/jobs">进入处理任务</a></td></tr>{% else %}<tr><td colspan="5" class="empty">暂无采集任务。采集来源启用后会自动生成任务。</td></tr>{% endfor %}</tbody></table></div></section>
 {% elif mode == "items" %}
+<section class="panel">
+  <div class="section-head"><div><p class="eyebrow">情报生产链 · 第 1 阶段</p><h2>原始情报</h2><p>从这里进入详情、原始证据和数据处理，无需手工输入隐藏地址。</p></div><a class="button primary" href="/processing/jobs">进入数据处理</a></div>
+  <div class="subject-table"><table>
+    <thead><tr><th>原始情报</th><th>当前状态</th><th>试点标识</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td><strong>{{ item.title or item.item_no }}</strong><div class="code">{{ item.item_no }}</div><div class="muted">{{ item.source_name }} · {{ item.captured_at }}</div></td>
+        <td><span class="badge">{% if item.candidate_count %}待审核{% elif item.processing_status in ['processed','success'] %}待匹配{% else %}待处理{% endif %}</span><div class="muted">{{ item.flow_hint }}</div></td>
+        <td>{% if item.is_pilot %}<span class="badge">P2.1 试点</span><div class="code">{{ item.pilot_batch_id or '' }}</div>{% else %}<span class="muted">正式记录</span>{% endif %}</td>
+        <td class="actions">
+          <a class="button primary" href="/collection/items/{{ item.id }}">查看详情</a>
+          {% if item.snapshot_id %}<a class="button secondary" href="/collection/snapshots/{{ item.snapshot_id }}">查看原始证据</a>{% else %}<span class="muted">暂无原始证据</span>{% endif %}
+          <a class="button secondary" href="/processing/jobs?item_id={{ item.id }}">进入处理</a>
+          {% if item.first_candidate_id %}<a class="button secondary" href="/processing/candidates/{{ item.first_candidate_id }}">查看候选</a>{% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">
+        <h3>暂无原始情报</h3>
+        <p>先配置公开信息来源并运行采集，或在测试数据库副本中运行现有 P2.1 试点。系统不会在此页面自动创建正式业务数据。</p>
+        <a class="button primary" href="/collection/sources">进入原始情报来源</a>
+        {% set sec = request.scope.get('security_context', {}) %}
+        {% if sec.get('can_manage_users') or 'review_data' in sec.get('permissions', []) %}<a class="button secondary" href="/pipeline/pilot">运行试点</a>{% endif %}
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% elif mode == "items_legacy" %}
 <section class="panel"><div class="subject-table"><table><thead><tr><th>原始情报</th><th>来源</th><th>去重</th><th>加工队列</th><th>快照</th></tr></thead><tbody>{% for item in items %}<tr><td><a href="/collection/items/{{ item.id }}"><strong>{{ item.title or item.item_no }}</strong></a><div class="muted">{{ item.normalized_url }}</div></td><td>{{ item.source_name }}<div class="code">{{ item.source_no }}</div></td><td>{{ item.dedup_status_label }} / {{ item.change_status_label }}</td><td><span class="badge">{{ item.processing_status_label }}</span><div class="muted">{{ item.flow_hint }}</div><div class="muted">候选 {{ item.candidate_count }} 条{% if item.processing_job_no %} · 处理任务 {{ item.processing_job_no }}{% endif %}</div></td><td>{% if item.snapshot_id %}<a href="/collection/snapshots/{{ item.snapshot_id }}">来源快照</a>{% endif %} <a href="/processing/jobs">进入处理</a> <a href="/processing/candidates">查看候选</a>{% if item.published_intelligence_id %} <a href="/intelligence/{{ item.published_intelligence_id }}">查看前台情报</a>{% endif %}</td></tr>{% else %}<tr><td colspan="5" class="empty">暂无原始情报。添加采集来源后，系统将沉淀公开信息原文。</td></tr>{% endfor %}</tbody></table></div></section>
 {% elif mode == "item_detail" %}
+{% set workflow_step = '2 / 8' %}
+{% set workflow_stage = '情报详情' %}
+{% set workflow_status = '待审核' if item.candidate_count else ('待匹配' if item.processing_status in ['processed','success'] else '待处理') %}
+{% set workflow_is_pilot = item.is_pilot %}
+{% set workflow_pilot_batch = item.pilot_batch_id %}
+{% set workflow_previous_url = '/collection/items' %}
+{% set workflow_previous_label = '原始情报' %}
+{% set workflow_next_url = '/processing/candidates/' ~ item.first_candidate_id if item.first_candidate_id else '/processing/jobs?item_id=' ~ item.id %}
+{% set workflow_next_label = '候选详情' if item.first_candidate_id else '数据处理生成候选' %}
+{% set workflow_list_url = '/collection/items' %}
+{% set workflow_action_requires_review = false %}
+{% include "partials/p2_workflow_nav.html" %}
+<section class="panel">
+  <h2>{{ item.title or item.item_no }}</h2>
+  <p class="muted">{{ item.source_name }} · {{ item.captured_at }} · {{ item.page_structure }}</p>
+  <p><a href="{{ item.normalized_url }}" target="_blank" rel="noopener">查看公开来源</a></p>
+  <div class="actions">
+    {% if item.snapshot_id %}<a class="button secondary" href="/collection/snapshots/{{ item.snapshot_id }}">查看原始证据</a>{% endif %}
+    <a class="button primary" href="/processing/jobs?item_id={{ item.id }}">进入处理</a>
+    {% if item.first_candidate_id %}<a class="button primary" href="/processing/candidates/{{ item.first_candidate_id }}">进入候选详情</a>{% endif %}
+  </div>
+  {% if snapshot %}<h3>原文预览</h3><pre class="source-text">{{ snapshot.cleaned_text[:6000] }}</pre>{% else %}<div class="empty">暂无来源快照，不能查看原始证据。</div>{% endif %}
+</section>
+{% elif mode == "item_detail_legacy" %}
 <section class="panel"><h2>{{ item.title or item.item_no }}</h2><p class="muted">{{ item.source_name }} · {{ item.captured_at }} · {{ item.page_structure }}</p><p><a href="{{ item.normalized_url }}">{{ item.normalized_url }}</a></p><p><span class="badge">{{ status_labels.get(item.dedup_status, item.dedup_status) }}</span> <span class="badge">{{ status_labels.get(item.processing_status, item.processing_status) }}</span></p>{% if snapshot %}<pre class="source-text">{{ snapshot.cleaned_text[:6000] }}</pre>{% endif %}</section>
 {% elif mode == "snapshot" %}
+{% set workflow_step = '2 / 8' %}
+{% set workflow_stage = '原始证据' %}
+{% set workflow_status = '待处理' %}
+{% set workflow_is_pilot = snapshot.is_pilot %}
+{% set workflow_pilot_batch = snapshot.pilot_batch_id %}
+{% set workflow_previous_url = '/collection/items' %}
+{% set workflow_previous_label = '原始情报' %}
+{% set workflow_next_url = '/processing/jobs' %}
+{% set workflow_next_label = '数据处理' %}
+{% set workflow_list_url = '/collection/items' %}
+{% set workflow_action_requires_review = false %}
+{% include "partials/p2_workflow_nav.html" %}
+<section class="panel">
+  <h2>{{ snapshot.page_title or snapshot.snapshot_no }}</h2>
+  <p class="muted">{{ snapshot.source_name }} · {{ snapshot.captured_at }}</p>
+  <p><a href="{{ snapshot.normalized_url or snapshot.url }}" target="_blank" rel="noopener">查看公开来源</a></p>
+  <p>证据快照：<span class="code">#{{ snapshot.id }}</span> · SHA256 <span class="code">{{ snapshot.content_hash }}</span></p>
+  <pre class="source-text">{{ snapshot.cleaned_text[:8000] }}</pre>
+</section>
+{% elif mode == "snapshot_legacy" %}
 <section class="panel"><h2>{{ snapshot.page_title or snapshot.snapshot_no }}</h2><p class="muted">{{ snapshot.source_name }} · {{ snapshot.captured_at }}</p><p><a href="{{ snapshot.normalized_url or snapshot.url }}">{{ snapshot.normalized_url or snapshot.url }}</a></p><pre class="source-text">{{ snapshot.cleaned_text[:8000] }}</pre></section>
 {% endif %}
 {% endblock %}

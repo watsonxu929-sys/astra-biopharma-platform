@@ -10,6 +10,28 @@
 {% if mode == "list" %}
 <section class="grid-2"><form class="form-card" method="post" action="/reports/jobs"><h2>生成报告</h2><label>报告类型<select name="report_type"><option value="daily">产业情报日报</option><option value="weekly">产业情报周报</option><option value="monthly">产业情报月报</option><option value="subject">主体报告</option><option value="track">赛道报告</option><option value="financing">投融资报告</option><option value="attraction">招商专题报告</option><option value="qbay">Q-BAY报告</option></select></label><div class="grid-2"><label>开始日期<input name="period_start" placeholder="YYYY-MM-DD"></label><label>结束日期<input name="period_end" placeholder="YYYY-MM-DD"></label></div><label><input type="checkbox" name="run_now" value="1" checked> 创建后立即生成</label><button class="primary">生成报告</button></form><section class="panel"><h2>最近生成任务</h2>{% for job in jobs.data %}<div class="record-row"><div><strong>{{ job.job_no }}</strong><p>{{ report_labels.get(job.report_type, job.report_type) }} · {{ job.period_start }} 至 {{ job.period_end }}</p></div><span class="badge">{{ status_labels.get(job.status, job.status) }}</span></div>{% else %}<div class="empty">暂无报告生成任务</div>{% endfor %}</section></section>
 <section class="panel"><div class="subject-table"><table><thead><tr><th>报告</th><th>类型</th><th>周期</th><th>状态</th></tr></thead><tbody>{% for report in result.data %}<tr><td><a href="/reports/{{ report.id }}"><strong>{{ report.title }}</strong></a><div class="code">{{ report.report_no }}</div></td><td>{{ report_labels.get(report.report_type, report.report_type) }}</td><td>{{ report.period_start }} 至 {{ report.period_end }}</td><td><span class="badge">{{ status_labels.get(report.status, report.status) }}</span></td></tr>{% else %}<tr><td colspan="4" class="empty">暂无报告。系统积累足够的正式情报后，可生成日报、周报或专题报告。</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="panel">
+  <div class="section-head"><div><p class="eyebrow">情报生产链 · 第 8 阶段</p><h2>正式情报产品</h2><p>审核通过的候选发布后在这里进入正式产品详情。</p></div><a class="button secondary" href="/processing/review-queue">上一步：情报审核</a></div>
+  <div class="subject-table"><table><thead><tr><th>产品</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody>
+  {% for product in products %}
+    <tr>
+      <td><strong>{{ product.title }}</strong><div class="code">#{{ product.id }}</div></td>
+      <td>{{ product.source_name or '人工发布' }}{% if product.is_pilot %} <span class="badge">P2.1 试点</span><div class="code">{{ product.pilot_batch_id or '' }}</div>{% endif %}</td>
+      <td><span class="badge">已发布</span></td>
+      <td><a class="button primary" href="/reports/products/{{ product.id }}">查看正式产品详情</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="empty">
+      <h3>暂无正式情报产品</h3>
+      <p>请先从原始情报生成候选，完成证据核对与审核后再发布。系统不会因打开本页自动创建正式数据。</p>
+      <a class="button primary" href="/collection/items">进入原始情报</a>
+      <a class="button secondary" href="/processing/review-queue">进入情报审核</a>
+      {% set sec = request.scope.get('security_context', {}) %}
+      {% if sec.get('can_manage_users') or 'review_data' in sec.get('permissions', []) %}<a class="button secondary" href="/pipeline/pilot">运行试点</a>{% endif %}
+    </td></tr>
+  {% endfor %}
+  </tbody></table></div>
+</section>
 {% elif mode == "detail" %}
 <section class="profile-sections"><article class="panel"><h2>{{ report.title }}</h2><p><span class="badge">{{ status_labels.get(report.status, report.status) }}</span> <span class="code">{{ report.report_no }}</span></p><div class="report-preview">{{ report.content_html|safe }}</div></article><article class="panel"><h2>审核流程</h2><form method="post" action="/reports/{{ report.id }}/submit"><button class="button secondary">提交审核</button></form><form method="post" action="/reports/{{ report.id }}/approve"><button class="primary">批准报告</button></form><form method="post" action="/reports/{{ report.id }}/archive"><button class="button secondary">归档</button></form><h2>引用来源</h2>{% for c in citations %}<div class="record-row"><div><strong>{{ c.ref }}</strong><p>{{ c.type }} {{ c.id }}</p></div></div>{% else %}<div class="empty">暂无引用来源</div>{% endfor %}</article></section><section class="panel"><h2>编辑草稿</h2><form method="post" action="/reports/{{ report.id }}/edit"><label>标题<input name="title" value="{{ report.title }}"></label><label>摘要<textarea name="summary">{{ report.summary or '' }}</textarea></label><label>正文 Markdown<textarea name="content_markdown" rows="18">{{ report.content_markdown or '' }}</textarea></label><button class="primary">保存</button></form></section>
 {% elif mode == "jobs" %}

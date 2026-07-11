@@ -1,4 +1,4 @@
-﻿.venv/
+﻿﻿.venv/
 venv/
 __pycache__/
 **/__pycache__/
@@ -46,4 +46,5 @@ Thumbs.db
 desktop.ini
 .idea/
 dist/
+reports/
 

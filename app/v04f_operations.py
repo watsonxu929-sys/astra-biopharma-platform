@@ -17,7 +17,6 @@ from app.services.lead_scoring_service import manual_grade_requires_reason, scor
 from app.services.membership_person_link_service import bind_person, get_link_info, get_person_candidates, list_link_audit, unbind_person
 from app.services.membership_access_service import get_accessible_membership_or_403, require_membership_admin
 from app.services.membership_user_link_service import bind_user, get_link_info as get_user_link_info, list_link_audit as list_user_link_audit, unbind_user
-from app.services.unified_identity_service import UnifiedIdentityService, UnifiedIdentityServiceError
 from app.v04c_review import db_connection, default_db_path
 from scripts.migrate_v04f import SCHEMA_SQL
 
@@ -682,11 +681,8 @@ def bind_member_user(member_id: int, user_id: int = Form(...), reason: str = For
     
     actor = user.get("username") if user else "admin"
     try:
-        svc = UnifiedIdentityService()
-        svc.bind_user_to_membership(membership_id=member_id, user_id=user_id, reason=reason, actor=actor)
+        bind_user(member_id, user_id, reason, actor)
         return RedirectResponse(f"/club/members/{member_id}?message=关联登录账号成功", status_code=303)
-    except UnifiedIdentityServiceError as e:
-        return RedirectResponse(f"/club/members/{member_id}?error={e.message}", status_code=303)
     except Exception as e:
         return RedirectResponse(f"/club/members/{member_id}?error={str(e)}", status_code=303)
 
@@ -702,81 +698,36 @@ def unbind_member_user(member_id: int, reason: str = Form(""), request: Request 
     
     actor = user.get("username") if user else "admin"
     try:
-        svc = UnifiedIdentityService()
-        svc.unbind_user_from_membership(membership_id=member_id, reason=reason, actor=actor)
+        unbind_user(member_id, reason, actor)
         return RedirectResponse(f"/club/members/{member_id}?message=已解除登录账号关联", status_code=303)
-    except UnifiedIdentityServiceError as e:
-        return RedirectResponse(f"/club/members/{member_id}?error={e.message}", status_code=303)
     except Exception as e:
         return RedirectResponse(f"/club/members/{member_id}?error={str(e)}", status_code=303)
 
 
 @router.post("/club/members/{member_id}/needs")
 def add_need(member_id: int, title: str = Form(...), description: str = Form(""), need_type: str = Form(""), industry_tags: str = Form(""), region: str = Form(""), urgency: str = Form("normal")):
-    from app.services.unified_resource_service import UnifiedResourceService
-    from app.database import get_db
-    
     with db_connection() as conn:
-        membership = conn.execute("SELECT * FROM v04f_club_memberships WHERE id=?", (member_id,)).fetchone()
-        if not membership:
+        if not conn.execute("SELECT 1 FROM v04f_club_memberships WHERE id=?", (member_id,)).fetchone():
             raise HTTPException(404, "会员不存在")
-    
-    db = next(get_db())
-    svc = UnifiedResourceService(db)
-    try:
-        svc.create(actor_user_id=int(membership.get("user_id") or 0), fields={
-            "title": title,
-            "direction": "demand",
-            "resource_type": need_type or "其他",
-            "category": need_type,
-            "summary": description,
-            "description": description,
-            "region": region,
-            "industry_direction": industry_tags,
-            "tags": industry_tags,
-            "owner_person_id": membership.get("person_id"),
-            "owner_organization_id": membership.get("organization_id"),
-            "legacy_source_type": "v04f_club_needs",
-            "visibility": "organization",
-        })
-        return RedirectResponse(f"/club/members/{member_id}", status_code=303)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(500, f"创建资源需求失败: {str(e)}")
+        ts = now()
+        conn.execute(
+            "INSERT INTO v04f_club_needs(need_no, membership_id, title, description, need_type, industry_tags, region, urgency, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (_next_no(conn, "QBN"), member_id, title, description, need_type, industry_tags, region, urgency, ts, ts),
+        )
+    return RedirectResponse(f"/club/members/{member_id}", status_code=303)
 
 
 @router.post("/club/members/{member_id}/offerings")
 def add_offering(member_id: int, title: str = Form(...), description: str = Form(""), offering_type: str = Form(""), industry_tags: str = Form(""), region: str = Form(""), availability: str = Form("available")):
-    from app.services.unified_resource_service import UnifiedResourceService
-    from app.database import get_db
-    
     with db_connection() as conn:
-        membership = conn.execute("SELECT * FROM v04f_club_memberships WHERE id=?", (member_id,)).fetchone()
-        if not membership:
+        if not conn.execute("SELECT 1 FROM v04f_club_memberships WHERE id=?", (member_id,)).fetchone():
             raise HTTPException(404, "会员不存在")
-    
-    db = next(get_db())
-    svc = UnifiedResourceService(db)
-    try:
-        svc.create(actor_user_id=int(membership.get("user_id") or 0), fields={
-            "title": title,
-            "direction": "supply",
-            "resource_type": offering_type or "其他",
-            "category": offering_type,
-            "summary": description,
-            "description": description,
-            "region": region,
-            "industry_direction": industry_tags,
-            "tags": industry_tags,
-            "owner_person_id": membership.get("person_id"),
-            "owner_organization_id": membership.get("organization_id"),
-            "legacy_source_type": "v04f_club_offerings",
-            "visibility": "organization",
-        })
-        return RedirectResponse(f"/club/members/{member_id}", status_code=303)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(500, f"创建资源供给失败: {str(e)}")
+        ts = now()
+        conn.execute(
+            "INSERT INTO v04f_club_offerings(offering_no, membership_id, title, description, offering_type, industry_tags, region, availability, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (_next_no(conn, "QBO"), member_id, title, description, offering_type, industry_tags, region, availability, ts, ts),
+        )
+    return RedirectResponse(f"/club/members/{member_id}", status_code=303)
 
 
 @router.post("/club/matches/generate")

@@ -148,12 +148,20 @@ def _decorate_item(row: dict[str, Any], conn: sqlite3.Connection) -> dict[str, A
     except sqlite3.Error:
         pub = None
     try:
+        candidate = conn.execute(
+            "SELECT id,is_pilot,pilot_batch_id FROM v05g_extraction_candidates WHERE collection_item_id=? ORDER BY id LIMIT 1",
+            (row["id"],),
+        ).fetchone()
         cand_count = int(conn.execute("SELECT COUNT(*) FROM v05g_extraction_candidates WHERE collection_item_id=?", (row["id"],)).fetchone()[0] or 0)
     except sqlite3.Error:
+        candidate = None
         cand_count = 0
     row["processing_job_id"] = int(proc["id"]) if proc else None
     row["processing_job_no"] = proc["job_no"] if proc else ""
     row["candidate_count"] = cand_count
+    row["first_candidate_id"] = int(candidate["id"]) if candidate else None
+    row["is_pilot"] = bool(row.get("is_pilot") or (candidate and candidate["is_pilot"]))
+    row["pilot_batch_id"] = row.get("pilot_batch_id") or (candidate["pilot_batch_id"] if candidate else None)
     row["published_intelligence_id"] = int(pub["id"]) if pub else None
     row["flow_hint"] = "已发布到前台情报" if row.get("published_intelligence_id") else ("已有候选，等待审核或发布" if cand_count else ("已进入处理任务" if proc else "尚未进入处理任务"))
     return row
@@ -954,8 +962,10 @@ def list_items(db_path: str | Path | None = None, page: int = 1, page_size: int 
             f"""
             SELECT i.id, i.item_no, i.title, i.normalized_url, i.published_at, i.captured_at,
                    i.page_structure, i.dedup_status, i.change_status, i.processing_status,
-                   i.priority, i.snapshot_id, i.content_hash, s.name AS source_name, s.source_no
+                   i.priority, i.snapshot_id, i.content_hash, s.name AS source_name, s.source_no,
+                   COALESCE(sn.is_pilot,0) AS is_pilot, sn.pilot_batch_id
             FROM v05f_collection_items i JOIN v04g_monitoring_sources s ON s.id=i.monitoring_source_id
+            LEFT JOIN v04g_source_snapshots sn ON sn.id=i.snapshot_id
             WHERE {where} ORDER BY i.id DESC LIMIT ? OFFSET ?
             """,
             [*params, page_size, offset],

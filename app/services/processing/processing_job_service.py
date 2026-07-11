@@ -486,6 +486,30 @@ def list_subject_matches(db_path: str | Path | None = None, page: int = 1, page_
     return rows, total
 
 
+def list_review_queue(
+    db_path: str | Path | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[dict[str, Any]], int]:
+    """Return the canonical P2.1 candidate review queue without another queue model."""
+    ensure_schema(db_path)
+    offset = (max(1, page) - 1) * page_size
+    where = "COALESCE(pipeline_review_status,review_status) IN ('pending','needs_review')"
+    with db_connection(db_path) as conn:
+        total = int(conn.execute(f"SELECT COUNT(*) FROM v05g_extraction_candidates WHERE {where}").fetchone()[0])
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                f"SELECT * FROM v05g_extraction_candidates WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+                (page_size, offset),
+            ).fetchall()
+        ]
+    for row in rows:
+        row["warning_list"] = _loads(row.get("warning_json"), [])
+        row["payload"] = _loads(row.get("payload_json"), {})
+    return rows, total
+
+
 def candidate_detail(candidate_id: int, db_path: str | Path | None = None) -> dict[str, Any] | None:
     ensure_schema(db_path)
     with db_connection(db_path) as conn:
