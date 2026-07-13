@@ -1,0 +1,44 @@
+{
+  "status": "passed",
+  "batch_id": "P3-PILOT-20260713",
+  "database": "C:\\tmp\\p3_entity_network_pilot.db",
+  "source_database_name": "app.db",
+  "integrity_check": "ok",
+  "selected": {
+    "people": 12,
+    "organizations": 12,
+    "projects": 5
+  },
+  "counts": {
+    "p3_product_assets": 6,
+    "p3_entity_aliases": 1,
+    "p3_entity_resolution_candidates": 2,
+    "p3_entity_merge_records": 1,
+    "p3_canonical_relationships": 29,
+    "p3_relationship_candidates": 29,
+    "p3_connection_candidates": 3
+  },
+  "historical_relationships": 3,
+  "multi_source_relationships": 2,
+  "same_name_candidate_strength": "weak",
+  "organization_alias_candidate_strength": "medium",
+  "merge_preview_id": 1,
+  "merge_executed": false,
+  "path_queries": [
+    {
+      "path_count": 1,
+      "elapsed_ms": 19
+    },
+    {
+      "path_count": 2,
+      "elapsed_ms": 9
+    },
+    {
+      "path_count": 2,
+      "elapsed_ms": 9
+    }
+  ],
+  "connection_candidate_count": 3,
+  "formal_database_modified": false,
+  "generated_at": "2026-07-13T13:14:19.657733"
+}

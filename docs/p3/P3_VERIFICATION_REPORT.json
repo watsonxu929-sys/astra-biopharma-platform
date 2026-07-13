@@ -1,0 +1,36 @@
+{
+  "status": "passed",
+  "database": "C:\\tmp\\p3_entity_network_pilot.db",
+  "checks": {
+    "missing_tables": [],
+    "integrity_check": "ok",
+    "relationship_type_count": 43,
+    "relationship_categories": [
+      "organization_organization",
+      "organization_product",
+      "person_asset_project",
+      "person_organization",
+      "project_organization"
+    ],
+    "orphan_relationship_evidence": 0,
+    "invalid_periods": 0,
+    "sensitive_identifiers": 0,
+    "redirect_cycles": 0,
+    "pilot_batch_id": "P3-PILOT-20260713",
+    "pilot": {
+      "products": 6,
+      "relationships": 29,
+      "historical": 3,
+      "multi_source": 2,
+      "resolution_candidates": 2,
+      "connection_candidates": 3
+    },
+    "path_check": {
+      "path_count": 1,
+      "elapsed_ms": 33,
+      "max_depth": 3,
+      "truncated": false
+    }
+  },
+  "failures": []
+}
