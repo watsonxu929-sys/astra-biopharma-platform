@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.services.api_common import current_scope, single
 
 from . import auth, client, clubs, collection, dashboard, events, identity, intelligence, investment_assessments, membership_person_link, membership_user_link, navigation, network, organizations, pipeline, processing, relationships, reports, research, resources, opportunities, search, signals, subjects, system, watchlists
+from . import research_fusion
 
 router = APIRouter(prefix="/api/v1", tags=["API v1"])
 
@@ -63,6 +64,7 @@ router.include_router(reports.router)
 router.include_router(navigation.router)
 router.include_router(pipeline.router)
 router.include_router(research.router)
+router.include_router(research_fusion.router)
 router.include_router(investment_assessments.router)
 router.include_router(system.router)
 router.include_router(membership_person_link.router)
