@@ -540,6 +540,18 @@ def required_permission(path: str, method: str) -> str | None:
     method = method.upper()
     if is_public_path(path):
         return None
+    if path.startswith("/api/v1/entity-network") and method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if any(part in path for part in ("/review", "/approve", "/rollback")):
+            return "review_data"
+        return "edit_data"
+    if path.startswith("/network/connection-candidates/"):
+        return "use_recommendations"
+    if path.startswith("/network/resolution-candidates/") and method == "POST":
+        return "review_data"
+    if path.startswith("/network/relationship-candidates/") and method == "POST":
+        return "review_data"
+    if path.startswith("/network/merges/") and method == "POST":
+        return "review_data" if any(part in path for part in ("/approve", "/rollback")) else "edit_data"
     if path.startswith("/admin/data-integrity"):
         return "review_data"
     if path.startswith("/admin/intelligence"):

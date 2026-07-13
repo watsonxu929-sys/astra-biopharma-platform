@@ -20,6 +20,7 @@ from app.v05h_reports import router as v05h_reports_router
 from app.v05i_pipeline import router as v05i_pipeline_router
 from app.v05j_research import router as v05j_research_router
 from app.p2_3_research import router as p2_3_research_router
+from app.p3_network import router as p3_network_router
 from app.v05kl_operations import router as v05kl_operations_router
 from app.api.v1.router import router as api_v1_router
 from app.identity import router as identity_router
@@ -98,6 +99,7 @@ app.include_router(v05h_reports_router)
 app.include_router(v05i_pipeline_router)
 app.include_router(v05j_research_router)
 app.include_router(p2_3_research_router)
+app.include_router(p3_network_router)
 app.include_router(v05kl_operations_router)
 app.include_router(identity_router)
 app.include_router(platform_router)
