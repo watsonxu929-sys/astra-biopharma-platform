@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app.security import can, current_user, current_username
-from app.services.club_operations_service import ClubEventService, ClubOperationError
+from app.services.club_operations_service import ClubEventService, ClubOperationError, ClubResourceMatchingService
 from app.v04c_review import db_connection, default_db_path
 from app.v05b_member_import import ensure_schema as ensure_v05b_schema
 from scripts.migrate_v05c import SCHEMA_SQL as V05C_SCHEMA_SQL
@@ -533,20 +533,24 @@ def save_feedback(
     feedback: str = Form(""),
     contribution_note: str = Form(""),
     follow_up_note: str = Form(""),
+    new_demand: str = Form(""),
+    new_supply: str = Form(""),
 ):
     ensure_schema()
     user = current_user(request) or {}
     if not user:
         raise HTTPException(401, "请先登录后提交反馈")
     try:
-        ClubEventService().submit_feedback(
+        saved_feedback = ClubEventService().submit_feedback(
             club_event_id, registration_id,
             {
                 "satisfaction_score": satisfaction_score, "content_feedback": feedback,
                 "cooperation_intent": follow_up_note, "suggestions": contribution_note,
+                "new_demand": new_demand, "new_supply": new_supply,
             },
             actor_user_id=int(user["id"]),
         )
+        ClubResourceMatchingService().deposit_feedback(saved_feedback["id"], actor_user_id=int(user["id"]))
     except ClubOperationError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse(f"/club/events/{club_event_id}", status_code=303)

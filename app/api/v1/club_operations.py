@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.services.api_common import require_permission, single
-from app.services.club_operations_service import ClubEventService, ClubOperationError
+from app.services.club_operations_service import ClubEventService, ClubOperationError, ClubResourceMatchingService
 
 router = APIRouter(tags=["Club Operations"])
 
@@ -63,6 +63,15 @@ class FeedbackPayload(BaseModel):
     new_supply: str = ""
     suggestions: str = ""
 
+
+class ResourceReviewPayload(BaseModel):
+    decision: str
+    note: str = ""
+
+
+class CandidateReviewPayload(BaseModel):
+    decision: str
+    note: str = ""
 
 def _raise(exc: ClubOperationError) -> None:
     raise HTTPException(exc.status_code, detail={"code": exc.code, "message": exc.message}) from exc
@@ -153,6 +162,73 @@ def submit_feedback(request: Request, club_event_id: int, registration_id: int, 
     try:
         result = ClubEventService().submit_feedback(
             club_event_id, registration_id, payload.model_dump(), actor_user_id=int(actor["id"]),
+        )
+        deposition = ClubResourceMatchingService().deposit_feedback(result["id"], actor_user_id=int(actor["id"]))
+    except ClubOperationError as exc:
+        _raise(exc)
+    return single({"feedback": result, "deposition": deposition})
+
+@router.post("/club/resources/{resource_id}/review")
+def review_club_resource(request: Request, resource_id: int, payload: ResourceReviewPayload):
+    actor = require_permission(request, "manage_club")
+    try:
+        result = ClubResourceMatchingService().review_resource(
+            resource_id, decision=payload.decision, note=payload.note,
+            actor=str(actor.get("username") or actor["id"]), actor_user_id=int(actor["id"]),
+        )
+    except ClubOperationError as exc:
+        _raise(exc)
+    return single(result)
+
+
+@router.post("/club/resource-matches/generate")
+def generate_resource_matches(request: Request):
+    require_permission(request, "manage_club")
+    return single({"created": ClubResourceMatchingService().generate_matches()})
+
+
+@router.post("/club/resource-matches/{match_id}/review")
+def review_resource_match(request: Request, match_id: int, payload: CandidateReviewPayload):
+    actor = require_permission(request, "manage_club")
+    try:
+        result = ClubResourceMatchingService().review_match(
+            match_id, decision=payload.decision, note=payload.note,
+            actor=str(actor.get("username") or actor["id"]), actor_user_id=int(actor["id"]),
+        )
+    except ClubOperationError as exc:
+        _raise(exc)
+    return single(result)
+
+
+@router.post("/club/resource-matches/{match_id}/lead-candidate")
+def create_match_lead(request: Request, match_id: int):
+    actor = require_permission(request, "manage_club")
+    try:
+        result = ClubResourceMatchingService().create_lead_from_match(
+            match_id, actor=str(actor.get("username") or actor["id"]), actor_user_id=int(actor["id"]),
+        )
+    except ClubOperationError as exc:
+        _raise(exc)
+    return single(result)
+
+
+@router.post("/club/events/{club_event_id}/relationship-candidates")
+def generate_event_relationships(request: Request, club_event_id: int):
+    require_permission(request, "manage_club")
+    try:
+        result = ClubResourceMatchingService().generate_event_relationship_candidates(club_event_id)
+    except ClubOperationError as exc:
+        _raise(exc)
+    return single({"created": result})
+
+
+@router.post("/club/relationship-candidates/{candidate_id}/review")
+def review_event_relationship(request: Request, candidate_id: int, payload: CandidateReviewPayload):
+    actor = require_permission(request, "manage_club")
+    try:
+        result = ClubResourceMatchingService().review_event_relationship(
+            candidate_id, decision=payload.decision, note=payload.note,
+            actor=str(actor.get("username") or actor["id"]),
         )
     except ClubOperationError as exc:
         _raise(exc)

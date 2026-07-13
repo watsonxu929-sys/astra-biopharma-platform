@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.services.club_matching_service import match_need_offering
 from app.security import can, current_user, current_username
-from app.services.club_operations_service import ClubMembershipService, ClubOperationError
+from app.services.club_operations_service import ClubMembershipService, ClubOperationError, ClubResourceMatchingService
 from app.services.lead_recommendation_service import generate_lead_recommendations
 from app.services.lead_scoring_service import manual_grade_requires_reason, score_lead
 from app.services.membership_person_link_service import bind_person, get_link_info, get_person_candidates, list_link_audit, unbind_person
@@ -599,8 +599,22 @@ def member_detail(member_id: int, request: Request, message: str = "", error: st
             member_data["contact"] = {}
             member_data["avatar_asset_id"] = None
             member_data["avatar_source"] = {}
-        needs = [dict(r) for r in conn.execute("SELECT * FROM v04f_club_needs WHERE membership_id=? ORDER BY id DESC", (member_id,)).fetchall()]
-        offerings = [dict(r) for r in conn.execute("SELECT * FROM v04f_club_offerings WHERE membership_id=? ORDER BY id DESC", (member_id,)).fetchall()]
+        needs = [dict(r) for r in conn.execute(
+            """SELECT id,title,description,resource_type AS need_type,industry_direction AS industry_tags,
+                      region,status,'v06_market_resources' AS source_model
+               FROM v06_market_resources WHERE direction='demand'
+                 AND (owner_person_id=? OR organization_id=? OR (legacy_source_type='qbay_membership' AND legacy_source_id=?))
+               ORDER BY id DESC""", (member_data.get("person_id"), member_data.get("organization_id"), str(member_id)),
+        ).fetchall()]
+        needs.extend(dict(r) for r in conn.execute("SELECT *, 'v04f_club_needs' AS source_model FROM v04f_club_needs WHERE membership_id=? ORDER BY id DESC", (member_id,)).fetchall())
+        offerings = [dict(r) for r in conn.execute(
+            """SELECT id,title,description,resource_type AS offering_type,industry_direction AS industry_tags,
+                      region,status,'v06_market_resources' AS source_model
+               FROM v06_market_resources WHERE direction='supply'
+                 AND (owner_person_id=? OR organization_id=? OR (legacy_source_type='qbay_membership' AND legacy_source_id=?))
+               ORDER BY id DESC""", (member_data.get("person_id"), member_data.get("organization_id"), str(member_id)),
+        ).fetchall()]
+        offerings.extend(dict(r) for r in conn.execute("SELECT *, 'v04f_club_offerings' AS source_model FROM v04f_club_offerings WHERE membership_id=? ORDER BY id DESC", (member_id,)).fetchall())
         matches = [dict(r) for r in conn.execute(
             """
             SELECT cm.* FROM v04f_club_matches cm
@@ -716,96 +730,148 @@ def unbind_member_user(member_id: int, reason: str = Form(""), request: Request 
 
 
 @router.post("/club/members/{member_id}/needs")
-def add_need(member_id: int, title: str = Form(...), description: str = Form(""), need_type: str = Form(""), industry_tags: str = Form(""), region: str = Form(""), urgency: str = Form("normal")):
-    with db_connection() as conn:
-        if not conn.execute("SELECT 1 FROM v04f_club_memberships WHERE id=?", (member_id,)).fetchone():
-            raise HTTPException(404, "会员不存在")
-        ts = now()
-        conn.execute(
-            "INSERT INTO v04f_club_needs(need_no, membership_id, title, description, need_type, industry_tags, region, urgency, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (_next_no(conn, "QBN"), member_id, title, description, need_type, industry_tags, region, urgency, ts, ts),
+def add_need(request: Request, member_id: int, title: str = Form(...), description: str = Form(""), need_type: str = Form(""), industry_tags: str = Form(""), region: str = Form(""), urgency: str = Form("normal")):
+    user = current_user(request) or {}
+    if not user:
+        raise HTTPException(401, "请先登录")
+    try:
+        ClubResourceMatchingService().create_member_resource(
+            member_id, direction="demand", actor_user_id=int(user["id"]),
+            fields={"title": title, "description": description, "resource_type": need_type or "其他",
+                    "industry_direction": industry_tags, "tags": industry_tags, "region": region,
+                    "summary": description, "status": "pending_review"},
         )
-    return RedirectResponse(f"/club/members/{member_id}", status_code=303)
+    except ClubOperationError as exc:
+        return RedirectResponse(f"/club/members/{member_id}?error={exc.message}", status_code=303)
+    return RedirectResponse(f"/club/members/{member_id}?message=需求草稿已提交审核", status_code=303)
 
 
 @router.post("/club/members/{member_id}/offerings")
-def add_offering(member_id: int, title: str = Form(...), description: str = Form(""), offering_type: str = Form(""), industry_tags: str = Form(""), region: str = Form(""), availability: str = Form("available")):
-    with db_connection() as conn:
-        if not conn.execute("SELECT 1 FROM v04f_club_memberships WHERE id=?", (member_id,)).fetchone():
-            raise HTTPException(404, "会员不存在")
-        ts = now()
-        conn.execute(
-            "INSERT INTO v04f_club_offerings(offering_no, membership_id, title, description, offering_type, industry_tags, region, availability, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (_next_no(conn, "QBO"), member_id, title, description, offering_type, industry_tags, region, availability, ts, ts),
+def add_offering(request: Request, member_id: int, title: str = Form(...), description: str = Form(""), offering_type: str = Form(""), industry_tags: str = Form(""), region: str = Form(""), availability: str = Form("available")):
+    user = current_user(request) or {}
+    if not user:
+        raise HTTPException(401, "请先登录")
+    try:
+        ClubResourceMatchingService().create_member_resource(
+            member_id, direction="supply", actor_user_id=int(user["id"]),
+            fields={"title": title, "description": description, "resource_type": offering_type or "其他",
+                    "industry_direction": industry_tags, "tags": industry_tags, "region": region,
+                    "summary": description, "status": "pending_review"},
         )
-    return RedirectResponse(f"/club/members/{member_id}", status_code=303)
+    except ClubOperationError as exc:
+        return RedirectResponse(f"/club/members/{member_id}?error={exc.message}", status_code=303)
+    return RedirectResponse(f"/club/members/{member_id}?message=供给草稿已提交审核", status_code=303)
 
 
 @router.post("/club/matches/generate")
-def generate_matches():
-    ensure_schema()
-    created = 0
-    with db_connection() as conn:
-        needs = [dict(r) for r in conn.execute("SELECT * FROM v04f_club_needs WHERE status='active'").fetchall()]
-        offers = [dict(r) for r in conn.execute("SELECT * FROM v04f_club_offerings WHERE status='active'").fetchall()]
-        for need in needs:
-            for offering in offers:
-                result = match_need_offering(need, offering)
-                if not result:
-                    continue
-                if conn.execute("SELECT 1 FROM v04f_club_matches WHERE need_id=? AND offering_id=?", (need["id"], offering["id"])).fetchone():
-                    continue
-                ts = now()
-                conn.execute(
-                    """
-                    INSERT INTO v04f_club_matches(match_no, need_id, offering_id, match_score, match_grade, reasons_json, missing_json, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (_next_no(conn, "QBMAT"), need["id"], offering["id"], result["score"], result["grade"], _json(result["reasons"]), _json(result["missing"]), ts, ts),
-                )
-                created += 1
-    return RedirectResponse(f"/club/matches?created={created}", status_code=303)
+def generate_matches(request: Request):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    created = ClubResourceMatchingService().generate_matches()
+    return RedirectResponse(f"/club/matches?created={len(created)}", status_code=303)
 
 
 @router.get("/club/matches", response_class=HTMLResponse)
 def matches_page(request: Request, status: str = "", created: int = 0):
     with db_connection() as conn:
-        if status:
-            rows = conn.execute("SELECT * FROM v04f_club_matches WHERE status=? ORDER BY match_score DESC", (status,)).fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM v04f_club_matches ORDER BY match_score DESC LIMIT 100").fetchall()
+        where, params = ("WHERE m.status=?", [status]) if status else ("", [])
+        rows = conn.execute(
+            f"""SELECT m.*,m.demand_resource_id AS need_id,m.supply_resource_id AS offering_id,
+                       m.score AS match_score,'受控规则' AS match_grade,l.id AS action_id
+                FROM p4_resource_match_candidates m
+                LEFT JOIN p4_club_lead_candidates l ON l.source_type='resource_match' AND l.source_id=CAST(m.id AS TEXT)
+                {where} ORDER BY m.score DESC,m.id DESC LIMIT 100""", params,
+        ).fetchall()
     return templates.TemplateResponse(request, "v04f_club.html", {"mode": "matches", "matches": [dict(r) for r in rows], "created": created, "status": status})
 
 
 @router.post("/club/matches/{match_id}/status")
 def update_match(request: Request, match_id: int, status: str = Form(...), note: str = Form(""), actor: str = Form("manual")):
-    actor = current_username(request)
-    if status not in {"candidate", "confirmed", "contacted", "progressing", "successful", "rejected", "expired"}:
-        raise HTTPException(400, "无效匹配状态")
-    with db_connection() as conn:
-        if not conn.execute("SELECT 1 FROM v04f_club_matches WHERE id=?", (match_id,)).fetchone():
-            raise HTTPException(404, "匹配不存在")
-        conn.execute("UPDATE v04f_club_matches SET status=?, confirmed_by=?, confirmed_at=?, reject_reason=?, updated_at=? WHERE id=?", (status, actor, now(), note or None, now(), match_id))
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    try:
+        ClubResourceMatchingService().review_match(
+            match_id, decision=status, note=note, actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+        )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse("/club/matches", status_code=303)
 
 
 @router.post("/club/matches/{match_id}/action")
 def match_to_action(request: Request, match_id: int, owner: str = Form("")):
-    owner = owner.strip() or current_username(request)
-    with db_connection() as conn:
-        match = conn.execute("SELECT * FROM v04f_club_matches WHERE id=?", (match_id,)).fetchone()
-        if not match:
-            raise HTTPException(404, "匹配不存在")
-        if match["action_id"]:
-            return RedirectResponse("/club/matches", status_code=303)
-        action_no = _next_no(conn, "ACT")
-        cur = conn.execute(
-            "INSERT INTO actions(external_id, task, completion_standard, owner, priority, status, source_type, created_at) VALUES (?, ?, ?, ?, 'P2', '未开始', 'v0.4F资源匹配', ?)",
-            (action_no, f"跟进 Q-BAY 资源匹配 {match['match_no']}", "确认双方意向并记录跟进结果", owner, now()),
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    try:
+        ClubResourceMatchingService().create_lead_from_match(
+            match_id, actor=current_username(request), actor_user_id=int(user["id"]) if user.get("id") else None,
         )
-        conn.execute("UPDATE v04f_club_matches SET action_id=?, updated_at=? WHERE id=?", (cur.lastrowid, now(), match_id))
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse("/club/matches", status_code=303)
 
+@router.get("/club/resources", response_class=HTMLResponse)
+def club_resources_page(request: Request, status: str = ""):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    with db_connection() as conn:
+        where, params = ("WHERE status=?", [status]) if status else ("", [])
+        rows = [dict(row) for row in conn.execute(
+            f"SELECT * FROM v06_market_resources {where} ORDER BY id DESC LIMIT 200", params,
+        ).fetchall()]
+    return templates.TemplateResponse(request, "v04f_club.html", {"mode": "resources", "resources": rows, "status": status})
+
+
+@router.post("/club/resources/{resource_id}/review")
+def review_club_resource(request: Request, resource_id: int, decision: str = Form(...), note: str = Form("")):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    try:
+        ClubResourceMatchingService().review_resource(
+            resource_id, decision=decision, note=note, actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+        )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return RedirectResponse("/club/resources", status_code=303)
+
+
+@router.post("/club/events/{club_event_id}/relationship-candidates")
+def generate_event_relationships_page(request: Request, club_event_id: int):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    ClubResourceMatchingService().generate_event_relationship_candidates(club_event_id)
+    return RedirectResponse("/club/relationship-candidates", status_code=303)
+
+
+@router.get("/club/relationship-candidates", response_class=HTMLResponse)
+def relationship_candidates_page(request: Request):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    with db_connection() as conn:
+        rows = [dict(row) for row in conn.execute("SELECT * FROM p4_event_relationship_candidates ORDER BY id DESC LIMIT 200").fetchall()]
+    return templates.TemplateResponse(request, "v04f_club.html", {"mode": "relationship_candidates", "relationship_candidates": rows})
+
+
+@router.post("/club/relationship-candidates/{candidate_id}/review")
+def review_relationship_candidate_page(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form("")):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    ClubResourceMatchingService().review_event_relationship(candidate_id, decision=decision, note=note, actor=current_username(request))
+    return RedirectResponse("/club/relationship-candidates", status_code=303)
+
+
+@router.get("/club/leads", response_class=HTMLResponse)
+def club_leads_page(request: Request):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    with db_connection() as conn:
+        rows = [dict(row) for row in conn.execute("SELECT * FROM p4_club_lead_candidates ORDER BY id DESC LIMIT 200").fetchall()]
+    return templates.TemplateResponse(request, "v04f_club.html", {"mode": "club_leads", "club_leads": rows})
 
 @router.get("/v04f/health")
 def health():

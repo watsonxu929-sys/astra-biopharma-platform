@@ -655,3 +655,317 @@ class ClubEventService:
             (club_event_id, registration_id, token_id, action, result, method, detail or None,
              actor_user_id, actor, now_iso()),
         )
+
+class ClubResourceMatchingService:
+    def __init__(self, db_path: str | Path | None = None):
+        self.db_path = _path(db_path)
+
+    def create_member_resource(
+        self, membership_id: int, *, direction: str, fields: dict[str, Any], actor_user_id: int,
+    ) -> dict[str, Any]:
+        if direction not in {"demand", "supply"}:
+            raise ClubOperationError(400, "INVALID_RESOURCE_DIRECTION", "资源方向无效")
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import Session
+        from app.services.unified_resource_service import UnifiedResourceService
+
+        with db_connection(self.db_path) as conn:
+            member = _row(conn.execute("SELECT * FROM v04f_club_memberships WHERE id=?", (membership_id,)).fetchone())
+            if not member:
+                raise ClubOperationError(404, "MEMBERSHIP_NOT_FOUND", "会员不存在")
+            if int(member.get("user_id") or actor_user_id) != actor_user_id:
+                user = conn.execute("SELECT role FROM v05a_users WHERE id=?", (actor_user_id,)).fetchone()
+                if not user or user["role"] != "admin":
+                    raise ClubOperationError(403, "RESOURCE_FORBIDDEN", "无权代该会员发布资源")
+        engine = create_engine(f"sqlite:///{self.db_path.as_posix()}", connect_args={"check_same_thread": False})
+        try:
+            with Session(engine) as session:
+                unified = UnifiedResourceService(session)
+                create_fields = {
+                    **fields, "direction": direction, "owner_person_id": member.get("person_id"),
+                    "owner_organization_id": member.get("organization_id"),
+                    "legacy_source_type": "qbay_membership", "legacy_source_id": str(membership_id),
+                    "status": fields.get("status") or "pending_review",
+                }
+                duplicates = unified.find_duplicates(create_fields)
+                created = not bool(duplicates)
+                resource = duplicates[0] if duplicates else unified.create(actor_user_id=actor_user_id, fields=create_fields)
+                if created:
+                    session.execute(
+                        text("UPDATE v06_market_resources SET source_event_id=:source_event_id,target_audience=:target_audience,pilot_batch_id=:pilot WHERE id=:id"),
+                        {"source_event_id": fields.get("source_event_id"), "target_audience": fields.get("target_audience"),
+                         "pilot": fields.get("pilot_batch_id"), "id": resource.id},
+                    )
+                    session.commit()
+                result = unified.to_api(resource)
+                result["pilot_batch_id"] = fields.get("pilot_batch_id")
+                result["idempotent"] = not created
+        finally:
+            engine.dispose()
+        if created:
+            with db_connection(self.db_path) as conn:
+                record_audit(conn, action="resource.submitted", target_type="market_resource", target_id=result["id"],
+                             actor=str(actor_user_id), actor_user_id=actor_user_id, after={"direction": direction, "status": "pending_review"},
+                             pilot_batch_id=fields.get("pilot_batch_id"))
+        return result
+
+    def review_resource(
+        self, resource_id: int, *, decision: str, actor: str, actor_user_id: int | None = None, note: str = "",
+    ) -> dict[str, Any]:
+        status = {"approved": "published", "rejected": "rejected", "need_more_info": "pending_review"}.get(decision)
+        if not status:
+            raise ClubOperationError(400, "INVALID_RESOURCE_DECISION", "无效资源审核状态")
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            resource = _row(conn.execute("SELECT * FROM v06_market_resources WHERE id=?", (resource_id,)).fetchone())
+            if not resource:
+                raise ClubOperationError(404, "RESOURCE_NOT_FOUND", "资源不存在")
+            if resource["status"] == status:
+                return {"resource": resource, "idempotent": True}
+            conn.execute("UPDATE v06_market_resources SET status=?,reviewed_by=?,reviewed_at=?,review_note=?,updated_at=? WHERE id=?", (status, actor, ts, note or None, ts, resource_id))
+            updated = dict(conn.execute("SELECT * FROM v06_market_resources WHERE id=?", (resource_id,)).fetchone())
+            record_audit(conn, action="resource.reviewed", target_type="market_resource", target_id=resource_id,
+                         actor=actor, actor_user_id=actor_user_id, before={"status": resource["status"]},
+                         after={"status": status}, reason=note, pilot_batch_id=resource.get("pilot_batch_id"))
+            if decision == "approved":
+                emit_domain_event(conn, event_type="resource.approved", aggregate_type="market_resource",
+                                  aggregate_id=resource_id, payload={"direction": resource["direction"]},
+                                  actor_user_id=actor_user_id, pilot_batch_id=resource.get("pilot_batch_id"))
+            return {"resource": updated, "idempotent": False}
+
+    def generate_matches(self, *, pilot_batch_id: str | None = None) -> list[dict[str, Any]]:
+        ts = now_iso()
+        created: list[dict[str, Any]] = []
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            resources = [dict(row) for row in conn.execute(
+                """
+                SELECT * FROM v06_market_resources WHERE status='published'
+                  AND (valid_until IS NULL OR valid_until>=?) ORDER BY id
+                """, (ts,),
+            ).fetchall()]
+            demands = [row for row in resources if row["direction"] == "demand"]
+            supplies = [row for row in resources if row["direction"] == "supply"]
+            p3_available = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='p3_canonical_relationships'").fetchone() is not None
+            for demand in demands:
+                for supply in supplies:
+                    if demand["id"] == supply["id"] or (demand.get("organization_id") and demand.get("organization_id") == supply.get("organization_id")):
+                        continue
+                    score, reasons, risks, evidence, paths = 0, [], [], [], []
+                    if demand["resource_type"] == supply["resource_type"]:
+                        score += 40; reasons.append("资源类型一致")
+                    demand_tags = set(filter(None, str(demand.get("tags") or demand.get("industry_direction") or "").replace("，", ",").split(",")))
+                    supply_tags = set(filter(None, str(supply.get("tags") or supply.get("industry_direction") or "").replace("，", ",").split(",")))
+                    common_tags = sorted(demand_tags & supply_tags)
+                    if common_tags:
+                        score += min(25, len(common_tags) * 10); reasons.append(f"共同产业标签：{'、'.join(common_tags)}")
+                    if demand.get("region") and supply.get("region") and demand["region"] == supply["region"]:
+                        score += 15; reasons.append("地区一致")
+                    if p3_available and demand.get("organization_id") and supply.get("organization_id"):
+                        d_ext = conn.execute("SELECT external_id FROM organizations WHERE id=?", (demand["organization_id"],)).fetchone()
+                        s_ext = conn.execute("SELECT external_id FROM organizations WHERE id=?", (supply["organization_id"],)).fetchone()
+                        if d_ext and s_ext:
+                            relation = conn.execute(
+                                """
+                                SELECT relationship_no,relationship_type FROM p3_canonical_relationships
+                                WHERE review_status='approved' AND ((subject_id=? AND object_id=?) OR (subject_id=? AND object_id=?)) LIMIT 1
+                                """, (d_ext[0], s_ext[0], s_ext[0], d_ext[0]),
+                            ).fetchone()
+                            if relation:
+                                score += 20; reasons.append("P3存在已确认主体关系")
+                                paths.append({"relationship_no": relation["relationship_no"], "relationship_type": relation["relationship_type"]})
+                                evidence.append({"source": "p3_canonical_relationship", "id": relation["relationship_no"]})
+                    elif not p3_available:
+                        risks.append("P3关系表未迁入当前数据库，未计算可信关系距离")
+                    if score <= 0:
+                        continue
+                    existing = conn.execute("SELECT * FROM p4_resource_match_candidates WHERE demand_resource_id=? AND supply_resource_id=?", (demand["id"], supply["id"])).fetchone()
+                    if existing:
+                        continue
+                    cur = conn.execute(
+                        """
+                        INSERT INTO p4_resource_match_candidates(
+                          match_no,demand_resource_id,supply_resource_id,recommended_person_id,recommended_organization_id,
+                          score,reasons_json,relationship_path_json,common_contacts_json,risks_json,evidence_json,
+                          generation_method,status,pilot_batch_id,created_at,updated_at
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?)
+                        """,
+                        (_number("QBMAT"), demand["id"], supply["id"], supply.get("owner_person_id"), supply.get("organization_id"),
+                         min(100, score), _json(reasons), _json(paths), _json([]), _json(risks), _json(evidence),
+                         "controlled_rule_v1", pilot_batch_id or demand.get("pilot_batch_id") or supply.get("pilot_batch_id"), ts, ts),
+                    )
+                    created.append(dict(conn.execute("SELECT * FROM p4_resource_match_candidates WHERE id=?", (cur.lastrowid,)).fetchone()))
+        return created
+
+    def review_match(
+        self, match_id: int, *, decision: str, actor: str, actor_user_id: int | None = None, note: str = "",
+    ) -> dict[str, Any]:
+        if decision not in {"reviewed", "accepted", "rejected", "introduced", "closed"}:
+            raise ClubOperationError(400, "INVALID_MATCH_DECISION", "无效匹配状态")
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            match = _row(conn.execute("SELECT * FROM p4_resource_match_candidates WHERE id=?", (match_id,)).fetchone())
+            if not match:
+                raise ClubOperationError(404, "MATCH_NOT_FOUND", "匹配候选不存在")
+            if match["status"] == decision:
+                return {"match": match, "idempotent": True}
+            conn.execute("UPDATE p4_resource_match_candidates SET status=?,reviewed_by=?,reviewed_at=?,review_note=?,updated_at=? WHERE id=?", (decision, actor, ts, note or None, ts, match_id))
+            updated = dict(conn.execute("SELECT * FROM p4_resource_match_candidates WHERE id=?", (match_id,)).fetchone())
+            record_audit(conn, action="match.reviewed", target_type="resource_match", target_id=match_id,
+                         actor=actor, actor_user_id=actor_user_id, before={"status": match["status"]},
+                         after={"status": decision}, reason=note, pilot_batch_id=match.get("pilot_batch_id"))
+            if decision == "accepted":
+                emit_domain_event(conn, event_type="match.accepted", aggregate_type="resource_match",
+                                  aggregate_id=match_id, payload={"demand_resource_id": match["demand_resource_id"], "supply_resource_id": match["supply_resource_id"]},
+                                  actor_user_id=actor_user_id, pilot_batch_id=match.get("pilot_batch_id"))
+            return {"match": updated, "idempotent": False}
+
+    def create_lead_from_match(
+        self, match_id: int, *, actor: str, actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            match = _row(conn.execute("SELECT * FROM p4_resource_match_candidates WHERE id=?", (match_id,)).fetchone())
+            if not match or match["status"] not in {"accepted", "introduced", "converted_to_lead"}:
+                raise ClubOperationError(409, "ACCEPTED_MATCH_REQUIRED", "仅已接受匹配可生成线索候选")
+            existing = conn.execute("SELECT * FROM p4_club_lead_candidates WHERE source_type='resource_match' AND source_id=?", (str(match_id),)).fetchone()
+            if existing:
+                return dict(existing)
+            demand = dict(conn.execute("SELECT * FROM v06_market_resources WHERE id=?", (match["demand_resource_id"],)).fetchone())
+            supply = dict(conn.execute("SELECT * FROM v06_market_resources WHERE id=?", (match["supply_resource_id"],)).fetchone())
+            cur = conn.execute(
+                """
+                INSERT INTO p4_club_lead_candidates(
+                  lead_no,title,source_type,source_id,demand_organization_id,supply_organization_id,
+                  person_ids_json,organization_ids_json,reason,evidence_json,owner_user_id,priority,next_action,
+                  status,pilot_batch_id,created_at,updated_at
+                ) VALUES (?,?, 'resource_match',?,?,?,?,?,?,?,?,'P2',?,'pending',?,?,?)
+                """,
+                (_number("QBL"), f"{demand['title']} × {supply['title']}", str(match_id), demand.get("organization_id"),
+                 supply.get("organization_id"), _json([value for value in [demand.get("owner_person_id"), supply.get("owner_person_id")] if value]),
+                 _json([value for value in [demand.get("organization_id"), supply.get("organization_id")] if value]),
+                 "人工接受的资源匹配候选", match["evidence_json"], actor_user_id, "由运营确认双方联系意愿",
+                 match.get("pilot_batch_id"), ts, ts),
+            )
+            lead = dict(conn.execute("SELECT * FROM p4_club_lead_candidates WHERE id=?", (cur.lastrowid,)).fetchone())
+            conn.execute("UPDATE p4_resource_match_candidates SET status='converted_to_lead',updated_at=? WHERE id=?", (ts, match_id))
+            record_audit(conn, action="lead.created", target_type="club_lead_candidate", target_id=lead["id"],
+                         actor=actor, actor_user_id=actor_user_id, after={"status": "pending"},
+                         pilot_batch_id=match.get("pilot_batch_id"))
+            emit_domain_event(conn, event_type="lead.created", aggregate_type="club_lead_candidate",
+                              aggregate_id=lead["id"], payload={"source_type": "resource_match", "source_id": match_id},
+                              actor_user_id=actor_user_id, pilot_batch_id=match.get("pilot_batch_id"))
+            return lead
+
+    def generate_event_relationship_candidates(self, club_event_id: int) -> list[dict[str, Any]]:
+        ts = now_iso()
+        created: list[dict[str, Any]] = []
+        with db_connection(self.db_path) as conn:
+            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            if not event:
+                raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
+            participants = [dict(row) for row in conn.execute(
+                """
+                SELECT r.id AS registration_id,r.person_id,r.organization_id,r.applicant_name
+                FROM v05c_club_event_registrations r
+                WHERE r.club_event_id=? AND r.lifecycle_status='checked_in' AND r.person_id IS NOT NULL
+                ORDER BY r.id
+                """, (club_event_id,),
+            ).fetchall()]
+            conn.execute("BEGIN IMMEDIATE")
+            for index, left in enumerate(participants):
+                for right in participants[index + 1:]:
+                    if left["person_id"] == right["person_id"]:
+                        continue
+                    evidence = [{"club_event_id": club_event_id, "event_no": event["event_no"],
+                                 "registration_ids": [left["registration_id"], right["registration_id"]],
+                                 "statement": "仅证明同场签到，不代表认识或合作"}]
+                    try:
+                        cur = conn.execute(
+                            """
+                            INSERT INTO p4_event_relationship_candidates(
+                              candidate_no,club_event_id,relationship_type,subject_type,subject_id,object_type,object_id,
+                              evidence_json,confidence,status,pilot_batch_id,created_at,updated_at
+                            ) VALUES (?,?,'attended_same_event','person',?,'person',?,?,25,'pending',?,?,?)
+                            """,
+                            (_number("QBREL"), club_event_id, str(left["person_id"]), str(right["person_id"]),
+                             _json(evidence), event.get("pilot_batch_id"), ts, ts),
+                        )
+                    except sqlite3.IntegrityError:
+                        continue
+                    created.append(dict(conn.execute("SELECT * FROM p4_event_relationship_candidates WHERE id=?", (cur.lastrowid,)).fetchone()))
+        return created
+    def review_event_relationship(
+        self, candidate_id: int, *, decision: str, actor: str, note: str = "",
+    ) -> dict[str, Any]:
+        if decision not in {"reviewed", "accepted", "rejected", "closed"}:
+            raise ClubOperationError(400, "INVALID_RELATIONSHIP_DECISION", "无效关系候选状态")
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            candidate = _row(conn.execute("SELECT * FROM p4_event_relationship_candidates WHERE id=?", (candidate_id,)).fetchone())
+            if not candidate:
+                raise ClubOperationError(404, "RELATIONSHIP_CANDIDATE_NOT_FOUND", "关系候选不存在")
+            if candidate["status"] == decision:
+                return {"candidate": candidate, "idempotent": True}
+            conn.execute("UPDATE p4_event_relationship_candidates SET status=?,reviewed_by=?,reviewed_at=?,review_note=?,updated_at=? WHERE id=?", (decision, actor, ts, note or None, ts, candidate_id))
+            return {"candidate": dict(conn.execute("SELECT * FROM p4_event_relationship_candidates WHERE id=?", (candidate_id,)).fetchone()), "idempotent": False}
+
+    def deposit_feedback(self, feedback_id: int, *, actor_user_id: int) -> dict[str, Any]:
+        with db_connection(self.db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT f.*,r.canonical_membership_id,r.membership_id,r.person_id,r.organization_id
+                FROM p4_event_feedback f JOIN v05c_club_event_registrations r ON r.id=f.registration_id
+                WHERE f.id=?
+                """, (feedback_id,),
+            ).fetchone()
+            if not row:
+                raise ClubOperationError(404, "FEEDBACK_NOT_FOUND", "反馈不存在")
+            feedback = dict(row)
+        membership_id = feedback.get("canonical_membership_id") or feedback.get("membership_id")
+        resources = []
+        if membership_id and feedback.get("new_demand"):
+            resources.append(self.create_member_resource(
+                int(membership_id), direction="demand", actor_user_id=actor_user_id,
+                fields={"title": str(feedback["new_demand"])[:120], "description": feedback["new_demand"],
+                        "resource_type": "活动反馈需求", "source_event_id": feedback["club_event_id"],
+                        "pilot_batch_id": feedback.get("pilot_batch_id"), "status": "draft"},
+            ))
+        if membership_id and feedback.get("new_supply"):
+            resources.append(self.create_member_resource(
+                int(membership_id), direction="supply", actor_user_id=actor_user_id,
+                fields={"title": str(feedback["new_supply"])[:120], "description": feedback["new_supply"],
+                        "resource_type": "活动反馈供给", "source_event_id": feedback["club_event_id"],
+                        "pilot_batch_id": feedback.get("pilot_batch_id"), "status": "draft"},
+            ))
+        lead = None
+        if feedback.get("cooperation_intent"):
+            ts = now_iso()
+            with db_connection(self.db_path) as conn:
+                existing = conn.execute("SELECT * FROM p4_club_lead_candidates WHERE source_type='event_feedback' AND source_id=?", (str(feedback_id),)).fetchone()
+                if existing:
+                    lead = dict(existing)
+                else:
+                    cur = conn.execute(
+                        """
+                        INSERT INTO p4_club_lead_candidates(
+                          lead_no,title,source_type,source_id,demand_organization_id,person_ids_json,organization_ids_json,
+                          reason,evidence_json,owner_user_id,priority,next_action,status,pilot_batch_id,created_at,updated_at
+                        ) VALUES (?,?,'event_feedback',?,?,?,?,?,?,?,'P2',?,'pending',?,?,?)
+                        """,
+                        (_number("QBL"), f"活动反馈合作意向：{str(feedback['cooperation_intent'])[:80]}", str(feedback_id),
+                         feedback.get("organization_id"), _json([feedback["person_id"]] if feedback.get("person_id") else []),
+                         _json([feedback["organization_id"]] if feedback.get("organization_id") else []),
+                         feedback["cooperation_intent"], _json([{"feedback_id": feedback_id, "club_event_id": feedback["club_event_id"]}]),
+                         actor_user_id, "运营核实合作意向并征得双方同意", feedback.get("pilot_batch_id"), ts, ts),
+                    )
+                    lead = dict(conn.execute("SELECT * FROM p4_club_lead_candidates WHERE id=?", (cur.lastrowid,)).fetchone())
+                    emit_domain_event(conn, event_type="lead.created", aggregate_type="club_lead_candidate",
+                                      aggregate_id=lead["id"], payload={"source_type": "event_feedback", "source_id": feedback_id},
+                                      actor_user_id=actor_user_id, pilot_batch_id=feedback.get("pilot_batch_id"))
+        relationships = self.generate_event_relationship_candidates(int(feedback["club_event_id"]))
+        return {"resources": resources, "lead": lead, "relationship_candidates": relationships}
