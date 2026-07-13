@@ -16,3 +16,11 @@
 | KI-005 | `v06_timeline_entries` | 12 条历史记录引用不存在的机会（ID 1、12、13） | 高 | 待人工核对，不自动修复 | `PRAGMA foreign_key_check` | 否，迁移未增加 |
 | KI-006 | 俱乐部板块 | 某页面进入统一错误页（500） | 中 | 待定位根因 | 人工验收 | 否 |
 | KI-007 | 俱乐部运营与活动指标 | 数据键仍使用 `successful_matches`、`recent_events`、`event_registrations`、`today_checkins`、`post_event_followups`；不属于 P2.1 情报链 | 低 | 待俱乐部模块本地化任务处理 | 检查俱乐部运营页面指标标签 | 否 |
+
+
+## P2.3 已知问题
+
+- 事件融合为确定性规则首版，复杂别名、同义产品名和跨语言文本仍需人工确认。
+- 试点三家企业仅在数据库副本中以 P2.3 pilot 来源创建，尚未进入正式主体匹配。
+- 82 个模板中 9 个既有 platform/* 模板因缺少 status_label 过滤器未通过独立模板检查；P2.3 模板通过，本任务不扩修全站 UI。
+- 正式库起止文件 SHA256 不一致；正式库没有 p2_3_* 表或新增研究数据。现有连接助手设置 WAL，需人工确认物理文件头变化，详见 docs/p2/P2_3_ERROR_ANALYSIS.md。

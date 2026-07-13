@@ -43,3 +43,8 @@ P2.2 已加入真实静态网页、RSS、单一动态网页、PDF/XLSX解析、�
 ## P1 领域迁移
 
 先运行 `.venv\Scripts\python.exe scripts\migrations\001_core_domain_unification.py --dry-run`，确认冲突后再运行 `--apply`。迁移自动创建一致性备份。
+
+
+## P2.3 多来源研究融合
+
+P2.3 增加经人工审核的产业事件、事实断言、来源冲突、专题工作区、企业/赛道对比、结构化引用报告和只生成草稿的 ResearchAgent。005 默认 dry-run；受控试点必须在数据库副本运行。详见 docs/p2/P2_3_RESEARCH_FUSION_MODEL.md、docs/p2/P2_3_PILOT_RESULTS.md 和 docs/p2/P2_3_TRAE_HANDOFF.md。

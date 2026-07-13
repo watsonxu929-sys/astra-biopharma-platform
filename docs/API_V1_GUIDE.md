@@ -229,3 +229,8 @@ The API response shape, pagination, subject URLs and dashboard data are reusable
 - v0.5I adds pipeline orchestration, retry state, quality sampling, pilot source configuration and run-quality metrics. Real network pilot scripts are not part of default regression and require explicit confirmation.
 - v0.5J adds research topics, company comparison, track analysis, investment assessment and centralized Chinese labels. API machine fields remain English; display labels are returned through sibling fields such as `status_label`, `type_label`, `grade_label` and `field_label`.
 - v0.5K-L adds production configuration, health/readiness, unified task queue, backup/restore records, source quality metrics and safe real-source pilot tooling. SQLite remains the default database; PostgreSQL migration support is explicit and dry-run first.
+
+
+## P2.3 Research Fusion API
+
+前缀：/api/v1/research-fusion。主要资源包括专题工作区、研究问题、正式事件时间线/详情、关系分类、冲突列表/解决、研究发现、ResearchAgent 草稿、研究报告创建/提交/审核/发布、企业对比和赛道对比。读操作要求 view_internal，编辑要求 edit_data，冲突解决、发现审核和报告审核/发布要求 review_data。所有端点调用与 Web 页面相同的研究服务。

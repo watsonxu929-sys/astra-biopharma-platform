@@ -15,3 +15,8 @@
 | operations | 权限、审计、任务、备份、健康 | security、tasks、operations | 历史 Windows 入口 |
 
 网页和 `/api/v1` 应调用同一服务层；不得再新增第二套用户、人物、机构、会员、资源或机会模型。
+
+
+| 领域 | P2.3 正式能力 | 主要实现 | 边界 |
+|---|---|---|---|
+| research fusion | 多来源事件、事实断言、冲突、正式时间线、专题工作区、企业/赛道对比、引用报告与版本 | fusion_service、research_engine_service、005 迁移、/api/v1/research-fusion | AI 只生成草稿；事件/事实/冲突/报告均保留人工审核门；无可靠数据不补造 |

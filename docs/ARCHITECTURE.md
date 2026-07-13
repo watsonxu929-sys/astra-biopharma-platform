@@ -23,3 +23,8 @@ FastAPI 入口是 `app/main.py:app`。同一单体进程注册 v04/v05 兼容路
 ## 权限与审计
 
 `app/security.py` 提供登录、权限和中间件；API 与网页复用授权服务。敏感联系方式、机会和会员数据必须经过权限检查。身份、会员、机会状态和迁移保留审计或映射记录。
+
+
+## P2.3 研究融合层
+
+app/services/research/fusion_service.py 负责事件关系分类、正式事件、证据、事实断言和冲突；research_engine_service.py 负责专题工作区、研究发现、企业/赛道对比、引用报告、版本与 ResearchAgent。Web 和 /api/v1/research-fusion 复用同一服务层。005 只扩展既有专题/报告并增加关联表，不重复企业、人物、项目、候选、RawIntelligence 或 EvidenceSnapshot。
