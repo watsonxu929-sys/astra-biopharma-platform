@@ -1,5 +1,19 @@
 # 当前领域模型地图
 
+## P3 增量模型
+
+| 表/模型 | 含义 | 状态与边界 |
+|---|---|---|
+| `p3_product_assets` | ProductAsset 正式兼容主档 | 与 Project 分离；没有复用 P2 情报产品或媒体资产 |
+| `p3_entity_aliases` / `p3_entity_external_identifiers` | 四类主体的别名与公开权威标识 | 审核后使用；禁止敏感标识 |
+| `p3_entity_resolution_candidates` | 主体解析候选 | 不自动覆盖正式主档 |
+| `p3_entity_merge_records` / `p3_entity_redirects` | 合并审计、旧 ID 跳转和回滚 | 来源主体软停用，不物理删除 |
+| `p3_relationship_type_registry` | 43 个受控关系类型 | 保存正反向名、端点类型、风险级别 |
+| `p3_canonical_relationships` / `p3_relationship_evidence` | 已审核时态关系及结构化证据 | 新关系正式层；旧 `relations` 兼容保留 |
+| `p3_relationship_candidates` | 情报、研究和手工关系候选 | 审核前不进入网络 |
+| `p3_connection_candidates` | “我应该认识谁”候选接口 | 只供研判，不自动执行动作 |
+
+
 | 表/模型 | 业务含义 | 创建位置 | 主要写入 | 主要读取 | 使用状态 | 重复/映射与建议 |
 |---|---|---|---|---|---|---|
 | `v05a_users` | User 登录与安全身份 | `scripts/migrate_v05a.py` | security/身份服务 | 中间件、API | 正式 | 不并入 Person |

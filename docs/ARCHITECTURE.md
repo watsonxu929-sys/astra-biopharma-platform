@@ -1,5 +1,10 @@
 # 实际架构
 
+## P3 主体与关系网络层
+
+`entity_governance_service.py` 统一别名、外部标识、解析候选、合并预览、重定向和回滚；`canonical_relationship_service.py` 统一类型化关系、证据、时态冲突、受限 BFS 路径和连接候选。Web `app/p3_network.py` 与 API `/api/v1/entity-network` 调用同一服务层。旧 `relations` 保持兼容读取，P3 新写入进入 006 的增量表，不引入第二套人物/机构主档或图数据库。
+
+
 ## P2.2 真实来源质量层
 
 受控来源继续复用 `v04g/v05f CollectionJob → v04g_source_snapshots EvidenceSnapshot → raw_intelligence → v05g_extraction_candidates`。HTTP/RSS和Playwright只负责采集，ParsingService按MIME选择HTML/Text/可选Docling；统一质量门在AI前阻断低质量内容。004只增加观测、解析、质量、评测和冲突登记字段/表，不建立第二套主体或产品模型。AI结果只能进入候选与人工审核。

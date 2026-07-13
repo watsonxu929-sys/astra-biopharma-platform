@@ -1,5 +1,13 @@
 # 能力地图
 
+| 领域 | P3 正式能力 | 主要实现 | 边界 |
+|---|---|---|---|
+| entity governance | 别名、公开标识、强中弱候选、合并预览/审批/回滚 | `entity_governance_service.py`、006 | 不自动合并，不物理删除主档 |
+| relationship network | 43 类关系、证据、有效期、审核、可见性 | `canonical_relationship_service.py`、P3 Web/API | 旧 relations 兼容读取 |
+| relationship paths | 任意两点 1—3 跳、历史/类型过滤、置信度 | `RelationshipNetworkService` | SQLite 受限 BFS，不引入 Neo4j |
+| connection candidates | 理由、路径、证据、置信度、风险提示 | `ConnectionRecommendationService` | 不联系、不发消息、不创建商机 |
+
+
 | 领域 | P2.2能力 | 主要实现 | 边界 |
 |---|---|---|---|
 | real-source intelligence | HTTP/RSS条件请求、动态页、PDF/XLSX、质量门、评测 | `collection_service`、`collectors/`、`parsers/`、`evaluation_service`、004迁移 | 总量≤30、AI≤20、无自动审核/发布 |
