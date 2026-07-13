@@ -18,6 +18,21 @@ from .research_service import (
     track_detail,
 )
 
+from .fusion_service import (
+    add_event_evidence, add_event_subject, classify_event_relation, create_assertion,
+    create_industry_event, event_timeline, get_event, link_assertion_evidence,
+    link_topic_event, list_conflicts, register_conflict, resolve_conflict,
+    review_assertion, review_event, submit_event,
+)
+from .research_engine_service import (
+    ResearchAgentService, add_research_question, check_report_citations,
+    compare_companies_research, compare_track_research, configure_topic,
+    create_finding, create_research_report, delete_research_report,
+    get_research_report, publish_research_report, review_finding,
+    review_research_report, save_report_version, submit_finding,
+    submit_research_report, topic_workspace,
+)
+
 __all__ = [
     "add_topic_subject",
     "archive_topic",
@@ -41,4 +56,14 @@ __all__ = [
     "get_assessment",
     "list_assessments",
     "reject_assessment",
+    "add_event_evidence", "add_event_subject", "classify_event_relation",
+    "create_assertion", "create_industry_event", "event_timeline", "get_event",
+    "link_assertion_evidence", "link_topic_event", "list_conflicts",
+    "register_conflict", "resolve_conflict", "review_assertion", "review_event",
+    "submit_event", "ResearchAgentService", "add_research_question",
+    "check_report_citations", "compare_companies_research", "compare_track_research",
+    "configure_topic", "create_finding", "create_research_report",
+    "delete_research_report", "get_research_report", "publish_research_report",
+    "review_finding", "review_research_report", "save_report_version",
+    "submit_finding", "submit_research_report", "topic_workspace",
 ]

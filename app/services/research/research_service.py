@@ -133,6 +133,10 @@ def topic_dashboard(topic_id: int, db_path: str | Path | None = None) -> dict[st
 def topic_timeline(topic_id: int, *, event_type: str = "", signal_level: str = "", db_path: str | Path | None = None) -> dict[str, Any]:
     ensure_schema(db_path)
     with db_connection(db_path) as conn:
+        if table_exists(conn, "p2_3_industry_events"):
+            from .fusion_service import event_timeline
+            rows = event_timeline(topic_id=topic_id, event_type=event_type, db_path=db_path)
+            return {"data": [{"kind": "event", **row} for row in rows]}
         ids = [s["subject_id"] for s in _topic_subjects(conn, topic_id)]
         events = _events_for_ids(conn, ids)
         if event_type:

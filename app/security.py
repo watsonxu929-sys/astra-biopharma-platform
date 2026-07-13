@@ -604,6 +604,12 @@ def required_permission(path: str, method: str) -> str | None:
         return "review_data"
     if path.startswith("/pipeline") and method in {"POST", "PUT", "PATCH", "DELETE"}:
         return "review_data"
+    if path.startswith("/research/conflicts/") and method in {"POST", "PUT", "PATCH", "DELETE"}:
+        return "review_data"
+    if path.startswith("/research/findings/") and path.endswith("/review") and method in {"POST", "PUT", "PATCH", "DELETE"}:
+        return "review_data"
+    if path.startswith("/research/reports/") and (path.endswith("/review") or path.endswith("/publish")) and method in {"POST", "PUT", "PATCH", "DELETE"}:
+        return "review_data"
     if path.startswith("/research/investment") and method in {"POST", "PUT", "PATCH", "DELETE"}:
         return "review_data"
     if path.startswith("/research") and method in {"POST", "PUT", "PATCH", "DELETE"}:
