@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import secrets
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -290,3 +292,366 @@ class ClubMembershipService:
             return [dict(row) for row in conn.execute(
                 "SELECT * FROM p4_membership_history WHERE membership_id=? ORDER BY id DESC", (membership_id,),
             ).fetchall()]
+
+
+def _allow_v05c_legacy_fk_compatibility(conn: sqlite3.Connection) -> bool:
+    """Disable only this connection's FK enforcement when legacy v05c points at a removed table."""
+    targets = {str(row[2]) for row in conn.execute("PRAGMA foreign_key_list(v05c_club_event_registrations)")}
+    broken = "v04f_club_memberships_old" in targets and not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='v04f_club_memberships_old'"
+    ).fetchone()
+    if broken:
+        conn.execute("PRAGMA foreign_keys=OFF")
+    return broken
+
+
+class ClubEventService:
+    EVENT_TRANSITIONS = {
+        "submit_review": ({"draft"}, "pending_review"),
+        "approve": ({"pending_review"}, "published"),
+        "publish": ({"draft", "pending_review"}, "published"),
+        "open": ({"published", "registration_closed"}, "registration_open"),
+        "close": ({"registration_open"}, "registration_closed"),
+        "start": ({"published", "registration_open", "registration_closed"}, "ongoing"),
+        "complete": ({"ongoing"}, "completed"),
+        "cancel": ({"draft", "pending_review", "published", "registration_open", "registration_closed", "ongoing"}, "cancelled"),
+        "archive": ({"completed", "cancelled"}, "archived"),
+    }
+    LEGACY_EVENT_STATUS = {
+        "draft": "draft", "pending_review": "draft", "published": "published",
+        "registration_open": "registration_open", "registration_closed": "registration_closed",
+        "ongoing": "ongoing", "completed": "completed", "cancelled": "cancelled", "archived": "completed",
+    }
+
+    def __init__(self, db_path: str | Path | None = None):
+        self.db_path = _path(db_path)
+
+    def transition_event(
+        self, club_event_id: int, *, action: str, actor: str, actor_user_id: int | None = None,
+        note: str = "",
+    ) -> dict[str, Any]:
+        if action not in self.EVENT_TRANSITIONS:
+            raise ClubOperationError(400, "INVALID_EVENT_ACTION", "无效活动操作")
+        allowed, target = self.EVENT_TRANSITIONS[action]
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            if not event:
+                raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
+            current = event.get("lifecycle_status") or event["status"]
+            if current == target:
+                return {"event": event, "idempotent": True}
+            if current not in allowed:
+                raise ClubOperationError(409, "INVALID_EVENT_TRANSITION", "当前活动状态不允许该操作")
+            registration_status = "open" if target == "registration_open" else "closed"
+            conn.execute(
+                """
+                UPDATE v05c_club_event_profiles SET lifecycle_status=?,status=?,registration_status=?,
+                  reviewed_by=CASE WHEN ? IN ('approve','publish') THEN ? ELSE reviewed_by END,
+                  reviewed_at=CASE WHEN ? IN ('approve','publish') THEN ? ELSE reviewed_at END,
+                  review_note=CASE WHEN ? IN ('approve','publish') THEN ? ELSE review_note END,updated_at=? WHERE id=?
+                """,
+                (target, self.LEGACY_EVENT_STATUS[target], registration_status, action, actor, action, ts,
+                 action, note or None, ts, club_event_id),
+            )
+            after = dict(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            record_audit(conn, action=f"event.{action}", target_type="club_event", target_id=club_event_id,
+                         actor=actor, actor_user_id=actor_user_id, before={"status": current},
+                         after={"status": target}, reason=note, pilot_batch_id=event.get("pilot_batch_id"))
+            if target == "published":
+                emit_domain_event(conn, event_type="event.published", aggregate_type="club_event",
+                                  aggregate_id=club_event_id, payload={"status": target},
+                                  actor_user_id=actor_user_id, pilot_batch_id=event.get("pilot_batch_id"))
+            return {"event": after, "idempotent": False}
+
+    def register(self, club_event_id: int, fields: dict[str, Any], *, actor_user_id: int | None = None) -> dict[str, Any]:
+        ts = now_iso()
+        pilot = fields.get("pilot_batch_id")
+        with db_connection(self.db_path) as conn:
+            _allow_v05c_legacy_fk_compatibility(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            if not event:
+                raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
+            lifecycle = event.get("lifecycle_status") or event["status"]
+            if lifecycle != "registration_open" or event["registration_status"] != "open":
+                raise ClubOperationError(409, "REGISTRATION_NOT_OPEN", "活动报名未开放")
+            if event.get("registration_start") and ts < str(event["registration_start"]):
+                raise ClubOperationError(409, "REGISTRATION_NOT_STARTED", "尚未到报名开始时间")
+            if event.get("registration_deadline") and ts[:10] > str(event["registration_deadline"])[:10]:
+                raise ClubOperationError(409, "REGISTRATION_CLOSED", "活动报名已截止")
+            user_id = int(fields.get("user_id") or actor_user_id or 0) or None
+            person_id = int(fields.get("person_id") or 0) or None
+            organization_id = int(fields.get("organization_id") or 0) or None
+            mobile = str(fields.get("mobile") or "").strip()
+            email = str(fields.get("email") or "").strip().lower()
+            duplicate_clauses, params = [], [club_event_id]
+            for column, value in (("user_id", user_id), ("person_id", person_id), ("mobile", mobile), ("email", email)):
+                if value:
+                    duplicate_clauses.append(f"{column}=?")
+                    params.append(value)
+            if duplicate_clauses:
+                duplicate = conn.execute(
+                    f"SELECT * FROM v05c_club_event_registrations WHERE club_event_id=? AND ({' OR '.join(duplicate_clauses)}) AND lifecycle_status<>'cancelled' LIMIT 1",
+                    params,
+                ).fetchone()
+                if duplicate:
+                    return dict(duplicate)
+            membership_id = int(fields.get("membership_id") or 0) or None
+            if membership_id:
+                membership = conn.execute("SELECT * FROM v04f_club_memberships WHERE id=? AND status='active'", (membership_id,)).fetchone()
+                if not membership:
+                    raise ClubOperationError(400, "ACTIVE_MEMBERSHIP_REQUIRED", "会员身份无效")
+                person_id = person_id or membership["person_id"]
+                organization_id = organization_id or membership["organization_id"]
+                user_id = user_id or membership["user_id"]
+            legacy_membership_table = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v04f_club_memberships_old'").fetchone()
+            legacy_membership_id = membership_id if legacy_membership_table else None
+            cur = conn.execute(
+                """
+                INSERT INTO v05c_club_event_registrations(
+                  registration_no,club_event_id,membership_id,canonical_membership_id,applicant_name,organization_name,title,mobile,email,
+                  registration_source,status,lifecycle_status,registered_at,user_id,person_id,organization_id,is_guest,
+                  application_reason,interest_direction,desired_connections,offered_resources,current_needs,
+                  pilot_batch_id,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,'submitted','pending_review',?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (_number("QBR"), club_event_id, legacy_membership_id, membership_id, str(fields.get("applicant_name") or "").strip(),
+                 fields.get("organization_name"), fields.get("title"), mobile or None, email or None,
+                 fields.get("registration_source") or ("member" if membership_id else "public"), ts,
+                 user_id, person_id, organization_id, 0 if membership_id else 1, fields.get("application_reason"),
+                 fields.get("interest_direction"), fields.get("desired_connections"), fields.get("offered_resources"),
+                 fields.get("current_needs"), pilot or event.get("pilot_batch_id"), ts, ts),
+            )
+            registration = dict(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=?", (cur.lastrowid,)).fetchone())
+            record_audit(conn, action="registration.submitted", target_type="event_registration",
+                         target_id=registration["id"], actor=str(user_id or "guest"), actor_user_id=user_id,
+                         after={"status": "pending_review"}, pilot_batch_id=registration.get("pilot_batch_id"))
+            return registration
+
+    def review_registration(
+        self, club_event_id: int, registration_id: int, *, decision: str, actor: str,
+        actor_user_id: int | None = None, note: str = "",
+    ) -> dict[str, Any]:
+        allowed = {"approved", "rejected", "waitlisted", "cancelled", "pending_review", "no_show"}
+        if decision not in allowed:
+            raise ClubOperationError(400, "INVALID_REGISTRATION_DECISION", "无效报名状态")
+        legacy = {"pending_review": "submitted", "no_show": "approved"}.get(decision, decision)
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            _allow_v05c_legacy_fk_compatibility(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            registration = _row(conn.execute(
+                "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?",
+                (registration_id, club_event_id),
+            ).fetchone())
+            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            if not registration or not event:
+                raise ClubOperationError(404, "REGISTRATION_NOT_FOUND", "报名不存在")
+            current = registration.get("lifecycle_status") or registration["status"]
+            target = decision
+            if target == "approved" and int(event.get("capacity") or 0) > 0:
+                approved = int(conn.execute(
+                    "SELECT COUNT(*) FROM v05c_club_event_registrations WHERE club_event_id=? AND lifecycle_status IN ('approved','checked_in') AND id<>?",
+                    (club_event_id, registration_id),
+                ).fetchone()[0])
+                if approved >= int(event["capacity"]):
+                    target, legacy = "waitlisted", "waitlisted"
+            if current == target:
+                return {"registration": registration, "idempotent": True}
+            conn.execute(
+                """
+                UPDATE v05c_club_event_registrations SET status=?,lifecycle_status=?,review_note=?,reviewed_at=?,
+                  cancelled_at=CASE WHEN ?='cancelled' THEN ? ELSE cancelled_at END,updated_at=? WHERE id=?
+                """,
+                (legacy, target, note or None, ts, target, ts, ts, registration_id),
+            )
+            if target == "approved":
+                conn.execute(
+                    """
+                    INSERT INTO v05c_club_event_participation(
+                      club_event_id,registration_id,membership_id,canonical_membership_id,attendance_status,pilot_batch_id,created_at,updated_at
+                    ) VALUES (?,?,NULL,?,'registered',?,?,?)
+                    ON CONFLICT(club_event_id,registration_id) DO NOTHING
+                    """,
+                    (club_event_id, registration_id, registration.get("canonical_membership_id") or registration.get("membership_id"),
+                     registration.get("pilot_batch_id"), ts, ts),
+                )
+            updated = dict(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=?", (registration_id,)).fetchone())
+            record_audit(conn, action="registration.reviewed", target_type="event_registration",
+                         target_id=registration_id, actor=actor, actor_user_id=actor_user_id,
+                         before={"status": current}, after={"status": target}, reason=note,
+                         pilot_batch_id=registration.get("pilot_batch_id"))
+            if target == "approved":
+                emit_domain_event(conn, event_type="registration.approved", aggregate_type="event_registration",
+                                  aggregate_id=registration_id, payload={"club_event_id": club_event_id},
+                                  actor_user_id=actor_user_id, pilot_batch_id=registration.get("pilot_batch_id"))
+            return {"registration": updated, "idempotent": False}
+
+    def issue_checkin_token(
+        self, club_event_id: int, registration_id: int, *, actor_user_id: int | None = None,
+        valid_minutes: int = 240,
+    ) -> dict[str, Any]:
+        raw = secrets.token_urlsafe(32)
+        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        now = datetime.now().replace(microsecond=0)
+        valid_until = now + timedelta(minutes=max(1, min(int(valid_minutes), 1440)))
+        with db_connection(self.db_path) as conn:
+            registration = conn.execute(
+                "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=? AND lifecycle_status='approved'",
+                (registration_id, club_event_id),
+            ).fetchone()
+            if not registration:
+                raise ClubOperationError(409, "APPROVED_REGISTRATION_REQUIRED", "仅已通过报名可签发签到码")
+            conn.execute("UPDATE p4_checkin_tokens SET status='revoked',updated_at=? WHERE club_event_id=? AND registration_id=? AND status='active'", (now.isoformat(), club_event_id, registration_id))
+            cur = conn.execute(
+                """
+                INSERT INTO p4_checkin_tokens(
+                  club_event_id,registration_id,token_hash,token_hint,valid_from,valid_until,status,
+                  issued_by_user_id,pilot_batch_id,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,'active',?,?,?,?)
+                """,
+                (club_event_id, registration_id, digest, raw[-6:], now.isoformat(), valid_until.isoformat(),
+                 actor_user_id, registration["pilot_batch_id"], now.isoformat(), now.isoformat()),
+            )
+            return {"token_id": int(cur.lastrowid), "token": raw, "token_hint": raw[-6:],
+                    "valid_from": now.isoformat(), "valid_until": valid_until.isoformat()}
+
+    def check_in(
+        self, club_event_id: int, *, registration_id: int | None = None, token: str = "",
+        actor: str, actor_user_id: int | None = None, method: str = "manual", supplement: bool = False,
+    ) -> dict[str, Any]:
+        ts = now_iso()
+        token_row = None
+        with db_connection(self.db_path) as conn:
+            _allow_v05c_legacy_fk_compatibility(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            if token:
+                digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+                token_row = conn.execute("SELECT * FROM p4_checkin_tokens WHERE token_hash=?", (digest,)).fetchone()
+                if not token_row:
+                    self._checkin_audit(conn, club_event_id, None, None, "invalid_attempt", "not_found", method, actor, actor_user_id, "签到码不存在")
+                    raise ClubOperationError(404, "TOKEN_NOT_FOUND", "签到码无效")
+                if int(token_row["club_event_id"]) != club_event_id:
+                    self._checkin_audit(conn, club_event_id, token_row["registration_id"], token_row["id"], "invalid_attempt", "wrong_event", method, actor, actor_user_id, "签到码不属于本活动")
+                    raise ClubOperationError(409, "TOKEN_WRONG_EVENT", "签到码不属于本活动")
+                if token_row["status"] != "active" or ts < token_row["valid_from"] or ts > token_row["valid_until"]:
+                    self._checkin_audit(conn, club_event_id, token_row["registration_id"], token_row["id"], "invalid_attempt", "expired", method, actor, actor_user_id, "签到码已失效")
+                    raise ClubOperationError(409, "TOKEN_EXPIRED", "签到码已失效")
+                registration_id = int(token_row["registration_id"])
+            registration = _row(conn.execute(
+                "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?",
+                (registration_id, club_event_id),
+            ).fetchone())
+            if not registration or registration.get("lifecycle_status") not in {"approved", "checked_in"}:
+                self._checkin_audit(conn, club_event_id, registration_id, token_row["id"] if token_row else None, "invalid_attempt", "rejected", method, actor, actor_user_id, "报名未通过")
+                raise ClubOperationError(409, "APPROVED_REGISTRATION_REQUIRED", "报名未通过，不能签到")
+            if registration.get("lifecycle_status") == "checked_in":
+                self._checkin_audit(conn, club_event_id, registration_id, token_row["id"] if token_row else None, "check_in", "duplicate", method, actor, actor_user_id, "重复签到")
+                return {"registration": registration, "idempotent": True}
+            conn.execute("UPDATE v05c_club_event_registrations SET status='approved',lifecycle_status='checked_in',checked_in_at=?,updated_at=? WHERE id=?", (ts, ts, registration_id))
+            conn.execute(
+                """
+                INSERT INTO v05c_club_event_participation(
+                  club_event_id,registration_id,membership_id,canonical_membership_id,attendance_status,check_in_method,check_in_time,pilot_batch_id,created_at,updated_at
+                ) VALUES (?,?,NULL,?,'checked_in',?,?,?,?,?)
+                ON CONFLICT(club_event_id,registration_id) DO UPDATE SET attendance_status='checked_in',
+                  check_in_method=excluded.check_in_method,check_in_time=excluded.check_in_time,updated_at=excluded.updated_at
+                """,
+                (club_event_id, registration_id, registration.get("canonical_membership_id") or registration.get("membership_id"), method, ts,
+                 registration.get("pilot_batch_id"), ts, ts),
+            )
+            if token_row:
+                conn.execute("UPDATE p4_checkin_tokens SET status='used',updated_at=? WHERE id=?", (ts, token_row["id"]))
+            action = "supplement" if supplement else "check_in"
+            self._checkin_audit(conn, club_event_id, registration_id, token_row["id"] if token_row else None, action, "success", method, actor, actor_user_id, "")
+            emit_domain_event(conn, event_type="registration.checked_in", aggregate_type="event_registration",
+                              aggregate_id=registration_id, payload={"club_event_id": club_event_id, "method": method},
+                              actor_user_id=actor_user_id, pilot_batch_id=registration.get("pilot_batch_id"))
+            updated = dict(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=?", (registration_id,)).fetchone())
+            return {"registration": updated, "idempotent": False}
+
+    def undo_checkin(self, club_event_id: int, registration_id: int, *, actor: str, actor_user_id: int | None = None, reason: str = "") -> dict[str, Any]:
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            _allow_v05c_legacy_fk_compatibility(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            registration = _row(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?", (registration_id, club_event_id)).fetchone())
+            if not registration:
+                raise ClubOperationError(404, "REGISTRATION_NOT_FOUND", "报名不存在")
+            if registration.get("lifecycle_status") != "checked_in":
+                return {"registration": registration, "idempotent": True}
+            conn.execute("UPDATE v05c_club_event_registrations SET lifecycle_status='approved',checked_in_at=NULL,updated_at=? WHERE id=?", (ts, registration_id))
+            conn.execute("UPDATE v05c_club_event_participation SET attendance_status='registered',check_in_time=NULL,updated_at=? WHERE club_event_id=? AND registration_id=?", (ts, club_event_id, registration_id))
+            self._checkin_audit(conn, club_event_id, registration_id, None, "undo", "success", "manual", actor, actor_user_id, reason)
+            return {"registration": dict(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=?", (registration_id,)).fetchone()), "idempotent": False}
+
+    def submit_feedback(
+        self, club_event_id: int, registration_id: int, fields: dict[str, Any], *, actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            _allow_v05c_legacy_fk_compatibility(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            registration = _row(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?", (registration_id, club_event_id)).fetchone())
+            if not event or not registration:
+                raise ClubOperationError(404, "REGISTRATION_NOT_FOUND", "报名不存在")
+            if (event.get("lifecycle_status") or event["status"]) not in {"completed", "archived"}:
+                raise ClubOperationError(409, "EVENT_NOT_COMPLETED", "活动完成后才能提交反馈")
+            if registration.get("lifecycle_status") not in {"checked_in", "no_show"}:
+                raise ClubOperationError(409, "ATTENDANCE_REQUIRED", "仅活动参与者可提交反馈")
+            scores = {key: int(fields.get(key) or 0) or None for key in ("content_score", "speaker_score", "organization_score", "satisfaction_score")}
+            if any(score is not None and not 1 <= score <= 5 for score in scores.values()):
+                raise ClubOperationError(400, "INVALID_FEEDBACK_SCORE", "评价分数必须在1到5之间")
+            existing = conn.execute("SELECT id FROM p4_event_feedback WHERE club_event_id=? AND registration_id=?", (club_event_id, registration_id)).fetchone()
+            if existing:
+                conn.execute(
+                    """
+                    UPDATE p4_event_feedback SET content_score=?,speaker_score=?,organization_score=?,satisfaction_score=?,
+                      content_feedback=?,interested_people=?,interested_organizations=?,cooperation_intent=?,new_demand=?,
+                      new_supply=?,suggestions=?,submitted_by_user_id=?,updated_at=? WHERE id=?
+                    """,
+                    (scores["content_score"], scores["speaker_score"], scores["organization_score"], scores["satisfaction_score"],
+                     fields.get("content_feedback"), fields.get("interested_people"), fields.get("interested_organizations"),
+                     fields.get("cooperation_intent"), fields.get("new_demand"), fields.get("new_supply"), fields.get("suggestions"),
+                     actor_user_id, ts, existing["id"]),
+                )
+                feedback_id = int(existing["id"])
+            else:
+                cur = conn.execute(
+                    """
+                    INSERT INTO p4_event_feedback(
+                      feedback_no,club_event_id,registration_id,membership_id,content_score,speaker_score,
+                      organization_score,satisfaction_score,content_feedback,interested_people,interested_organizations,
+                      cooperation_intent,new_demand,new_supply,suggestions,status,submitted_by_user_id,pilot_batch_id,created_at,updated_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'submitted',?,?,?,?)
+                    """,
+                    (_number("QBF"), club_event_id, registration_id, registration.get("canonical_membership_id") or registration.get("membership_id"),
+                     scores["content_score"], scores["speaker_score"], scores["organization_score"], scores["satisfaction_score"],
+                     fields.get("content_feedback"), fields.get("interested_people"), fields.get("interested_organizations"),
+                     fields.get("cooperation_intent"), fields.get("new_demand"), fields.get("new_supply"), fields.get("suggestions"),
+                     actor_user_id, registration.get("pilot_batch_id"), ts, ts),
+                )
+                feedback_id = int(cur.lastrowid)
+            conn.execute("UPDATE v05c_club_event_participation SET satisfaction_score=?,feedback=?,follow_up_note=?,updated_at=? WHERE club_event_id=? AND registration_id=?", (scores["satisfaction_score"], fields.get("content_feedback"), fields.get("cooperation_intent"), ts, club_event_id, registration_id))
+            emit_domain_event(conn, event_type="feedback.submitted", aggregate_type="event_feedback",
+                              aggregate_id=feedback_id, payload={"club_event_id": club_event_id, "registration_id": registration_id},
+                              actor_user_id=actor_user_id, pilot_batch_id=registration.get("pilot_batch_id"))
+            return dict(conn.execute("SELECT * FROM p4_event_feedback WHERE id=?", (feedback_id,)).fetchone())
+
+    @staticmethod
+    def _checkin_audit(
+        conn: sqlite3.Connection, club_event_id: int, registration_id: int | None, token_id: int | None,
+        action: str, result: str, method: str, actor: str, actor_user_id: int | None, detail: str,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO p4_checkin_audit(
+              club_event_id,registration_id,token_id,action,result,method,detail,actor_user_id,actor,created_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+            """,
+            (club_event_id, registration_id, token_id, action, result, method, detail or None,
+             actor_user_id, actor, now_iso()),
+        )

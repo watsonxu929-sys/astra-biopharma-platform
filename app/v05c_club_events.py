@@ -13,7 +13,8 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from app.security import current_username
+from app.security import can, current_user, current_username
+from app.services.club_operations_service import ClubEventService, ClubOperationError
 from app.v04c_review import db_connection, default_db_path
 from app.v05b_member_import import ensure_schema as ensure_v05b_schema
 from scripts.migrate_v05c import SCHEMA_SQL as V05C_SCHEMA_SQL
@@ -283,26 +284,18 @@ def event_detail(request: Request, club_event_id: int, message: str = Query(""),
 
 
 @router.post("/club/events/{club_event_id}/status")
-def change_event_status(club_event_id: int, action: str = Form(...)):
+def change_event_status(request: Request, club_event_id: int, action: str = Form(...), note: str = Form("")):
     ensure_schema()
-    mapping = {
-        "publish": ("published", "closed"),
-        "open": ("registration_open", "open"),
-        "close": ("registration_closed", "closed"),
-        "start": ("ongoing", "closed"),
-        "complete": ("completed", "closed"),
-        "cancel": ("cancelled", "closed"),
-    }
-    if action not in mapping:
-        raise HTTPException(400, "无效活动操作")
-    status, reg_status = mapping[action]
-    with db_connection() as conn:
-        if not conn.execute("SELECT 1 FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone():
-            raise HTTPException(404, "活动不存在")
-        conn.execute(
-            "UPDATE v05c_club_event_profiles SET status=?,registration_status=?,updated_at=? WHERE id=?",
-            (status, reg_status, now_iso(), club_event_id),
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    try:
+        ClubEventService().transition_event(
+            club_event_id, action=action, note=note, actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None,
         )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse(f"/club/events/{club_event_id}", status_code=303)
 
 
@@ -377,38 +370,26 @@ def submit_registration(
         return RedirectResponse(f"/club/events/{club_event_id}/register?error=提交失败，请稍后重试", status_code=303)
     if not mobile.strip() and not email.strip():
         return RedirectResponse(f"/club/events/{club_event_id}/register?error=手机或邮箱至少填写一项", status_code=303)
-    ts = now_iso()
+    user = current_user(request) or {}
     with db_connection() as conn:
         event = _event_detail(conn, club_event_id)
-        if event["visibility"] == "internal" or event["registration_status"] != "open":
-            return RedirectResponse(f"/club/events/{club_event_id}/register?error=活动报名未开放", status_code=303)
+        if event["visibility"] == "internal":
+            return RedirectResponse(f"/club/events/{club_event_id}/register?error=活动未对外开放", status_code=303)
         membership_id = _find_membership(conn, mobile, email)
-        reg_no = _next_no(conn, "QBR")
-        try:
-            conn.execute(
-                """
-                INSERT INTO v05c_club_event_registrations(
-                  registration_no,club_event_id,membership_id,applicant_name,organization_name,title,mobile,email,
-                  registration_source,status,registered_at,created_at,updated_at
-                ) VALUES (?,?,?,?,?,?,?,?, 'public','submitted',?,?,?)
-                """,
-                (
-                    reg_no,
-                    club_event_id,
-                    membership_id,
-                    applicant_name.strip(),
-                    organization_name.strip() or None,
-                    title.strip() or None,
-                    re.sub(r"\D", "", mobile)[-11:] if mobile else None,
-                    email.strip().lower() or None,
-                    ts,
-                    ts,
-                    ts,
-                ),
-            )
-        except sqlite3.IntegrityError:
-            return RedirectResponse(f"/club/events/{club_event_id}/register?error=该活动已有相同联系方式报名记录", status_code=303)
-    return RedirectResponse(f"/club/events/{club_event_id}/register?submitted={reg_no}", status_code=303)
+    try:
+        registration = ClubEventService().register(
+            club_event_id,
+            {
+                "membership_id": membership_id, "user_id": user.get("id"),
+                "applicant_name": applicant_name.strip(), "organization_name": organization_name.strip() or None,
+                "title": title.strip() or None, "mobile": re.sub(r"\D", "", mobile)[-11:] if mobile else None,
+                "email": email.strip().lower() or None, "registration_source": "public",
+            },
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+        )
+    except ClubOperationError as exc:
+        return RedirectResponse(f"/club/events/{club_event_id}/register?error={exc.message}", status_code=303)
+    return RedirectResponse(f"/club/events/{club_event_id}/register?submitted={registration['registration_no']}", status_code=303)
 
 
 @router.get("/club/events/{club_event_id}/registrations", response_class=HTMLResponse)
@@ -445,100 +426,106 @@ def registrations_all(request: Request):
 
 
 @router.post("/club/events/{club_event_id}/registrations/{registration_id}/review")
-def review_registration(club_event_id: int, registration_id: int, status: str = Form(...), review_note: str = Form("")):
+def review_registration(request: Request, club_event_id: int, registration_id: int, status: str = Form(...), review_note: str = Form("")):
     ensure_schema()
-    if status not in REGISTRATION_STATUSES:
-        raise HTTPException(400, "无效报名状态")
-    ts = now_iso()
-    with db_connection() as conn:
-        registration = conn.execute(
-            "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?",
-            (registration_id, club_event_id),
-        ).fetchone()
-        if not registration:
-            raise HTTPException(404, "报名不存在")
-        conn.execute(
-            "UPDATE v05c_club_event_registrations SET status=?,review_note=?,reviewed_at=?,updated_at=? WHERE id=?",
-            (status, review_note or None, ts, ts, registration_id),
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    try:
+        ClubEventService().review_registration(
+            club_event_id, registration_id, decision=status, note=review_note,
+            actor=current_username(request), actor_user_id=int(user["id"]) if user.get("id") else None,
         )
-        if status == "approved":
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO v05c_club_event_participation(
-                  club_event_id,registration_id,membership_id,attendance_status,created_at,updated_at
-                ) VALUES (?,?,?,'registered',?,?)
-                """,
-                (club_event_id, registration["id"], registration["membership_id"], ts, ts),
-            )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse(f"/club/events/{club_event_id}/registrations", status_code=303)
 
 
 @router.post("/club/events/{club_event_id}/checkin")
-def check_in(club_event_id: int, identifier: str = Form(...), method: str = Form("manual")):
+def check_in(request: Request, club_event_id: int, identifier: str = Form(...), method: str = Form("manual")):
     ensure_schema()
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
     ident = identifier.strip()
-    ts = now_iso()
     with db_connection() as conn:
         registration = conn.execute(
             """
             SELECT * FROM v05c_club_event_registrations
-            WHERE club_event_id=? AND (registration_no=? OR CAST(membership_id AS TEXT)=? OR applicant_name=?)
-            ORDER BY status='approved' DESC, id DESC LIMIT 1
+            WHERE club_event_id=? AND (registration_no=? OR CAST(canonical_membership_id AS TEXT)=? OR applicant_name=?)
+            ORDER BY lifecycle_status='approved' DESC, id DESC LIMIT 1
             """,
             (club_event_id, ident, ident, ident),
         ).fetchone()
-        if not registration:
-            raise HTTPException(404, "未找到可签到报名")
-        conn.execute(
-            "UPDATE v05c_club_event_registrations SET checked_in_at=?,updated_at=? WHERE id=?",
-            (ts, ts, registration["id"]),
+    if not registration:
+        raise HTTPException(404, "未找到可签到报名")
+    user = current_user(request) or {}
+    try:
+        ClubEventService().check_in(
+            club_event_id, registration_id=int(registration["id"]), actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None, method=method,
         )
-        conn.execute(
-            """
-            INSERT INTO v05c_club_event_participation(
-              club_event_id,registration_id,membership_id,attendance_status,check_in_method,check_in_time,created_at,updated_at
-            ) VALUES (?,?,?,'checked_in',?,?,?,?)
-            ON CONFLICT(club_event_id,registration_id) DO UPDATE SET
-              attendance_status='checked_in',check_in_method=excluded.check_in_method,
-              check_in_time=excluded.check_in_time,updated_at=excluded.updated_at
-            """,
-            (club_event_id, registration["id"], registration["membership_id"], method, ts, ts, ts),
-        )
-        if registration["membership_id"]:
-            _recalculate_activity(conn, int(registration["membership_id"]))
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse(f"/club/events/{club_event_id}", status_code=303)
 
 
 @router.post("/club/events/{club_event_id}/registrations/bulk-checkin")
-def bulk_check_in(club_event_id: int, registration_ids: list[int] = Form(...)):
+def bulk_check_in(request: Request, club_event_id: int, registration_ids: list[int] = Form(...)):
     ensure_schema()
-    ts = now_iso()
-    with db_connection() as conn:
-        for registration_id in registration_ids:
-            registration = conn.execute(
-                "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?",
-                (registration_id, club_event_id),
-            ).fetchone()
-            if not registration:
-                continue
-            conn.execute("UPDATE v05c_club_event_registrations SET checked_in_at=?,updated_at=? WHERE id=?", (ts, ts, registration_id))
-            conn.execute(
-                """
-                INSERT INTO v05c_club_event_participation(
-                  club_event_id,registration_id,membership_id,attendance_status,check_in_method,check_in_time,created_at,updated_at
-                ) VALUES (?,?,?,'checked_in','bulk',?,?,?)
-                ON CONFLICT(club_event_id,registration_id) DO UPDATE SET
-                  attendance_status='checked_in',check_in_method='bulk',check_in_time=excluded.check_in_time,updated_at=excluded.updated_at
-                """,
-                (club_event_id, registration_id, registration["membership_id"], ts, ts, ts),
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    service = ClubEventService()
+    for registration_id in registration_ids:
+        try:
+            service.check_in(
+                club_event_id, registration_id=registration_id, actor=current_username(request),
+                actor_user_id=int(user["id"]) if user.get("id") else None, method="bulk",
             )
-            if registration["membership_id"]:
-                _recalculate_activity(conn, int(registration["membership_id"]))
+        except ClubOperationError:
+            continue
     return RedirectResponse(f"/club/events/{club_event_id}/registrations", status_code=303)
 
+@router.post("/club/events/{club_event_id}/registrations/{registration_id}/checkin-token", response_class=HTMLResponse)
+def issue_checkin_token_page(request: Request, club_event_id: int, registration_id: int, valid_minutes: int = Form(240)):
+    ensure_schema()
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    try:
+        token = ClubEventService().issue_checkin_token(
+            club_event_id, registration_id, actor_user_id=int(user["id"]) if user.get("id") else None,
+            valid_minutes=valid_minutes,
+        )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    with db_connection() as conn:
+        event = _event_detail(conn, club_event_id)
+        rows = [dict(row) for row in conn.execute(
+            "SELECT * FROM v05c_club_event_registrations WHERE club_event_id=? ORDER BY registered_at DESC",
+            (club_event_id,),
+        ).fetchall()]
+    return _render(request, "registrations", event=event, registrations=rows, status="", issued_token=token)
+
+
+@router.post("/club/events/{club_event_id}/registrations/{registration_id}/undo-checkin")
+def undo_checkin_page(request: Request, club_event_id: int, registration_id: int, reason: str = Form(...)):
+    ensure_schema()
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    user = current_user(request) or {}
+    try:
+        ClubEventService().undo_checkin(
+            club_event_id, registration_id, reason=reason, actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+        )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return RedirectResponse(f"/club/events/{club_event_id}/registrations", status_code=303)
 
 @router.post("/club/events/{club_event_id}/registrations/{registration_id}/feedback")
 def save_feedback(
+    request: Request,
     club_event_id: int,
     registration_id: int,
     attendance_status: str = Form("attended"),
@@ -548,30 +535,21 @@ def save_feedback(
     follow_up_note: str = Form(""),
 ):
     ensure_schema()
-    if attendance_status not in {"registered", "checked_in", "attended", "absent", "left_early"}:
-        raise HTTPException(400, "无效出席状态")
-    ts = now_iso()
-    with db_connection() as conn:
-        registration = conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?", (registration_id, club_event_id)).fetchone()
-        if not registration:
-            raise HTTPException(404, "报名不存在")
-        conn.execute(
-            """
-            INSERT INTO v05c_club_event_participation(
-              club_event_id,registration_id,membership_id,attendance_status,contribution_note,follow_up_note,
-              satisfaction_score,feedback,created_at,updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(club_event_id,registration_id) DO UPDATE SET
-              attendance_status=excluded.attendance_status,contribution_note=excluded.contribution_note,
-              follow_up_note=excluded.follow_up_note,satisfaction_score=excluded.satisfaction_score,
-              feedback=excluded.feedback,updated_at=excluded.updated_at
-            """,
-            (club_event_id, registration_id, registration["membership_id"], attendance_status, contribution_note or None, follow_up_note or None, int(satisfaction_score or 0) or None, feedback or None, ts, ts),
+    user = current_user(request) or {}
+    if not user:
+        raise HTTPException(401, "请先登录后提交反馈")
+    try:
+        ClubEventService().submit_feedback(
+            club_event_id, registration_id,
+            {
+                "satisfaction_score": satisfaction_score, "content_feedback": feedback,
+                "cooperation_intent": follow_up_note, "suggestions": contribution_note,
+            },
+            actor_user_id=int(user["id"]),
         )
-        if registration["membership_id"]:
-            _recalculate_activity(conn, int(registration["membership_id"]))
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse(f"/club/events/{club_event_id}", status_code=303)
-
 
 @router.post("/club/events/{club_event_id}/followup-action")
 def create_followup_action(

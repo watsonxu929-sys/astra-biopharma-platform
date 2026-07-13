@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.services.api_common import current_scope, single
 
-from . import auth, client, clubs, collection, dashboard, events, identity, intelligence, investment_assessments, membership_person_link, membership_user_link, navigation, network, organizations, pipeline, processing, relationships, reports, research, resources, opportunities, search, signals, subjects, system, watchlists
+from . import auth, client, club_operations, clubs, collection, dashboard, events, identity, intelligence, investment_assessments, membership_person_link, membership_user_link, navigation, network, organizations, pipeline, processing, relationships, reports, research, resources, opportunities, search, signals, subjects, system, watchlists
 from . import entity_network, research_fusion
 
 router = APIRouter(prefix="/api/v1", tags=["API v1"])
@@ -46,6 +46,7 @@ def me(request: Request):
 router.include_router(auth.router)
 router.include_router(client.router)
 router.include_router(clubs.router)
+router.include_router(club_operations.router)
 router.include_router(network.router)
 router.include_router(identity.router)
 router.include_router(subjects.router)

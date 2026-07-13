@@ -139,20 +139,20 @@ ADDITIVE_COLUMNS = {
     },
     "v04f_club_memberships": {"pilot_batch_id": "TEXT"},
     "v05c_club_event_profiles": {
-        "topic": "TEXT", "co_organizer": "TEXT", "channel": "TEXT",
+        "lifecycle_status": "TEXT NOT NULL DEFAULT 'draft'", "topic": "TEXT", "co_organizer": "TEXT", "channel": "TEXT",
         "registration_start": "TEXT", "audience": "TEXT", "review_mode": "TEXT",
         "agenda": "TEXT", "guests": "TEXT", "research_topic_id": "INTEGER",
         "industry_tags": "TEXT", "reviewed_by": "TEXT", "reviewed_at": "TEXT",
         "review_note": "TEXT", "pilot_batch_id": "TEXT",
     },
     "v05c_club_event_registrations": {
-        "user_id": "INTEGER", "person_id": "INTEGER", "organization_id": "INTEGER",
+        "lifecycle_status": "TEXT NOT NULL DEFAULT 'submitted'", "canonical_membership_id": "INTEGER", "user_id": "INTEGER", "person_id": "INTEGER", "organization_id": "INTEGER",
         "is_guest": "INTEGER NOT NULL DEFAULT 1", "application_reason": "TEXT",
         "interest_direction": "TEXT", "desired_connections": "TEXT",
         "offered_resources": "TEXT", "current_needs": "TEXT", "cancelled_at": "TEXT",
         "pilot_batch_id": "TEXT",
     },
-    "v05c_club_event_participation": {"pilot_batch_id": "TEXT"},
+    "v05c_club_event_participation": {"canonical_membership_id": "INTEGER", "pilot_batch_id": "TEXT"},
     "v06_market_resources": {
         "source_event_id": "INTEGER", "target_audience": "TEXT", "reviewed_by": "TEXT",
         "reviewed_at": "TEXT", "review_note": "TEXT", "pilot_batch_id": "TEXT",
