@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.services.club_matching_service import match_need_offering
 from app.security import can, current_user, current_username
-from app.services.club_operations_service import ClubMembershipService, ClubOperationError, ClubResourceMatchingService
+from app.services.club_operations_service import ClubMembershipService, ClubOperationError, ClubOperationsDashboardService, ClubResourceMatchingService
 from app.services.lead_recommendation_service import generate_lead_recommendations
 from app.services.lead_scoring_service import manual_grade_requires_reason, score_lead
 from app.services.membership_person_link_service import bind_person, get_link_info, get_person_candidates, list_link_audit, unbind_person
@@ -234,31 +234,6 @@ def lead_detail(lead_id: int, db_path: str | Path | None = None) -> dict[str, An
     return {"lead": dict(lead), "profile": profile, "scoring": scoring, "suggestions": suggestions, "history": history, "stages": LEAD_STAGES}
 
 
-def club_counts(conn: sqlite3.Connection) -> dict[str, int]:
-    counts = {
-        "members": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_memberships").fetchone()["c"],
-        "active_members": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_memberships WHERE status='active'").fetchone()["c"],
-        "pending_applications": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_applications WHERE status IN ('submitted','under_review','need_more_info')").fetchone()["c"],
-        "needs": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_needs WHERE status='active'").fetchone()["c"],
-        "offerings": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_offerings WHERE status='active'").fetchone()["c"],
-        "candidate_matches": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_matches WHERE status='candidate'").fetchone()["c"],
-        "progressing_matches": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_matches WHERE status='progressing'").fetchone()["c"],
-        "successful_matches": conn.execute("SELECT COUNT(*) AS c FROM v04f_club_matches WHERE status='successful'").fetchone()["c"],
-    }
-    try:
-        counts.update(
-            {
-                "recent_events": conn.execute("SELECT COUNT(*) AS c FROM v05c_club_event_profiles WHERE status IN ('published','registration_open','ongoing')").fetchone()["c"],
-                "event_registrations": conn.execute("SELECT COUNT(*) AS c FROM v05c_club_event_registrations WHERE status IN ('submitted','approved','waitlisted')").fetchone()["c"],
-                "today_checkins": conn.execute("SELECT COUNT(*) AS c FROM v05c_club_event_participation WHERE date(check_in_time)=date('now','localtime')").fetchone()["c"],
-                "post_event_followups": conn.execute("SELECT COUNT(*) AS c FROM actions WHERE source_type='v0.5C Q-BAY活动' AND status NOT IN ('已完成','完成','done')").fetchone()["c"],
-            }
-        )
-    except sqlite3.Error:
-        counts.update({"recent_events": 0, "event_registrations": 0, "today_checkins": 0, "post_event_followups": 0})
-    return counts
-
-
 @router.get("/leads", response_class=HTMLResponse)
 def leads_page(request: Request, q: str = "", subject_type: str = "", stage: str = "", owner: str = "", min_score: int = 0, max_score: int = 100, overdue: str = "", page: int = 1):
     ensure_schema()
@@ -377,11 +352,13 @@ def suggestion_to_action(request: Request, lead_id: int, suggestion_id: int, own
 
 
 @router.get("/club", response_class=HTMLResponse)
+@router.get("/club/operations", response_class=HTMLResponse)
 def club_home(request: Request):
     ensure_schema()
-    with db_connection() as conn:
-        counts = club_counts(conn)
-    return templates.TemplateResponse(request, "v04f_club.html", {"mode": "home", "counts": counts})
+    dashboard = ClubOperationsDashboardService().summary()
+    return templates.TemplateResponse(
+        request, "v04f_club.html", {"mode": "home", "counts": dashboard["metrics"], "dashboard": dashboard}
+    )
 
 
 @router.get("/club/apply", response_class=HTMLResponse)

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.services.api_common import require_permission, single
-from app.services.club_operations_service import ClubEventService, ClubOperationError, ClubResourceMatchingService
+from app.services.club_operations_service import ClubEventService, ClubOperationError, ClubOperationsDashboardService, ClubResourceMatchingService
 
 router = APIRouter(tags=["Club Operations"])
 
@@ -233,3 +233,14 @@ def review_event_relationship(request: Request, candidate_id: int, payload: Cand
     except ClubOperationError as exc:
         _raise(exc)
     return single(result)
+
+@router.get("/club/operations")
+def club_operations_dashboard(request: Request):
+    require_permission(request, "manage_club")
+    return single(ClubOperationsDashboardService().summary())
+
+
+@router.get("/club/domain-events")
+def club_domain_events(request: Request, status: str = "pending", limit: int = 100):
+    require_permission(request, "manage_club")
+    return single({"items": ClubOperationsDashboardService().domain_events(status=status, limit=limit)})

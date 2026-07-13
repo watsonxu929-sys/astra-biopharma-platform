@@ -92,9 +92,9 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("club.notifications", "通知", "通知", "俱乐部通知", "club", "club", "/club?tab=notifications", "/api/v1/me/club-context", "bell", order=67),
     cap("club.members", "会员管理", "会员管理", "会员管理", "club", "club", "/club/members", "/api/v1/me/memberships", "users-round", "manage_club", clients=("web", "admin"), order=68),
     cap("club.event_admin", "活动管理", "活动管理", "活动管理", "club", "club", "/club/events", "/api/v1/events", "calendar-cog", "manage_club", clients=("web", "admin"), order=69),
-    cap("club.supply_admin", "供需管理", "供需管理", "供需管理", "club", "club", "/club", "/api/v1/resources", "package-check", "manage_club", clients=("web", "admin"), order=70),
+    cap("club.supply_admin", "供需管理", "供需管理", "供需管理", "club", "club", "/club/resources", "/api/v1/resources", "package-check", "manage_club", clients=("web", "admin"), order=70),
     cap("club.import", "数据导入", "导入", "会员数据导入", "club", "club", "/club/import", "/api/v1/memberships", "upload", "manage_club", clients=("web", "admin"), order=71),
-    cap("club.operations", "俱乐部运营", "运营", "俱乐部运营", "club", "club", "/club/members", "/api/v1/me/memberships", "landmark", "manage_club", clients=("web", "admin"), order=72),
+    cap("club.operations", "俱乐部运营", "运营", "俱乐部运营", "club", "club", "/club/operations", "/api/v1/club/operations", "landmark", "manage_club", clients=("web", "admin"), order=72),
 
     cap("account.identity", "我的产业身份", "身份", "账号关联的产业身份", "account", None, "/me/industry-profile", "/api/v1/me/person-link", "badge-check", "identity.view_self", clients=("web", "app", "miniprogram"), order=80),
     cap("account.membership", "我的会员", "会员", "我的会员身份", "account", None, "/member", "/api/v1/me/membership-context", "id-card", "membership.view_self", clients=("web", "app", "miniprogram"), order=81),

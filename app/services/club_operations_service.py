@@ -969,3 +969,63 @@ class ClubResourceMatchingService:
                                       actor_user_id=actor_user_id, pilot_batch_id=feedback.get("pilot_batch_id"))
         relationships = self.generate_event_relationship_candidates(int(feedback["club_event_id"]))
         return {"resources": resources, "lead": lead, "relationship_candidates": relationships}
+
+class ClubOperationsDashboardService:
+    def __init__(self, db_path: str | Path | None = None):
+        self.db_path = _path(db_path)
+
+    @staticmethod
+    def _exists(conn: sqlite3.Connection, table: str) -> bool:
+        return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+
+    def summary(self) -> dict[str, Any]:
+        today = datetime.now().date().isoformat()
+        soon = (datetime.now() + timedelta(days=30)).date().isoformat()
+        with db_connection(self.db_path) as conn:
+            scalar = lambda sql, params=(): int(conn.execute(sql, params).fetchone()[0] or 0)
+            metrics: dict[str, int] = {
+                "会员总数": scalar("SELECT COUNT(*) FROM v04f_club_memberships"),
+                "正常会员": scalar("SELECT COUNT(*) FROM v04f_club_memberships WHERE status='active'"),
+                "待审核申请": scalar("SELECT COUNT(*) FROM v04f_club_applications WHERE status IN ('submitted','under_review','need_more_info')"),
+                "即将到期会员": scalar("SELECT COUNT(*) FROM v04f_club_memberships WHERE status='active' AND expired_at IS NOT NULL AND date(expired_at) BETWEEN date(?) AND date(?)", (today, soon)),
+                "待审核活动": 0,
+                "开放报名活动": scalar("SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status='registration_open'"),
+                "待审核报名": scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE status='submitted'"),
+                "今日活动": scalar("SELECT COUNT(*) FROM v05c_club_event_profiles p JOIN events e ON e.id=p.event_id WHERE date(e.event_date)=date(?)", (today,)),
+                "待签到": scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE status='approved' AND checked_in_at IS NULL"),
+                "活动后待跟进": 0,
+                "有效需求": scalar("SELECT COUNT(*) FROM v06_market_resources WHERE direction='demand' AND status='published' AND (valid_until IS NULL OR date(valid_until)>=date(?))", (today,)),
+                "有效供给": scalar("SELECT COUNT(*) FROM v06_market_resources WHERE direction='supply' AND status='published' AND (valid_until IS NULL OR date(valid_until)>=date(?))", (today,)),
+                "待审核匹配": 0,
+                "推进中匹配": 0,
+                "潜在线索": 0,
+                "待处理任务": scalar("SELECT COUNT(*) FROM actions WHERE status NOT IN ('已完成','completed','closed','cancelled')"),
+            }
+            if self._exists(conn, "p4_resource_match_candidates"):
+                metrics["待审核活动"] = scalar("SELECT COUNT(*) FROM v05c_club_event_profiles WHERE lifecycle_status='pending_review'")
+                metrics["开放报名活动"] = scalar("SELECT COUNT(*) FROM v05c_club_event_profiles WHERE lifecycle_status='registration_open'")
+                metrics["待审核报名"] = scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE lifecycle_status='pending_review'")
+                metrics["待签到"] = scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE lifecycle_status='approved'")
+                metrics["活动后待跟进"] = scalar(
+                    """SELECT COUNT(*) FROM v05c_club_event_registrations r
+                       JOIN v05c_club_event_profiles e ON e.id=r.club_event_id
+                       LEFT JOIN p4_event_feedback f ON f.registration_id=r.id
+                       WHERE e.lifecycle_status IN ('completed','archived') AND r.lifecycle_status='checked_in' AND f.id IS NULL"""
+                )
+                metrics["待审核匹配"] = scalar("SELECT COUNT(*) FROM p4_resource_match_candidates WHERE status IN ('pending','reviewed')")
+                metrics["推进中匹配"] = scalar("SELECT COUNT(*) FROM p4_resource_match_candidates WHERE status IN ('accepted','introduced','converted_to_lead')")
+                metrics["潜在线索"] = scalar("SELECT COUNT(*) FROM p4_club_lead_candidates WHERE status IN ('pending','reviewed','accepted')")
+            queues = {
+                "会员审核": "/club/admin/applications", "活动管理": "/club/events",
+                "供需审核": "/club/resources", "匹配管理": "/club/matches",
+                "会后关系候选": "/club/relationship-candidates", "潜在线索": "/club/leads",
+            }
+            return {"metrics": metrics, "queues": queues, "generated_at": now_iso()}
+
+    def domain_events(self, *, status: str = "pending", limit: int = 100) -> list[dict[str, Any]]:
+        with db_connection(self.db_path) as conn:
+            if not self._exists(conn, "p4_domain_events"):
+                return []
+            return [dict(row) for row in conn.execute(
+                "SELECT * FROM p4_domain_events WHERE status=? ORDER BY id LIMIT ?", (status, max(1, min(limit, 500))),
+            ).fetchall()]
