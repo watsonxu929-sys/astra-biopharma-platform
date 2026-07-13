@@ -34,6 +34,10 @@
 verify_all_windows.bat
 ```
 
+## P2.2 受控真实来源试点
+
+P2.2 已加入真实静态网页、RSS、单一动态网页、PDF/XLSX解析、内容质量门和规则/AI评测框架。来源配置见 `config/p2_2_source_pilot.json`，试点必须在数据库副本运行：先对副本执行004迁移，再运行 `scripts/run_p2_2_real_source_pilot.py --db <副本路径>`。Playwright和Docling分别使用可选依赖文件，未安装不影响主应用。真实结果与限制见 `docs/p2/P2_2_PILOT_RESULTS.md`.
+
 当前状态与风险见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[KNOWN_ISSUES.md](KNOWN_ISSUES.md)、[架构](docs/ARCHITECTURE.md)、[数据模型](docs/DATA_MODEL.md)、[启动与验证](docs/STARTUP_AND_VERIFICATION.md)。
 
 ## P1 领域迁移

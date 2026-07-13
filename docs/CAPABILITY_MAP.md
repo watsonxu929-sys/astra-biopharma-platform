@@ -1,5 +1,9 @@
 # 能力地图
 
+| 领域 | P2.2能力 | 主要实现 | 边界 |
+|---|---|---|---|
+| real-source intelligence | HTTP/RSS条件请求、动态页、PDF/XLSX、质量门、评测 | `collection_service`、`collectors/`、`parsers/`、`evaluation_service`、004迁移 | 总量≤30、AI≤20、无自动审核/发布 |
+
 | 领域 | 正式能力 | 主要实现 | 兼容来源 |
 |---|---|---|---|
 | identity | User、Person、Organization、Membership、身份链接 | `app/models.py`、身份/会员链接服务 | `v05a_users`、`v04f_club_memberships`、`v05d_member_accounts` |

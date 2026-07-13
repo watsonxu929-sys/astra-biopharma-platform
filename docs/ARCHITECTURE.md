@@ -1,5 +1,9 @@
 # 实际架构
 
+## P2.2 真实来源质量层
+
+受控来源继续复用 `v04g/v05f CollectionJob → v04g_source_snapshots EvidenceSnapshot → raw_intelligence → v05g_extraction_candidates`。HTTP/RSS和Playwright只负责采集，ParsingService按MIME选择HTML/Text/可选Docling；统一质量门在AI前阻断低质量内容。004只增加观测、解析、质量、评测和冲突登记字段/表，不建立第二套主体或产品模型。AI结果只能进入候选与人工审核。
+
 ## 应用与路由
 
 FastAPI 入口是 `app/main.py:app`。同一单体进程注册 v04/v05 兼容路由、`app/identity.py`、`app/routes_platform.py` 与 `/api/v1` 聚合路由。Jinja2 模板位于 `app/templates/`，静态文件位于 `app/static/`。
