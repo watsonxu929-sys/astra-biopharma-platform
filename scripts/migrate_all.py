@@ -34,6 +34,7 @@ MIGRATIONS = [
     ("v0.5I", "scripts/migrate_v05i.py", {"v05i_pipeline_runs", "v05i_pipeline_stage_runs", "v05i_pipeline_quality_samples", "v05i_pilot_source_results"}),
     ("v0.5J", "scripts/migrate_v05j.py", {"research_topics", "research_topic_subjects", "research_snapshots", "investment_assessments"}),
     ("P2.3", "scripts/migrations/005_research_fusion_engine.py", {"p2_3_industry_events", "p2_3_research_findings", "p2_3_report_citations"}, ["--apply"]),
+    ("P3", "scripts/migrations/006_entity_relationship_network.py", {"p3_product_assets", "p3_entity_resolution_candidates", "p3_canonical_relationships"}, ["--apply"]),
     ("v0.5K-L", "scripts/migrate_v05kl.py", {"task_queue", "worker_heartbeats", "scheduler_jobs", "backup_records", "source_health_scores", "data_quality_metrics"}),
 ]
 
@@ -65,6 +66,13 @@ def backup_database() -> str:
     return str(target)
 
 
+def ensure_core_schema() -> None:
+    """Bootstrap existing canonical ORM tables for a brand-new database."""
+    from app.database import Base, engine
+    from app import models  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
+
 def main() -> int:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     LOG_PATH.write_text("", encoding="utf-8")
@@ -72,6 +80,8 @@ def main() -> int:
     log(f"project={ROOT}")
     backup = backup_database()
     log(f"backup={backup or 'not created'}")
+    ensure_core_schema()
+    log("core_schema=ready")
 
     skipped = 0
     executed = 0
