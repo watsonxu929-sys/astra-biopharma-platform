@@ -11,7 +11,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app.services.club_matching_service import match_need_offering
-from app.security import current_username
+from app.security import can, current_user, current_username
+from app.services.club_operations_service import ClubMembershipService, ClubOperationError
 from app.services.lead_recommendation_service import generate_lead_recommendations
 from app.services.lead_scoring_service import manual_grade_requires_reason, score_lead
 from app.services.membership_person_link_service import bind_person, get_link_info, get_person_candidates, list_link_audit, unbind_person
@@ -476,40 +477,45 @@ def application_detail(application_id: int, request: Request):
 
 
 @router.post("/club/admin/applications/{application_id}/review")
-def review_application(request: Request, application_id: int, decision: str = Form(...), person_id: int = Form(0), organization_id: int = Form(0), reviewer: str = Form("admin"), note: str = Form("")):
+def review_application(request: Request, application_id: int, decision: str = Form(...), person_id: int = Form(0), organization_id: int = Form(0), user_id: int = Form(0), reviewer: str = Form("admin"), note: str = Form("")):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部管理权限")
     reviewer = current_username(request)
-    if decision not in {"under_review", "need_more_info", "approved", "rejected"}:
-        raise HTTPException(400, "无效审核状态")
-    with db_connection() as conn:
-        app = conn.execute("SELECT * FROM v04f_club_applications WHERE id=?", (application_id,)).fetchone()
-        if not app:
-            raise HTTPException(404, "申请不存在")
-        if decision == "approved":
-            if not person_id:
-                raise HTTPException(400, "批准时必须选择现有人物")
-            existing = conn.execute("SELECT * FROM v04f_club_memberships WHERE person_id=? AND status IN ('pending','active','suspended')", (person_id,)).fetchone()
-            if existing:
-                raise HTTPException(400, "该人物已有有效会员身份")
-            ts = now()
-            member_no = _next_no(conn, "QBM")
-            conn.execute(
-                """
-                INSERT INTO v04f_club_memberships(
-                    member_no, person_id, organization_id, member_role, member_level, status, joined_at,
-                    source, owner, industry_tags, expertise_tags, cooperation_preferences, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'standard', 'active', ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (member_no, person_id, organization_id or None, app["title"], ts, app["application_no"], reviewer, app["industry_tags"], app["expertise_tags"], app["cooperation_needs"], ts, ts),
-            )
-        conn.execute(
-            """
-            UPDATE v04f_club_applications
-            SET status=?, review_note=?, reviewed_at=?, reviewed_by=?, matched_person_id=?, matched_organization_id=?, updated_at=?
-            WHERE id=?
-            """,
-            (decision, note or None, now(), reviewer, person_id or None, organization_id or None, now(), application_id),
+    user = current_user(request) or {}
+    try:
+        ClubMembershipService().review_application(
+            application_id, decision=decision, actor=reviewer,
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+            note=note, owner=reviewer, person_id=person_id or None,
+            organization_id=organization_id or None, user_id=user_id or None,
         )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
     return RedirectResponse(f"/club/admin/applications/{application_id}", status_code=303)
+
+
+@router.post("/club/members/{member_id}/lifecycle")
+def membership_lifecycle(
+    request: Request, member_id: int, action: str = Form(...), reason: str = Form(""),
+    member_level: str = Form(""), organization_id: int = Form(0), member_role: str = Form(""),
+    expired_at: str = Form(""),
+):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部管理权限")
+    user = current_user(request) or {}
+    changes = {
+        "member_level": member_level or None, "organization_id": organization_id or None,
+        "member_role": member_role or None, "expired_at": expired_at or None,
+    }
+    try:
+        ClubMembershipService().transition_membership(
+            member_id, action=action, actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+            reason=reason, changes=changes,
+        )
+    except ClubOperationError as exc:
+        return RedirectResponse(f"/club/members/{member_id}?error={exc.message}", status_code=303)
+    return RedirectResponse(f"/club/members/{member_id}?message=会员状态已更新", status_code=303)
 
 
 @router.get("/club/members", response_class=HTMLResponse)
@@ -633,10 +639,15 @@ def member_detail(member_id: int, request: Request, message: str = "", error: st
     
     user_link_info = get_user_link_info(member_id)
     user_link_audit = list_user_link_audit(member_id)
+    try:
+        lifecycle_history = ClubMembershipService().history(member_id)
+    except sqlite3.Error:
+        lifecycle_history = []
     
     return templates.TemplateResponse(request, "v04f_club.html", {
         "mode": "member_detail",
         "member": member_data,
+        "lifecycle_history": lifecycle_history,
         "needs": needs,
         "offerings": offerings,
         "matches": matches,
