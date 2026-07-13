@@ -649,11 +649,13 @@ class ClubEventService:
         conn.execute(
             """
             INSERT INTO p4_checkin_audit(
-              club_event_id,registration_id,token_id,action,result,method,detail,actor_user_id,actor,created_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+              club_event_id,registration_id,token_id,action,result,method,detail,actor_user_id,actor,pilot_batch_id,created_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """,
             (club_event_id, registration_id, token_id, action, result, method, detail or None,
-             actor_user_id, actor, now_iso()),
+             actor_user_id, actor,
+             (conn.execute("SELECT pilot_batch_id FROM v05c_club_event_registrations WHERE id=?", (registration_id,)).fetchone() or [None])[0] if registration_id else None,
+             now_iso()),
         )
 
 class ClubResourceMatchingService:
@@ -739,11 +741,13 @@ class ClubResourceMatchingService:
         created: list[dict[str, Any]] = []
         with db_connection(self.db_path) as conn:
             conn.execute("BEGIN IMMEDIATE")
+            resource_where = "status='published' AND (valid_until IS NULL OR valid_until>=?)"
+            resource_params: list[Any] = [ts]
+            if pilot_batch_id:
+                resource_where += " AND pilot_batch_id=?"
+                resource_params.append(pilot_batch_id)
             resources = [dict(row) for row in conn.execute(
-                """
-                SELECT * FROM v06_market_resources WHERE status='published'
-                  AND (valid_until IS NULL OR valid_until>=?) ORDER BY id
-                """, (ts,),
+                f"SELECT * FROM v06_market_resources WHERE {resource_where} ORDER BY id", resource_params,
             ).fetchall()]
             demands = [row for row in resources if row["direction"] == "demand"]
             supplies = [row for row in resources if row["direction"] == "supply"]
@@ -932,14 +936,14 @@ class ClubResourceMatchingService:
             resources.append(self.create_member_resource(
                 int(membership_id), direction="demand", actor_user_id=actor_user_id,
                 fields={"title": str(feedback["new_demand"])[:120], "description": feedback["new_demand"],
-                        "resource_type": "活动反馈需求", "source_event_id": feedback["club_event_id"],
+                        "resource_type": "活动反馈资源", "source_event_id": feedback["club_event_id"],
                         "pilot_batch_id": feedback.get("pilot_batch_id"), "status": "draft"},
             ))
         if membership_id and feedback.get("new_supply"):
             resources.append(self.create_member_resource(
                 int(membership_id), direction="supply", actor_user_id=actor_user_id,
                 fields={"title": str(feedback["new_supply"])[:120], "description": feedback["new_supply"],
-                        "resource_type": "活动反馈供给", "source_event_id": feedback["club_event_id"],
+                        "resource_type": "活动反馈资源", "source_event_id": feedback["club_event_id"],
                         "pilot_batch_id": feedback.get("pilot_batch_id"), "status": "draft"},
             ))
         lead = None

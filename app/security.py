@@ -582,6 +582,21 @@ def required_permission(path: str, method: str) -> str | None:
         return "view_internal"
     if path.startswith("/api/v1/organizations"):
         return "manage_club"
+    if path in {"/api/v1/club/operations", "/api/v1/club/domain-events"}:
+        return "manage_club"
+    if path.startswith("/api/v1/club/resource-matches"):
+        return "manage_club"
+    if path.startswith("/api/v1/club/resources/") and path.endswith("/review"):
+        return "manage_club"
+    if path.startswith("/api/v1/club/relationship-candidates/") and path.endswith("/review"):
+        return "manage_club"
+    if path.startswith("/api/v1/club/events/"):
+        if any(path.endswith(suffix) for suffix in (
+            "/transition", "/review", "/checkin-token", "/checkin",
+            "/undo-checkin", "/relationship-candidates",
+        )):
+            return "manage_club"
+        return "membership.view_self"
     if path.startswith("/api/v1/identity/users/") and path.endswith("/person-link"):
         return "identity.unlink"
     if path.startswith("/api/v1/collection/items") and method in {"POST", "PUT", "PATCH", "DELETE"}:
