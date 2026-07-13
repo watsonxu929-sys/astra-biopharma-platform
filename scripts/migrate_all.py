@@ -33,6 +33,7 @@ MIGRATIONS = [
     ("v0.5H", "scripts/migrate_v05h.py", {"v05h_signal_rules", "v05h_signal_evidence", "v05h_report_templates", "v05h_report_jobs", "v05h_generated_reports"}),
     ("v0.5I", "scripts/migrate_v05i.py", {"v05i_pipeline_runs", "v05i_pipeline_stage_runs", "v05i_pipeline_quality_samples", "v05i_pilot_source_results"}),
     ("v0.5J", "scripts/migrate_v05j.py", {"research_topics", "research_topic_subjects", "research_snapshots", "investment_assessments"}),
+    ("P2.3", "scripts/migrations/005_research_fusion_engine.py", {"p2_3_industry_events", "p2_3_research_findings", "p2_3_report_citations"}, ["--apply"]),
     ("v0.5K-L", "scripts/migrate_v05kl.py", {"task_queue", "worker_heartbeats", "scheduler_jobs", "backup_records", "source_health_scores", "data_quality_metrics"}),
 ]
 
@@ -74,7 +75,9 @@ def main() -> int:
 
     skipped = 0
     executed = 0
-    for name, script, required in MIGRATIONS:
+    for migration in MIGRATIONS:
+        name, script, required, *optional_args = migration
+        script_args = optional_args[0] if optional_args else []
         path = ROOT / script
         if not path.exists():
             log(f"[SKIP] {name}: missing {script}")
@@ -86,7 +89,7 @@ def main() -> int:
             skipped += 1
             continue
         log(f"[RUN] {name}: {script}")
-        result = subprocess.run([sys.executable, str(path)], cwd=ROOT, text=True, capture_output=True)
+        result = subprocess.run([sys.executable, str(path), *script_args], cwd=ROOT, text=True, capture_output=True)
         if result.stdout:
             log(result.stdout.rstrip())
         if result.stderr:
