@@ -1,5 +1,18 @@
 # 当前领域模型地图
 
+## P4 俱乐部运营增量模型
+
+| 表/模型 | 含义 | 边界 |
+|---|---|---|
+| `p4_membership_history` | 会员状态变更历史 | 不复制会员主档 |
+| `p4_event_feedback` | 结构化活动反馈 | participation 保持兼容 |
+| `p4_checkin_tokens` / `p4_checkin_audit` | Token 摘要与签到审计 | 不保存明文 Token |
+| `p4_event_relationship_candidates` | 同场及会后关系候选 | 审核前不进入 P3 网络 |
+| `p4_resource_match_candidates` | 可解释供需匹配候选 | 不自动联系 |
+| `p4_club_lead_candidates` | ClubLead 候选 | 不自动创建 Opportunity |
+| `p4_domain_events` / `p4_operation_audit` | 内部事件队列和操作审计 | 非外部消息总线 |
+
+
 ## P3 增量模型
 
 | 表/模型 | 含义 | 状态与边界 |

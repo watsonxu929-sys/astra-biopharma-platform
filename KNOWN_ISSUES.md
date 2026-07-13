@@ -1,5 +1,13 @@
 # 已知问题
 
+## P4 已知问题
+
+- 正式库现有 `v05c_club_event_registrations.membership_id` 和 participation 同名字段的外键仍指向缺失的 `v04f_club_memberships_old`。P4 新增 `canonical_membership_id` 并在检测到该精确历史目标时对当前服务连接做兼容处理；本轮不重建表、不改写历史记录。正式应用 007 前应先备份并由人工决定后续修复迁移。
+- 正式库有一条 `v05c_club_event_profiles.event_id=7` 的历史悬空引用。受控试点构造器会避开所有已引用活动 ID；本轮不猜测或自动补建正式 Event。
+- P4 运营看板已使用中文指标；其他模块仍存在 `recent_events` 等英文内部键，仅登记、不在 P4 跨模块批量修改。
+- 正式库尚未应用 006/007，因此 P4 写操作人工验收必须使用受控数据库副本。
+
+
 ## P3 已知问题
 
 - 正式库 26 条旧 `relations` 仍为自由文本兼容数据，9 条源端点无法解析；本轮未批量迁移或猜测修复。

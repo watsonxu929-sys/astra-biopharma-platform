@@ -1,5 +1,10 @@
 # 实际架构
 
+## P4 俱乐部运营层
+
+`club_operations_service.py` 为网页与 `/api/v1/club/*` 提供共享会员、活动、签到、反馈、资源匹配和运营看板逻辑。Q-BAY 复用既有 User/Person/Organization/Membership/Event/MarketResource；007 只增加历史、反馈、Token/审计、匹配/关系/线索候选和内部领域事件，不建立第二套主档。旧供需表只读，ClubLead 候选不自动进入 Opportunity。
+
+
 ## P3 主体与关系网络层
 
 `entity_governance_service.py` 统一别名、外部标识、解析候选、合并预览、重定向和回滚；`canonical_relationship_service.py` 统一类型化关系、证据、时态冲突、受限 BFS 路径和连接候选。Web `app/p3_network.py` 与 API `/api/v1/entity-network` 调用同一服务层。旧 `relations` 保持兼容读取，P3 新写入进入 006 的增量表，不引入第二套人物/机构主档或图数据库。

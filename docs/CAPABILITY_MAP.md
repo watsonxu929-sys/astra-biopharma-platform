@@ -1,5 +1,16 @@
 # 能力地图
 
+## P4 俱乐部运营能力
+
+| 领域 | P4 能力 | 主要实现 | 边界 |
+|---|---|---|---|
+| membership | 申请审核、激活、变更、暂停、恢复、到期、退出 | `ClubMembershipService`、007 | 复用既有会员与主体 |
+| club events | 生命周期、容量/候补、Token/手工签到、反馈 | `ClubEventService`、Web/API | 仅已批准报名可签到 |
+| club resources | 统一供需审核、可解释匹配候选 | `ClubResourceMatchingService` | 旧供需只读，不自动联系 |
+| deposition | 会后关系与 ClubLead 候选 | P4 候选表 | 不自动写 P3 正式关系或 Opportunity |
+| operations | 16 个中文指标、工作队列、领域事件与审计 | `ClubOperationsDashboardService` | `manage_club` 后端权限 |
+
+
 | 领域 | P3 正式能力 | 主要实现 | 边界 |
 |---|---|---|---|
 | entity governance | 别名、公开标识、强中弱候选、合并预览/审批/回滚 | `entity_governance_service.py`、006 | 不自动合并，不物理删除主档 |
