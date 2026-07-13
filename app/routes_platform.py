@@ -79,34 +79,128 @@ def get_current_user_id(request: Request) -> int | None:
     return sec.get("user", {}).get("id")
 
 
-# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  HOME  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
+def get_user_role(request: Request) -> str:
+    sec = request.scope.get("security_context", {})
+    return sec.get("user", {}).get("role", "viewer")
+
+
+def get_workspace_for_role(request: Request, db: Session, user_id: int | None):
+    role = get_user_role(request)
+    workspace = {"role": role, "role_label": "", "cards": []}
+
+    role_labels = {
+        "admin": "管理员",
+        "operator": "俱乐部运营",
+        "reviewer": "研究人员",
+        "viewer": "普通会员",
+    }
+    workspace["role_label"] = role_labels.get(role, "用户")
+
+    if role == "reviewer":
+        from app.services.collection_service import dashboard as collection_dashboard
+        from app.services.processing import dashboard as processing_dashboard
+        from app.services.reports import list_reports
+        try:
+            coll_counts = collection_dashboard()["counts"]
+            proc_counts = processing_dashboard()["counts"]
+            pending_reports = list_reports(status="under_review")["pagination"]["total"]
+        except Exception:
+            coll_counts = {}
+            proc_counts = {}
+            pending_reports = 0
+
+        workspace["cards"] = [
+            {"title": "今日新增情报", "value": coll_counts.get("today_collection_items", 0), "url": "/collection/items", "icon": "newspaper"},
+            {"title": "待处理原始情报", "value": coll_counts.get("queued_items", 0), "url": "/collection/items", "icon": "file-search"},
+            {"title": "待审核事实", "value": proc_counts.get("pending_candidates", 0), "url": "/processing/candidates", "icon": "git-compare"},
+            {"title": "关注专题", "value": 0, "url": "/research", "icon": "flask-conical"},
+            {"title": "待审核报告", "value": pending_reports, "url": "/reports", "icon": "file-text"},
+            {"title": "异常数据源", "value": coll_counts.get("failed_sources", 0), "url": "/collection/sources", "icon": "alert-circle"},
+        ]
+
+    elif role == "operator":
+        try:
+            pending_members = db.scalar(select(func.count()).select_from(
+                db.query(CooperationOpportunity).filter(CooperationOpportunity.status == "active")
+            )) or 0
+            pending_registrations = db.scalar(select(func.count()).select_from(
+                db.query(ContactIntent).filter(ContactIntent.status == "pending")
+            )) or 0
+        except Exception:
+            pending_members = 0
+            pending_registrations = 0
+
+        workspace["cards"] = [
+            {"title": "待审核会员", "value": pending_members, "url": "/club/admin/applications", "icon": "users-round"},
+            {"title": "待审核报名", "value": pending_registrations, "url": "/club/events", "icon": "clipboard-check"},
+            {"title": "今日活动", "value": 0, "url": "/club/events", "icon": "calendar"},
+            {"title": "待处理匹配", "value": 0, "url": "/club/matches", "icon": "shuffle"},
+            {"title": "会后待跟进", "value": 0, "url": "/opportunities?tab=followups", "icon": "message-square"},
+            {"title": "潜在线索", "value": 0, "url": "/opportunities", "icon": "target"},
+        ]
+
+    elif role == "admin":
+        workspace["cards"] = [
+            {"title": "系统管理", "value": "", "url": "/admin/platform", "icon": "shield"},
+            {"title": "人物与机构", "value": 0, "url": "/admin/people", "icon": "users-round"},
+            {"title": "会员管理", "value": 0, "url": "/club/members", "icon": "id-card"},
+            {"title": "情报运营", "value": 0, "url": "/admin/intelligence", "icon": "newspaper"},
+            {"title": "数据治理", "value": 0, "url": "/admin/data-integrity", "icon": "shield-alert"},
+            {"title": "用户与权限", "value": 0, "url": "/admin/users", "icon": "user-cog"},
+        ]
+
+    else:
+        if user_id:
+            my_events_count = db.scalar(select(func.count()).select_from(
+                db.query(MarketResource).filter(MarketResource.publisher_id == user_id)
+            )) or 0
+            my_resources_count = db.scalar(select(func.count()).select_from(
+                db.query(CooperationOpportunity).filter(
+                    CooperationOpportunity.initiator_id == user_id,
+                    CooperationOpportunity.status == "active"
+                )
+            )) or 0
+        else:
+            my_events_count = 0
+            my_resources_count = 0
+
+        workspace["cards"] = [
+            {"title": "我的活动", "value": my_events_count, "url": "/member/events", "icon": "calendar"},
+            {"title": "我的需求与供给", "value": my_resources_count, "url": "/member/needs", "icon": "package"},
+            {"title": "推荐认识的人", "value": 0, "url": "/network/people", "icon": "sparkles"},
+            {"title": "我的合作进展", "value": 0, "url": "/opportunities", "icon": "handshake"},
+            {"title": "我的通知", "value": 0, "url": "/member/notifications", "icon": "bell"},
+        ]
+
+    return workspace
+
 
 @router.get("/platform", response_class=HTMLResponse)
 def platform_home(request: Request, db: Session = Depends(get_db)):
     user_id = get_current_user_id(request)
-    # Card 1: Network
     rec_people = recommend_people(db, user_id, limit=4) if user_id is not None else []
     recent_people = list(db.scalars(
         select(Person).where(Person.is_active == True).order_by(desc(Person.created_at)).limit(4)
     ).all())
-    # Card 2: Intelligence
     feed = personalized_feed(db, user_id, limit=4)
-    # Card 3: Resources
     supplies = list(db.scalars(
         select(MarketResource).where(MarketResource.status == "published", MarketResource.direction == "supply").order_by(desc(MarketResource.created_at)).limit(4)
     ).all())
     demands = list(db.scalars(
         select(MarketResource).where(MarketResource.status == "published", MarketResource.direction == "demand").order_by(desc(MarketResource.created_at)).limit(4)
     ).all())
-    # Card 4: Opportunities
     opps = list(db.scalars(
         select(CooperationOpportunity).where(CooperationOpportunity.status == "active").order_by(desc(CooperationOpportunity.updated_at)).limit(4)
     ).all())
+
+    workspace = get_workspace_for_role(request, db, user_id)
+    tasks = list_user_tasks(db, user_id) if user_id else []
 
     return render(request, "platform/home.html",
         rec_people=rec_people, recent_people=recent_people,
         feed=feed, supplies=supplies, demands=demands,
         opps=opps, user_id=user_id,
+        workspace=workspace, tasks=tasks,
     )
 
 

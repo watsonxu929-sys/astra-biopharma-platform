@@ -5,21 +5,34 @@
 <section class="page-header">
   <div class="page-header-top">
     <h1>工作台</h1>
+    {% if workspace %}
     <div class="header-actions">
-      <a class="btn btn-primary" href="/intelligence/operations">情报运营</a>
-      <a class="btn" href="/collection/sources">数据源管理</a>
+      <span class="role-badge">{{ workspace.role_label }}</span>
     </div>
+    {% endif %}
   </div>
   <p class="page-desc">业务概览、待办事项、推荐内容和最近动态。</p>
 </section>
 {% endblock %}
 {% block platform_content %}
+
+{% if workspace and workspace.cards %}
+<section class="stats-bar stats-bar-6">
+  {% for card in workspace.cards %}
+  <a class="stat-card" href="{{ card.url }}">
+    <span class="stat-value">{{ card.value if card.value != '' else '' }}</span>
+    <span class="stat-label">{{ card.title }}</span>
+  </a>
+  {% endfor %}
+</section>
+{% else %}
 <section class="stats-bar stats-bar-4">
   <a class="stat-card" href="/workspace?tab=todos"><span class="stat-value">{{ tasks|default([])|length }}</span><span class="stat-label">待办任务</span></a>
   <a class="stat-card" href="/network/people"><span class="stat-value">{{ rec_people|default([])|length }}</span><span class="stat-label">推荐人脉</span></a>
   <a class="stat-card" href="/intelligence"><span class="stat-value">{{ feed|default([])|length }}</span><span class="stat-label">最新情报</span></a>
   <a class="stat-card" href="/opportunities"><span class="stat-value">{{ opps|default([])|length }}</span><span class="stat-label">进行中合作</span></a>
 </section>
+{% endif %}
 
 <div class="dashboard-grid-2">
   <section class="platform-card">

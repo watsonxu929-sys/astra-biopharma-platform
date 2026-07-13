@@ -5,12 +5,31 @@ from typing import Any
 from app.platform.capability_registry import filter_capabilities, list_capabilities
 
 INTELLIGENCE_WORK_ENTRY_KEYS = {
-    "intelligence.raw_items",
+    "intelligence.feed",
+    "intelligence.collection",
     "intelligence.processing",
-    "intelligence.candidates",
     "intelligence.review",
-    "intelligence.signals",
     "intelligence.reports",
+}
+NETWORK_WORK_ENTRY_KEYS = {
+    "network.people",
+    "network.graph",
+    "network.admin",
+    "network.recommendations",
+}
+RESOURCES_WORK_ENTRY_KEYS = {
+    "resources.home",
+    "resources.leads",
+    "resources.opportunities",
+    "resources.tasks",
+    "resources.meetings",
+}
+CLUB_WORK_ENTRY_KEYS = {
+    "club.home",
+    "club.member_center",
+    "club.events",
+    "club.matching",
+    "club.operations",
 }
 PRIMARY_ORDER = ["workspace", "network", "intelligence", "resources", "club"]
 CLIENTS = {"web", "app", "miniprogram", "admin"}
@@ -71,6 +90,12 @@ def get_secondary_navigation(context: dict[str, Any] | None, active_category: st
     caps = [cap for cap in _allowed_capabilities(context, client=client) if cap.get("category") == active_category and cap.get("parent_key")]
     if active_category == "intelligence":
         caps = [cap for cap in caps if cap.get("capability_key") in INTELLIGENCE_WORK_ENTRY_KEYS]
+    elif active_category == "network":
+        caps = [cap for cap in caps if cap.get("capability_key") in NETWORK_WORK_ENTRY_KEYS]
+    elif active_category == "resources":
+        caps = [cap for cap in caps if cap.get("capability_key") in RESOURCES_WORK_ENTRY_KEYS]
+    elif active_category == "club":
+        caps = [cap for cap in caps if cap.get("capability_key") in CLUB_WORK_ENTRY_KEYS]
     return [_nav_item(cap, path) for cap in sorted(caps, key=lambda item: item.get("order", 0))]
 
 
@@ -81,6 +106,11 @@ def get_account_navigation(context: dict[str, Any] | None, path: str = "/", *, c
 
 def get_admin_navigation(context: dict[str, Any] | None, path: str = "/", *, client: str = "web") -> list[dict[str, Any]]:
     caps = [cap for cap in _allowed_capabilities(context, client="admin" if client == "admin" else "web") if cap.get("category") == "admin"]
+    return [_nav_item(cap, path) for cap in sorted(caps, key=lambda item: item.get("order", 0))]
+
+
+def get_experimental_navigation(context: dict[str, Any] | None, path: str = "/", *, client: str = "web") -> list[dict[str, Any]]:
+    caps = [cap for cap in _allowed_capabilities(context, client="admin" if client == "admin" else "web") if cap.get("category") == "experimental"]
     return [_nav_item(cap, path) for cap in sorted(caps, key=lambda item: item.get("order", 0))]
 
 
@@ -101,6 +131,7 @@ def get_client_navigation(context: dict[str, Any] | None, *, client: str = "web"
         "secondary": secondary,
         "account": get_account_navigation(context, path, client=client),
         "admin": get_admin_navigation(context, path, client=client),
+        "experimental": get_experimental_navigation(context, path, client=client),
         "active": active,
     }
 

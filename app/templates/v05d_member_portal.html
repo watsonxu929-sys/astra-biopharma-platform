@@ -9,6 +9,13 @@
 
 <section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>会员门户</h1><p>会员自助查看资料、活动、供需内容和通知。</p></div><a class="button secondary" href="/club">返回俱乐部</a></section>
 
+{% set field_labels = {
+    "person_name": "姓名", "name": "姓名", "organization_name": "企业/机构",
+    "public_role": "职务", "member_role": "职务", "member_level": "会员等级",
+    "status": "状态", "mobile": "手机", "email": "邮箱", "wechat": "微信",
+    "city": "城市", "expertise_tags": "能力标签", "cooperation_preferences": "合作偏好",
+    "preferred_contact_method": "联系偏好",
+} %}
 {% if portal %}
 <section class="membership-switcher">
 <div class="current-identity">
@@ -73,13 +80,13 @@
 <section class="panel"><h2>激活会员账号</h2><form method="post" action="/member/activate" class="form-grid"><input type="hidden" name="token" value="{{ token }}"><label>用户名<input name="username" value="{{ activation.username or '' }}" required></label><label>密码<input name="password" type="password" required></label><label>确认密码<input name="confirm_password" type="password" required></label><label class="checkbox-line full"><input type="checkbox" name="agree" value="1" required> 我已阅读并同意俱乐部账号使用规则</label><button class="button primary" type="submit">激活账号</button></form></section>
 {% elif mode == 'profile' %}
 <section class="panel"><h2>资料维护</h2><form method="post" action="/member/profile" class="form-grid"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>姓名<input name="display_name" value="{{ member.person_name or '' }}"></label><label>企业/机构<input name="organization_name" value="{{ member.organization_name or '' }}"></label><label>职务<input name="title" value="{{ member.public_role or member.member_role or '' }}"></label><label>城市<input name="city" value="{{ member.city or '' }}"></label><label>能力标签<input name="expertise_tags" value="{{ member.expertise_tags or '' }}"></label><label>合作偏好<input name="cooperation_preferences" value="{{ member.cooperation_preferences or '' }}"></label><label>手机<input name="mobile" value="{{ member.mobile or '' }}"></label><label>邮箱<input name="email" value="{{ member.email or '' }}"></label><label>微信<input name="wechat" value="{{ member.wechat or '' }}"></label><label>联系偏好<input name="preferred_contact_method" value="{{ member.preferred_contact_method or '' }}"></label><label class="full">修改说明<textarea name="evidence_note" rows="3"></textarea></label><button class="button primary" type="submit">提交资料变更</button></form></section>
-<section class="panel"><h2>变更记录</h2>{% for item in pending|default([]) %}<div class="record-row"><div><strong>{{ item.field_name }}</strong><p>{{ item.current_value or '暂无' }} → {{ item.proposed_value or '暂无' }}</p></div><span class="badge">{{ item.status }}</span></div>{% else %}<div class="empty">暂无资料变更记录。</div>{% endfor %}</section>
+<section class="panel"><h2>变更记录</h2>{% for item in pending|default([]) %}<div class="record-row"><div><strong>{{ field_labels.get(item.field_name, item.field_name) }}</strong><p>{{ item.current_value or '暂无' }} → {{ item.proposed_value or '暂无' }}</p></div><span class="badge">{{ {"pending":"待审核","approved":"已通过","rejected":"已驳回"}.get(item.status, item.status) }}</span></div>{% else %}<div class="empty">暂无资料变更记录。</div>{% endfor %}</section>
 {% elif mode == 'events' %}
 <section class="panel"><h2>活动</h2>{% for item in events|default([]) %}<div class="record-row"><div><strong>{{ item.name }}</strong><p>{{ item.event_date or '时间待定' }}</p></div><form method="post" action="/member/events/{{ item.id }}/register"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button secondary" type="submit">报名</button></form></div>{% else %}<div class="empty">暂无活动</div>{% endfor %}</section>
 {% elif mode == 'matches' %}
 <section class="panel"><h2>资源匹配</h2>{% for item in matches|default([]) %}<div class="record-row"><div><strong>{{ item.match_no or item.title or '匹配记录' }}</strong><p>{{ item.status or '待确认' }}</p></div><form method="post" action="/member/matches/{{ item.id }}/feedback"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input name="feedback" value="interested" type="hidden"><button class="button secondary" type="submit">感兴趣</button></form></div>{% else %}<div class="empty">暂无资源匹配</div>{% endfor %}</section>
 {% elif mode == 'notifications' %}
-<section class="panel"><h2>通知</h2><form method="post" action="/member/notifications"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="read_all"><button class="button secondary" type="submit">全部标记已读</button></form>{% for item in notifications|default([]) %}<div class="record-row"><div><strong>{{ item.title }}</strong><p>{{ item.body or '' }}</p></div><span class="badge">{{ item.status }}</span></div>{% else %}<div class="empty">暂无通知</div>{% endfor %}</section>
+<section class="panel"><h2>通知</h2><form method="post" action="/member/notifications"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="read_all"><button class="button secondary" type="submit">全部标记已读</button></form>{% for item in notifications|default([]) %}<div class="record-row"><div><strong>{{ item.title }}</strong><p>{{ item.body or '' }}</p></div><span class="badge">{{ {"unread":"未读","read":"已读","archived":"已归档"}.get(item.status, item.status) }}</span></div>{% else %}<div class="empty">暂无通知</div>{% endfor %}</section>
 {% elif mode == 'request_link' %}
 <section class="panel">
 <h2>申请关联会员身份</h2>
@@ -93,7 +100,7 @@
 </form>
 </section>
 {% else %}
-<section class="panel"><h2>今日待办</h2><p>待处理资料变更 {{ counts.pending_changes if counts is defined else 0 }} 条，未读通知 {{ counts.unread if counts is defined else 0 }} 条。</p>{% for item in notifications|default([]) %}<div class="record-row"><div><strong>{{ item.title }}</strong><p>{{ item.body or '' }}</p></div><span class="badge">{{ item.status }}</span></div>{% else %}<div class="empty">暂无待办。</div>{% endfor %}</section>
+<section class="panel"><h2>今日待办</h2><p>待处理资料变更 {{ counts.pending_changes if counts is defined else 0 }} 条，未读通知 {{ counts.unread if counts is defined else 0 }} 条。</p>{% for item in notifications|default([]) %}<div class="record-row"><div><strong>{{ item.title }}</strong><p>{{ item.body or '' }}</p></div><span class="badge">{{ {"unread":"未读","read":"已读","archived":"已归档"}.get(item.status, item.status) }}</span></div>{% else %}<div class="empty">暂无待办。</div>{% endfor %}</section>
 {% endif %}
 
 

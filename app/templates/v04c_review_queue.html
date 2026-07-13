@@ -16,6 +16,8 @@
 {% block platform_content %}
 {% set status_labels = {"pending":"待审核","in_review":"审核中","approved":"已批准","rejected":"已拒绝","deferred":"暂缓","high":"高","medium":"中","low":"低"} %}
 {% set item_type_labels = {"candidate":"候选数据","relationship":"关系","claim":"事实声明","field_change":"字段变更"} %}
+{% set subject_type_labels = {"Person":"人物","Organization":"机构","Project":"项目","Event":"事件","Resource":"资源"} %}
+{% set field_labels = {"name":"名称","title":"标题","description":"描述","industry_tags":"行业标签","region":"地区","city":"城市","founding_year":"成立年份","revenue":"营收","employee_count":"员工数","website":"官网","email":"邮箱","phone":"电话","mobile":"手机","wechat":"微信","public_role":"职务","expertise_tags":"专业标签","cooperation_preferences":"合作偏好","status":"状态","member_level":"会员等级","subject_type":"主体类型","subject_id":"主体ID","candidate_type":"候选类型","candidate_no":"候选编号"} %}
 <section class="stats-bar stats-bar-4">
   <a href="/review?status=pending" class="stat-card"><span class="stat-value">{{ counts.get('pending', 0) }}</span><span class="stat-label">待审核</span></a>
   <a href="/review?status=in_review" class="stat-card"><span class="stat-value">{{ counts.get('in_review', 0) }}</span><span class="stat-label">审核中</span></a>
@@ -63,8 +65,8 @@
       {% for item in items %}
       <tr>
         <td><span class="code" style="font-size:12px;">{{ item.review_no }}</span><div style="font-size:11px;color:var(--color-text-muted);">{{ item.created_at }}</div></td>
-        <td>{{ item.subject_label or item.subject_id or '未关联主体' }}<div class="code" style="font-size:11px;">{{ item.subject_type }} {{ item.subject_id or '' }}</div></td>
-        <td>{{ item.field_name or '-' }}</td>
+        <td>{{ item.subject_label or item.subject_id or '未关联主体' }}<div class="code" style="font-size:11px;">{{ subject_type_labels.get(item.subject_type, item.subject_type) }} {{ item.subject_id or '' }}</div></td>
+        <td>{{ field_labels.get(item.field_name, item.field_name) or '-' }}</td>
         <td>{{ item.proposed_value or item.summary or '-' }}</td>
         <td>{{ item_type_labels.get(item.item_type, item.item_type) }}</td>
         <td><span class="badge badge-{{ item.priority }}">{{ priority_labels.get(item.priority, item.priority) }}</span></td>
@@ -106,7 +108,7 @@
     <h3>事实声明</h3>
     {% for claim in claims %}
     <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--color-border);font-size:13px;">
-      <div><strong>{{ claim.subject_label or claim.subject_id }}</strong><p style="font-size:12px;color:var(--color-text-muted);">{{ claim.field_name }}：{{ claim.claim_value }}</p></div>
+      <div><strong>{{ claim.subject_label or claim.subject_id }}</strong><p style="font-size:12px;color:var(--color-text-muted);">{{ field_labels.get(claim.field_name, claim.field_name) }}：{{ claim.claim_value }}</p></div>
       <span class="badge badge-{{ claim.status }}">{{ status_labels.get(claim.status, claim.status) }}</span>
     </div>
     {% else %}
