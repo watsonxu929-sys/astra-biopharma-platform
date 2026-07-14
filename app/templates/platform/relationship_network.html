@@ -1,0 +1,178 @@
+{% extends "platform/base.html" %}
+{% block platform_title %}关系网络{% endblock %}
+{% block platform_content %}
+<nav class="breadcrumb">
+  <a href="/platform">工作台</a>
+  <span class="sep">/</span>
+  <a href="/network">产业关系</a>
+  <span class="sep">/</span>
+  <span>关系网络</span>
+</nav>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">关系网络</h1>
+    <p class="page-desc">查看主体之间的连接关系、路径查询和时间线。</p>
+  </div>
+</div>
+
+<nav class="tabs">
+  <a href="/network/graph" class="{{ 'active' if active_tab == 'overview' else '' }}">网络概览</a>
+  <a href="/network/paths" class="{{ 'active' if active_tab == 'paths' else '' }}">路径查询</a>
+  <a href="/network/timeline" class="{{ 'active' if active_tab == 'timeline' else '' }}">关系时间线</a>
+</nav>
+
+{% if active_tab == 'overview' %}
+<section class="panel">
+  <div class="panel-title">
+    <h2>网络概览</h2>
+  </div>
+  <div class="form-grid">
+    <label>起点主体类型
+      <select name="entity_type" onchange="this.form.submit()">
+        <option value="person" {% if entity_type == 'person' %}selected{% endif %}>人物</option>
+        <option value="organization" {% if entity_type == 'organization' %}selected{% endif %}>机构</option>
+        <option value="project" {% if entity_type == 'project' %}selected{% endif %}>项目</option>
+        <option value="product" {% if entity_type == 'product' %}selected{% endif %}>产品</option>
+      </select>
+    </label>
+    <label>起点主体 ID
+      <input name="entity_id" value="{{ entity_id }}" placeholder="输入主体ID">
+    </label>
+    <label>关系深度
+      <select name="depth">
+        <option value="1">1跳</option>
+        <option value="2" selected>2跳</option>
+        <option value="3">3跳</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" type="submit">展开关系图</button>
+  </div>
+
+  {% if result %}
+  <div class="network-summary">
+    <p>节点 {{ result.nodes|length }} 个，关系 {{ result.edges|length }} 条{% if result.truncated %}（已按上限截断）{% endif %}</p>
+  </div>
+  <div class="network-list">
+    {% for edge in result.edges %}
+    <div class="relation-item">
+      <a href="/network/entities/{{ edge.subject_type }}/{{ edge.subject_id }}">{{ edge.subject_id }}</a>
+      <span class="relation-type">{{ RELATION_TYPE_LABELS.get(edge.relationship_type, edge.relationship_type) }}</span>
+      <a href="/network/entities/{{ edge.object_type }}/{{ edge.object_id }}">{{ edge.object_id }}</a>
+      <span class="relation-status">{{ '当前' if edge.is_current else '历史' }}</span>
+      <a href="/network/relationships/{{ edge.id }}" class="btn btn-sm">查看证据</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>请选择起点主体并输入ID，查看其关系网络。</p>
+  </div>
+  {% endif %}
+</section>
+{% elif active_tab == 'paths' %}
+<section class="panel">
+  <div class="panel-title">
+    <h2>关系路径查询</h2>
+  </div>
+  <div class="form-grid">
+    <label>起点类型
+      <select name="source_type">
+        <option value="person" {% if source_type == 'person' %}selected{% endif %}>人物</option>
+        <option value="organization" {% if source_type == 'organization' %}selected{% endif %}>机构</option>
+        <option value="project" {% if source_type == 'project' %}selected{% endif %}>项目</option>
+        <option value="product" {% if source_type == 'product' %}selected{% endif %}>产品</option>
+      </select>
+    </label>
+    <label>起点 ID
+      <input name="source_id" value="{{ source_id }}" required>
+    </label>
+    <label>终点类型
+      <select name="target_type">
+        <option value="organization" {% if target_type == 'organization' %}selected{% endif %}>机构</option>
+        <option value="person" {% if target_type == 'person' %}selected{% endif %}>人物</option>
+        <option value="project" {% if target_type == 'project' %}selected{% endif %}>项目</option>
+        <option value="product" {% if target_type == 'product' %}selected{% endif %}>产品</option>
+      </select>
+    </label>
+    <label>终点 ID
+      <input name="target_id" value="{{ target_id }}" required>
+    </label>
+    <label>最大跳数
+      <select name="max_depth">
+        <option value="1">1跳</option>
+        <option value="2">2跳</option>
+        <option value="3" selected>3跳</option>
+      </select>
+    </label>
+    <label>包含历史关系
+      <input type="checkbox" name="include_history" {% if include_history %}checked{% endif %}>
+    </label>
+    <button class="btn btn-primary" type="submit">查找路径</button>
+  </div>
+
+  {% if result %}
+  <div class="path-results">
+    <p>共发现 {{ result.paths|length }} 条路径（查询耗时 {{ result.elapsed_ms }}ms）</p>
+    {% for path in result.paths %}
+    <div class="path-card">
+      <div class="path-header">
+        <span class="path-hops">{{ path.hops }} 跳</span>
+        <span class="path-confidence">置信度 {{ path.confidence }}</span>
+      </div>
+      <div class="path-nodes">
+        {% for node in path.nodes %}
+        <span class="node-item">{{ ENTITY_TYPE_LABELS.get(node.type, node.type) }}: {{ node.id }}</span>
+        {% if not loop.last %}<span class="node-arrow">→</span>{% endif %}
+        {% endfor %}
+      </div>
+      <div class="path-edges">
+        {% for edge in path.edges %}
+        <a href="/network/relationships/{{ edge.id }}" class="edge-item">
+          {{ RELATION_TYPE_LABELS.get(edge.relationship_type, edge.relationship_type) }}
+        </a>
+        {% if not loop.last %}<span class="edge-sep">/</span>{% endif %}
+        {% endfor %}
+      </div>
+      <div class="path-evidence">
+        证据数量: {{ path.evidence_count or 0 }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif source_id and target_id %}
+  <div class="empty-state">
+    <p>当前数据中未发现可靠连接路径。</p>
+    <p>建议：包含历史关系、提高跳数或检查主体别名。</p>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>请输入起点和终点主体，查询它们之间的关系路径。</p>
+  </div>
+  {% endif %}
+</section>
+{% elif active_tab == 'timeline' %}
+<section class="panel">
+  <div class="panel-title">
+    <h2>关系时间线</h2>
+  </div>
+  <div class="form-grid">
+    <label>主体类型
+      <select name="entity_type">
+        <option value="person">人物</option>
+        <option value="organization">机构</option>
+        <option value="project">项目</option>
+        <option value="product">产品</option>
+      </select>
+    </label>
+    <label>主体 ID
+      <input name="entity_id" placeholder="输入主体ID">
+    </label>
+    <button class="btn btn-primary" type="submit">查看时间线</button>
+  </div>
+  <div class="empty-state">
+    <p>时间线功能开发中，请先使用路径查询。</p>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

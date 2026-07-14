@@ -15,7 +15,7 @@
   </div>
   <div class="page-header-right">
     <a class="btn btn-primary" href="/network/people">人物发现</a>
-    <a class="btn btn-outline" href="/network/organizations">机构发现</a>
+    <a class="btn btn-outline" href="/network/graph">关系网络</a>
   </div>
 </div>
 {% endblock %}
@@ -23,34 +23,56 @@
 
 <div class="dashboard-grid">
   <section class="dashboard-card">
-    <h3 class="card-title">主体治理与关系网络</h3>
-    <p class="card-desc">进入主体消歧、关系审核、时态路径与证据链。</p>
-    <a class="btn btn-sm" href="/network/governance">进入 P3 工作台</a>
-  </section>
-  <section class="dashboard-card">
-    <h3 class="card-title">人物发现</h3>
-    <p class="card-desc">浏览产业人物档案和画像。</p>
-    <a class="btn btn-sm" href="/network/people">查看人物</a>
-  </section>
-  <section class="dashboard-card">
-    <h3 class="card-title">机构发现</h3>
-    <p class="card-desc">查看产业机构、组织和上下文。</p>
-    <a class="btn btn-sm" href="/network/organizations">查看机构</a>
-  </section>
-  <section class="dashboard-card">
-    <h3 class="card-title">推荐人脉</h3>
-    <div class="card-content">
-      {% for item in recommendations|default([]) %}
-      <p class="recommendation-item">{{ item.name|default('推荐人物') }}</p>
-      {% else %}
-      <p class="text-muted">暂无推荐。</p>
-      {% endfor %}
+    <div class="card-stats">
+      <div class="stat-item"><span class="stat-value">{{ stats.people_count or 0 }}</span><span class="stat-label">人物数量</span></div>
+      <div class="stat-item"><span class="stat-value">{{ stats.org_count or 0 }}</span><span class="stat-label">机构数量</span></div>
+      <div class="stat-item"><span class="stat-value">{{ stats.project_count or 0 }}</span><span class="stat-label">产品与项目</span></div>
+      <div class="stat-item"><span class="stat-value">{{ stats.relation_count or 0 }}</span><span class="stat-label">当前关系</span></div>
     </div>
   </section>
+
   <section class="dashboard-card">
-    <h3 class="card-title">我的产业身份</h3>
-    <p class="card-desc">维护当前账号与产业人物身份的关系。</p>
-    <a class="btn btn-sm btn-outline" href="/me/industry-profile">进入身份中心</a>
+    <h3 class="card-title">快速入口</h3>
+    <div class="quick-links">
+      <a href="/network/people" class="quick-link-item">
+        <span class="quick-link-icon">👥</span>
+        <span class="quick-link-text">人物与机构</span>
+        <span class="quick-link-desc">浏览产业人物和机构档案</span>
+      </a>
+      <a href="/network/graph" class="quick-link-item">
+        <span class="quick-link-icon">🔗</span>
+        <span class="quick-link-text">关系网络</span>
+        <span class="quick-link-desc">查看主体关系图谱和路径</span>
+      </a>
+      {% if can_access_governance %}
+      <a href="/network/governance" class="quick-link-item">
+        <span class="quick-link-icon">🛡️</span>
+        <span class="quick-link-text">主体治理</span>
+        <span class="quick-link-desc">主体消歧、合并和关系审核</span>
+      </a>
+      {% endif %}
+      <a href="/network/recommendations" class="quick-link-item">
+        <span class="quick-link-icon">✨</span>
+        <span class="quick-link-text">人脉推荐</span>
+        <span class="quick-link-desc">发现值得认识的产业人物</span>
+      </a>
+    </div>
   </section>
+
+  {% if rec %}
+  <section class="dashboard-card">
+    <h3 class="card-title">推荐人脉</h3>
+    <div class="recommendation-list">
+      {% for item in rec %}
+      <div class="recommendation-item">
+        <a href="/network/people/{{ item.id }}">{{ item.name }}</a>
+        <span class="recommendation-role">{{ item.public_role or '' }}</span>
+        <span class="recommendation-org">{{ item.organization_network or '' }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <a href="/network/recommendations" class="btn btn-sm">查看更多推荐</a>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

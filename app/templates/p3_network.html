@@ -1,50 +1,354 @@
 {% extends "platform/base.html" %}
 {% block platform_title %}主体治理与产业关系网络{% endblock %}
 {% block platform_content %}
-<nav class="breadcrumb"><a href="/network">产业关系</a><span class="sep">/</span><span>主体治理与关系网络</span></nav>
+{% set ENTITY_TYPE_LABELS = ENTITY_TYPE_LABELS or {'person':'人物','organization':'机构','project':'项目','product':'产品'} %}
+{% set RELATION_TYPE_LABELS = RELATION_TYPE_LABELS or {} %}
+{% set EVIDENCE_STATUS_LABELS = EVIDENCE_STATUS_LABELS or {'evidence_backed':'有证据','manual_unverified':'人工录入，待补证据'} %}
+{% set QUALITY_STATUS_LABELS = QUALITY_STATUS_LABELS or {'accepted':'已接受','duplicate':'重复','low_quality':'低质量'} %}
+
+<nav class="breadcrumb">
+  <a href="/platform">工作台</a><span class="sep">/</span>
+  <a href="/network">产业关系</a><span class="sep">/</span>
+  {% if mode == 'governance' %}<span>主体治理</span>
+  {% elif mode == 'entity' %}<span>{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}详情</span>
+  {% elif mode == 'paths' %}<span>路径查询</span>
+  {% elif mode == 'graph' %}<span>关系图谱</span>
+  {% elif mode == 'connections' %}<span>人脉推荐</span>
+  {% elif mode == 'relationship_queue' %}<span>关系审核</span>
+  {% elif mode == 'relationship' %}<span>关系详情</span>
+  {% elif mode == 'merge' %}<span>合并预览</span>
+  {% elif mode == 'timeline' %}<span>关系时间线</span>
+  {% else %}<span>主体治理与关系网络</span>{% endif %}
+</nav>
+
 <div class="page-header">
-  <div class="page-header-left"><h1 class="page-title">主体治理与产业关系网络</h1><p class="page-desc">候选先审、证据可追溯、关系有时态；路径和连接建议仅供人工研判。</p></div>
+  <div class="page-header-left">
+    <h1 class="page-title">
+      {% if mode == 'governance' %}主体治理
+      {% elif mode == 'entity' %}{{ entity.canonical_label or ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}详情
+      {% elif mode == 'paths' %}关系路径查询
+      {% elif mode == 'graph' %}关系网络
+      {% elif mode == 'connections' %}人脉推荐
+      {% elif mode == 'relationship_queue' %}关系审核
+      {% elif mode == 'relationship' %}关系详情
+      {% elif mode == 'merge' %}合并预览
+      {% elif mode == 'timeline' %}关系时间线
+      {% else %}主体治理与产业关系网络{% endif %}
+    </h1>
+    <p class="page-desc">
+      {% if mode == 'governance' %}主体消歧、证据可追溯、关系有时态；路径和连接建议仅供人工研判。
+      {% elif mode == 'entity' %}查看{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}的详细信息和关系网络。
+      {% elif mode == 'paths' %}查询两个主体之间的关系路径，支持1-3跳深度。
+      {% elif mode == 'graph' %}展开主体的关系网络，查看一跳至三跳连接。
+      {% elif mode == 'connections' %}发现值得认识的产业人物，查看推荐理由和连接路径。
+      {% elif mode == 'relationship_queue' %}审核关系候选，确认或拒绝新发现的关系。
+      {% elif mode == 'relationship' %}查看关系的详细信息和证据链。
+      {% elif mode == 'merge' %}预览合并操作的影响，确认后再执行。
+      {% elif mode == 'timeline' %}按时间顺序查看主体的关系变化。
+      {% else %}候选先审、证据可追溯、关系有时态；路径和连接建议仅供人工研判。{% endif %}
+    </p>
+  </div>
   <div class="page-header-right">
-    <a class="btn btn-outline" href="/network/governance">主体治理</a>
-    <a class="btn btn-outline" href="/network/relationship-candidates">关系审核</a>
-    <a class="btn btn-outline" href="/network/paths">关系路径</a>
-    <a class="btn btn-outline" href="/network/graph">关系图谱</a>
+    {% if mode != 'governance' %}<a class="btn btn-outline" href="/network/governance">主体治理</a>{% endif %}
+    {% if mode != 'relationship_queue' %}<a class="btn btn-outline" href="/network/relationship-candidates">关系审核</a>{% endif %}
+    {% if mode != 'paths' %}<a class="btn btn-outline" href="/network/paths">路径查询</a>{% endif %}
+    {% if mode != 'graph' %}<a class="btn btn-outline" href="/network/graph">关系图谱</a>{% endif %}
+    {% if mode != 'connections' %}<a class="btn btn-outline" href="/network/recommendations">人脉推荐</a>{% endif %}
   </div>
 </div>
 
 {% if mode == 'governance' %}
+<nav class="tabs">
+  <a href="/network/governance" class="{{ 'active' if not status else '' }}">待识别主体</a>
+  <a href="/network/governance?status=pending" class="{{ 'active' if status == 'pending' else '' }}">待审核</a>
+  <a href="/network/relationship-candidates">关系候选</a>
+</nav>
 <section class="dashboard-card">
   <h2>主体消歧候选</h2>
-  {% if candidates %}<div class="table-wrap"><table><thead><tr><th>候选</th><th>原始名称</th><th>可能主体</th><th>强度/分数</th><th>状态</th><th>操作</th></tr></thead><tbody>
-  {% for item in candidates %}<tr><td>{{ item.candidate_no }}{% if item.is_pilot %}<span class="status-badge">试点</span>{% endif %}</td><td>{{ item.raw_name }}</td><td>{{ item.possible_entity_label or '待补证据' }}</td><td>{{ {'strong':'强','medium':'中','weak':'弱'}.get(item.match_strength,item.match_strength) }} / {{ item.score }}</td><td>{{ item.resolution_status }}</td><td>{% if item.resolution_status in ['pending','ambiguous','needs_more_evidence'] %}<form method="post" action="/network/resolution-candidates/{{ item.id }}/review"><input type="hidden" name="decision" value="{{ 'matched' if item.possible_entity_id else 'needs_more_evidence' }}"><button class="btn btn-sm" type="submit">人工确认</button></form>{% else %}已处理{% endif %}</td></tr>{% endfor %}
+  {% if candidates %}<div class="table-wrap"><table><thead><tr><th>候选编号</th><th>原始名称</th><th>可能主体</th><th>匹配强度</th><th>匹配分数</th><th>状态</th><th>操作</th></tr></thead><tbody>
+  {% for item in candidates %}<tr>
+    <td>{{ item.candidate_no }}{% if item.is_pilot %}<span class="status-badge">试点</span>{% endif %}</td>
+    <td>{{ item.raw_name }}</td>
+    <td>{{ item.possible_entity_label or '待补证据' }}</td>
+    <td>{{ {'strong':'强','medium':'中','weak':'弱'}.get(item.match_strength,item.match_strength) }}</td>
+    <td>{{ item.score }}</td>
+    <td>{{ {'pending':'待处理','matched':'已匹配','rejected':'已拒绝','ambiguous':'模糊','needs_more_evidence':'需更多证据'}.get(item.resolution_status,item.resolution_status) }}</td>
+    <td>{% if item.resolution_status in ['pending','ambiguous','needs_more_evidence'] %}
+      <form method="post" action="/network/resolution-candidates/{{ item.id }}/review">
+        <input type="hidden" name="decision" value="{{ 'matched' if item.possible_entity_id else 'needs_more_evidence' }}">
+        <button class="btn btn-sm" type="submit">人工确认</button>
+      </form>{% else %}已处理{% endif %}</td>
+  </tr>{% endfor %}
   </tbody></table></div>{% else %}<div class="empty-state"><h3>暂无消歧候选</h3><p>从采集或解析结果提交名称后，系统只生成候选，不会自动创建或覆盖正式主体。</p></div>{% endif %}
 </section>
-<section class="dashboard-card"><h2>合并预览</h2><form method="post" action="/network/merges/preview" class="form-grid"><label>主体类型<select name="entity_type"><option value="organization">机构</option><option value="person">人物</option><option value="project">项目</option><option value="product">产品资产</option></select></label><label>源主体 ID<input name="source_entity_id" required></label><label>目标主体 ID<input name="target_entity_id" required></label><label>原因<input name="reason" required></label><button class="btn btn-primary" type="submit">生成预览（不执行）</button></form>
-{% if merges %}<ul>{% for item in merges %}<li><a href="/network/merges/{{ item.id }}">{{ item.merge_no }}</a>：{{ item.source_entity_id }} → {{ item.target_entity_id }}（{{ item.merge_status }}）{% if item.is_pilot %} · 试点{% endif %}</li>{% endfor %}</ul>{% endif %}</section>
+<section class="dashboard-card"><h2>合并预览</h2>
+<form method="post" action="/network/merges/preview" class="form-grid">
+  <label>主体类型<select name="entity_type">
+    <option value="organization">机构</option>
+    <option value="person">人物</option>
+    <option value="project">项目</option>
+    <option value="product">产品资产</option>
+  </select></label>
+  <label>源主体 ID<input name="source_entity_id" required placeholder="输入源主体ID"></label>
+  <label>目标主体 ID<input name="target_entity_id" required placeholder="输入目标主体ID"></label>
+  <label>原因<input name="reason" required placeholder="合并原因"></label>
+  <button class="btn btn-primary" type="submit">生成预览（不执行）</button>
+</form>
+{% if merges %}<ul>{% for item in merges %}<li><a href="/network/merges/{{ item.id }}">{{ item.merge_no }}</a>：{{ item.source_entity_id }} → {{ item.target_entity_id }}（{{ {'preview':'预览中','pending_approval':'待审批','merged':'已合并','rolled_back':'已回滚'}.get(item.merge_status,item.merge_status) }}）{% if item.is_pilot %} · 试点{% endif %}</li>{% endfor %}</ul>{% endif %}
+</section>
 
 {% elif mode == 'merge' %}
-<section class="dashboard-card"><h2>合并记录 {{ merge.merge_no }}</h2><p><strong>{{ merge.source_entity_id }}</strong> → <strong>{{ merge.target_entity_id }}</strong></p><p>状态：{{ merge.merge_status }}；原因：{{ merge.merge_reason }}</p><details open><summary>影响预览</summary><pre>{{ merge.preview_json }}</pre></details>
-{% if merge.merge_status == 'preview' %}<form method="post" action="/network/merges/{{ merge.id }}/submit"><button class="btn btn-primary" type="submit">提交人工审批</button></form>{% elif merge.merge_status == 'pending_approval' %}<form method="post" action="/network/merges/{{ merge.id }}/approve"><button class="btn btn-primary" type="submit">批准并执行</button></form>{% elif merge.merge_status == 'merged' %}<form method="post" action="/network/merges/{{ merge.id }}/rollback"><label>回滚原因<input name="reason" required></label><button class="btn btn-outline" type="submit">回滚合并</button></form>{% endif %}</section>
+<section class="dashboard-card">
+  <h2>合并记录 {{ merge.merge_no }}</h2>
+  <p><strong>{{ merge.source_entity_id }}</strong> → <strong>{{ merge.target_entity_id }}</strong></p>
+  <p>状态：{{ {'preview':'预览中','pending_approval':'待审批','merged':'已合并','rolled_back':'已回滚'}.get(merge.merge_status,merge.merge_status) }}；原因：{{ merge.merge_reason }}</p>
+  <details open><summary>影响预览</summary><pre>{{ merge.preview_json }}</pre></details>
+  {% if merge.merge_status == 'preview' %}
+  <form method="post" action="/network/merges/{{ merge.id }}/submit"><button class="btn btn-primary" type="submit">提交人工审批</button></form>
+  {% elif merge.merge_status == 'pending_approval' %}
+  <form method="post" action="/network/merges/{{ merge.id }}/approve"><button class="btn btn-primary" type="submit">批准并执行</button></form>
+  {% elif merge.merge_status == 'merged' %}
+  <form method="post" action="/network/merges/{{ merge.id }}/rollback"><label>回滚原因<input name="reason" required></label><button class="btn btn-outline" type="submit">回滚合并</button></form>
+  {% endif %}
+</section>
 
 {% elif mode == 'entity' %}
-<section class="dashboard-card"><h2>{{ entity.canonical_label }}{% if entity.is_pilot %} <span class="status-badge">试点</span>{% endif %}</h2><p>类型：{{ entity_type }}；ID：{{ entity.resolved_id }}{% if entity.redirected %}；已从 {{ entity.requested_id }} 重定向{% endif %}</p><p>别名：{% for alias in entity.aliases %}{{ alias.alias }}{% if not loop.last %}、{% endif %}{% else %}暂无{% endfor %}</p><p>公开标识：{% for identifier in entity.external_identifiers %}{{ identifier.identifier_type }}={{ identifier.identifier_value }}{% if not loop.last %}；{% endif %}{% else %}暂无{% endfor %}</p></section>
-<section class="dashboard-card"><h2>{{ '全部历史关系' if history else '当前关系' }}</h2><p><a href="?history={{ 'false' if history else 'true' }}">{{ '只看当前' if history else '查看历史' }}</a> · <a href="/network/graph?entity_type={{ entity_type }}&entity_id={{ entity.resolved_id }}">展开关系图</a></p>{% if relationships %}<ul>{% for item in relationships %}<li><a href="/network/relationships/{{ item.id }}">{{ item.relationship_type }}</a>：{{ item.subject_type }} {{ item.subject_id }} → {{ item.object_type }} {{ item.object_id }}；{{ '当前' if item.is_current else '历史' }}；置信度 {{ item.confidence }}</li>{% endfor %}</ul>{% else %}<div class="empty-state"><p>暂无已审核关系。请先在关系审核队列中确认候选。</p></div>{% endif %}</section>
+<section class="dashboard-card">
+  <h2>{{ entity.canonical_label }}{% if entity.is_pilot %} <span class="status-badge">试点</span>{% endif %}</h2>
+  <p>类型：{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}；ID：{{ entity.resolved_id }}{% if entity.redirected %}；已从 {{ entity.requested_id }} 重定向{% endif %}</p>
+  <p>别名：{% for alias in entity.aliases %}{{ alias.alias }}{% if not loop.last %}、{% endif %}{% else %}暂无{% endfor %}</p>
+  <p>公开标识：{% for identifier in entity.external_identifiers %}{{ identifier.identifier_type }}={{ identifier.identifier_value }}{% if not loop.last %}；{% endif %}{% else %}暂无{% endfor %}</p>
+</section>
+<section class="dashboard-card">
+  <h2>{{ '全部历史关系' if history else '当前关系' }}</h2>
+  <p><a href="?history={{ 'false' if history else 'true' }}">{{ '只看当前' if history else '查看历史' }}</a> · <a href="/network/graph?entity_type={{ entity_type }}&entity_id={{ entity.resolved_id }}">展开关系图</a></p>
+  {% if relationships %}
+  <div class="relation-list">
+    {% for item in relationships %}
+    <div class="relation-item">
+      <a href="/network/relationships/{{ item.id }}" class="relation-type">{{ RELATION_TYPE_LABELS.get(item.relationship_type, item.relationship_type) }}</a>
+      <a href="/network/entities/{{ item.subject_type }}/{{ item.subject_id }}">{{ item.subject_type }}: {{ item.subject_id }}</a>
+      <span class="relation-arrow">→</span>
+      <a href="/network/entities/{{ item.object_type }}/{{ item.object_id }}">{{ item.object_type }}: {{ item.object_id }}</a>
+      <span class="relation-status">{{ '当前' if item.is_current else '历史' }}</span>
+      <span class="relation-confidence">置信度 {{ item.confidence }}</span>
+      <span class="relation-evidence">{{ EVIDENCE_STATUS_LABELS.get(item.evidence_status, item.evidence_status) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><p>暂无已审核关系。请先在关系审核队列中确认候选。</p></div>
+  {% endif %}
+</section>
 
 {% elif mode == 'relationship_queue' %}
-<section class="dashboard-card"><h2>关系候选审核队列</h2>{% if candidates %}<div class="table-wrap"><table><thead><tr><th>候选</th><th>关系</th><th>时态</th><th>状态</th><th>证据</th><th>操作</th></tr></thead><tbody>{% for item in candidates %}<tr><td>{{ item.candidate_no }}{% if item.is_pilot %} · 试点{% endif %}</td><td>{{ item.subject_id }} — {{ item.relationship_type }} → {{ item.object_id }}</td><td>{{ item.valid_from or '未知' }} 至 {{ item.valid_to or '当前' }}</td><td>{{ item.status }}</td><td>{{ item.evidence_json }}</td><td>{% if item.status in ['pending','conflict','needs_more_evidence'] %}<form method="post" action="/network/relationship-candidates/{{ item.id }}/review"><button name="decision" value="approved" class="btn btn-sm" type="submit">通过</button><button name="decision" value="needs_more_evidence" class="btn btn-sm btn-outline" type="submit">补证</button><button name="decision" value="rejected" class="btn btn-sm btn-outline" type="submit">拒绝</button></form>{% else %}已处理{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-state"><h3>暂无关系候选</h3><p>解析结果或人工录入先进入候选；没有证据的关系会标记为“人工未核实”。</p></div>{% endif %}</section>
+<section class="dashboard-card">
+  <h2>关系候选审核队列</h2>
+  {% if candidates %}
+  <div class="table-wrap">
+    <table><thead><tr><th>候选编号</th><th>关系</th><th>时态</th><th>状态</th><th>证据</th><th>操作</th></tr></thead><tbody>
+    {% for item in candidates %}<tr>
+      <td>{{ item.candidate_no }}{% if item.is_pilot %} · 试点{% endif %}</td>
+      <td>{{ item.subject_id }} — {{ RELATION_TYPE_LABELS.get(item.relationship_type, item.relationship_type) }} → {{ item.object_id }}</td>
+      <td>{{ item.valid_from or '未知' }} 至 {{ item.valid_to or '当前' }}</td>
+      <td>{{ {'pending':'待处理','approved':'已通过','rejected':'已拒绝','conflict':'冲突','needs_more_evidence':'需更多证据'}.get(item.status,item.status) }}</td>
+      <td>{{ '有证据' if item.evidence_json and item.evidence_json != '[]' else '无证据' }}</td>
+      <td>{% if item.status in ['pending','conflict','needs_more_evidence'] %}
+        <form method="post" action="/network/relationship-candidates/{{ item.id }}/review">
+          <button name="decision" value="approved" class="btn btn-sm" type="submit">通过</button>
+          <button name="decision" value="needs_more_evidence" class="btn btn-sm btn-outline" type="submit">补证</button>
+          <button name="decision" value="rejected" class="btn btn-sm btn-outline" type="submit">拒绝</button>
+        </form>{% else %}已处理{% endif %}</td>
+    </tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}
+  <div class="empty-state"><h3>暂无关系候选</h3><p>解析结果或人工录入先进入候选；没有证据的关系会标记为“人工未核实”。</p></div>
+  {% endif %}
+</section>
 
 {% elif mode == 'relationship' %}
-<section class="dashboard-card"><h2>关系 {{ relationship.relationship_no }}</h2><p>{{ relationship.subject_type }} <a href="/network/entities/{{ relationship.subject_type }}/{{ relationship.subject_id }}">{{ relationship.subject_id }}</a> — <strong>{{ relationship.relationship_type }}</strong> → {{ relationship.object_type }} <a href="/network/entities/{{ relationship.object_type }}/{{ relationship.object_id }}">{{ relationship.object_id }}</a></p><p>状态：{{ relationship.review_status }}；{{ '当前关系' if relationship.is_current else '历史关系' }}；有效期：{{ relationship.valid_from or '未知' }} 至 {{ relationship.valid_to or '当前' }}；证据状态：{{ relationship.evidence_status }}；来源数：{{ relationship.source_count }}</p></section>
-<section class="dashboard-card"><h2>证据链</h2>{% if relationship.evidence %}<ol>{% for evidence in relationship.evidence %}<li>{{ evidence.evidence_text }}{% if evidence.source_url %} · <a href="{{ evidence.source_url }}" rel="noopener">来源</a>{% endif %}{% if evidence.page_number %} · 第 {{ evidence.page_number }} 页{% endif %}</li>{% endfor %}</ol>{% else %}<p class="text-muted">人工未核实：当前没有结构化证据，不可用于高置信连接推荐。</p>{% endif %}</section>
+<section class="dashboard-card">
+  <h2>关系 {{ relationship.relationship_no }}</h2>
+  <p>{{ ENTITY_TYPE_LABELS.get(relationship.subject_type, relationship.subject_type) }} 
+    <a href="/network/entities/{{ relationship.subject_type }}/{{ relationship.subject_id }}">{{ relationship.subject_id }}</a>
+    — <strong>{{ RELATION_TYPE_LABELS.get(relationship.relationship_type, relationship.relationship_type) }}</strong> → 
+    {{ ENTITY_TYPE_LABELS.get(relationship.object_type, relationship.object_type) }} 
+    <a href="/network/entities/{{ relationship.object_type }}/{{ relationship.object_id }}">{{ relationship.object_id }}</a>
+  </p>
+  <p>状态：{{ {'approved':'已审核','archived':'已归档','pending':'待审核'}.get(relationship.review_status,relationship.review_status) }}；
+    {{ '当前关系' if relationship.is_current else '历史关系' }}；
+    有效期：{{ relationship.valid_from or '未知' }} 至 {{ relationship.valid_to or '当前' }}；
+    证据状态：{{ EVIDENCE_STATUS_LABELS.get(relationship.evidence_status, relationship.evidence_status) }}；
+    来源数：{{ relationship.source_count }}</p>
+</section>
+<section class="dashboard-card">
+  <h2>证据链</h2>
+  {% if relationship.evidence %}
+  <ol>{% for evidence in relationship.evidence %}
+    <li>
+      {{ evidence.evidence_text }}
+      {% if evidence.source_url %} · <a href="{{ evidence.source_url }}" rel="noopener">原文链接</a>{% endif %}
+      {% if evidence.source_date %} · {{ evidence.source_date }}{% endif %}
+      {% if evidence.page_number %} · 第 {{ evidence.page_number }} 页{% endif %}
+      {% if evidence.evidence_strength %} · 强度：{{ {'supporting':'支持','weak':'较弱','contradicting':'矛盾'}.get(evidence.evidence_strength,evidence.evidence_strength) }}{% endif %}
+    </li>{% endfor %}
+  </ol>
+  {% else %}
+  <p class="text-muted">人工录入，待补证据：当前没有结构化证据，不可用于高置信连接推荐。</p>
+  {% endif %}
+</section>
 
 {% elif mode == 'paths' %}
-<section class="dashboard-card"><h2>1–3 跳关系路径</h2><form method="get" action="/network/paths" class="form-grid"><label>起点类型<select name="source_type"><option value="person">人物</option><option value="organization">机构</option><option value="project">项目</option><option value="product">产品</option></select></label><label>起点 ID<input name="source_id" value="{{ source_id }}" required></label><label>终点类型<select name="target_type"><option value="organization">机构</option><option value="person">人物</option><option value="project">项目</option><option value="product">产品</option></select></label><label>终点 ID<input name="target_id" value="{{ target_id }}" required></label><label>截至日期<input type="date" name="as_of" value="{{ as_of }}"></label><button class="btn btn-primary" type="submit">查找路径</button></form></section>
-{% if result %}<section class="dashboard-card"><h2>结果（访问节点 {{ result.visited_nodes }}，{{ result.elapsed_ms }}ms）</h2>{% for path in result.paths %}<article><h3>{{ path.hops }} 跳 · 置信度 {{ path.confidence }}</h3><p>{% for node in path.nodes %}{{ node.type }}:{{ node.id }}{% if not loop.last %} → {% endif %}{% endfor %}</p><p>{% for edge in path.edges %}<a href="/network/relationships/{{ edge.id }}">{{ edge.relationship_type }}</a>{% if not loop.last %} / {% endif %}{% endfor %}</p></article>{% else %}<div class="empty-state"><p>限定深度内没有可见且已审核的关系路径。</p></div>{% endfor %}</section>{% endif %}
+<section class="dashboard-card">
+  <h2>1–3 跳关系路径</h2>
+  <form method="get" action="/network/paths" class="form-grid">
+    <label>起点类型<select name="source_type">
+      <option value="person" {% if source_type == 'person' %}selected{% endif %}>人物</option>
+      <option value="organization" {% if source_type == 'organization' %}selected{% endif %}>机构</option>
+      <option value="project" {% if source_type == 'project' %}selected{% endif %}>项目</option>
+      <option value="product" {% if source_type == 'product' %}selected{% endif %}>产品</option>
+    </select></label>
+    <label>起点 ID<input name="source_id" value="{{ source_id }}" required placeholder="输入起点ID"></label>
+    <label>终点类型<select name="target_type">
+      <option value="organization" {% if target_type == 'organization' %}selected{% endif %}>机构</option>
+      <option value="person" {% if target_type == 'person' %}selected{% endif %}>人物</option>
+      <option value="project" {% if target_type == 'project' %}selected{% endif %}>项目</option>
+      <option value="product" {% if target_type == 'product' %}selected{% endif %}>产品</option>
+    </select></label>
+    <label>终点 ID<input name="target_id" value="{{ target_id }}" required placeholder="输入终点ID"></label>
+    <label>最大跳数<select name="max_depth">
+      <option value="1" {% if max_depth == 1 %}selected{% endif %}>1跳</option>
+      <option value="2" {% if max_depth == 2 %}selected{% endif %}>2跳</option>
+      <option value="3" {% if max_depth == 3 %}selected{% endif %}>3跳</option>
+    </select></label>
+    <label>包含历史关系<input type="checkbox" name="include_history" {% if include_history %}checked{% endif %}></label>
+    <button class="btn btn-primary" type="submit">查找路径</button>
+  </form>
+</section>
+{% if result %}
+<section class="dashboard-card">
+  <h2>结果（访问节点 {{ result.visited_nodes }}，{{ result.elapsed_ms }}ms）</h2>
+  {% for path in result.paths %}
+  <article class="path-card">
+    <div class="path-header">
+      <span class="path-hops">{{ path.hops }} 跳</span>
+      <span class="path-confidence">置信度 {{ path.confidence }}</span>
+    </div>
+    <div class="path-nodes">
+      {% for node in path.nodes %}
+      <span class="node-item">{{ ENTITY_TYPE_LABELS.get(node.type, node.type) }}: {{ node.id }}</span>
+      {% if not loop.last %}<span class="node-arrow">→</span>{% endif %}
+      {% endfor %}
+    </div>
+    <div class="path-edges">
+      {% for edge in path.edges %}
+      <a href="/network/relationships/{{ edge.id }}" class="edge-item">{{ RELATION_TYPE_LABELS.get(edge.relationship_type, edge.relationship_type) }}</a>
+      {% if not loop.last %}<span class="edge-sep">/</span>{% endif %}
+      {% endfor %}
+    </div>
+    <div class="path-meta">证据数量: {{ path.evidence_count or 0 }}</div>
+  </article>
+  {% else %}
+  <div class="empty-state"><p>当前数据中未发现可靠连接路径。</p><p>建议：包含历史关系、提高跳数或检查主体别名。</p></div>
+  {% endfor %}
+</section>
+{% elif source_id and target_id %}
+<div class="empty-state"><p>当前数据中未发现可靠连接路径。</p><p>建议：包含历史关系、提高跳数或检查主体别名。</p></div>
+{% endif %}
 
 {% elif mode == 'graph' %}
-<section class="dashboard-card"><h2>受限关系图</h2><form method="get" action="/network/graph"><select name="entity_type"><option value="organization">机构</option><option value="person">人物</option><option value="project">项目</option><option value="product">产品</option></select><input name="entity_id" value="{{ entity_id }}" placeholder="主体 ID" required><select name="depth"><option>1</option><option selected>2</option><option>3</option></select><button class="btn btn-primary" type="submit">展开</button></form>{% if result %}<p>节点 {{ result.nodes|length }}，关系 {{ result.edges|length }}{% if result.truncated %}（已按上限截断）{% endif %}</p><ul>{% for edge in result.edges %}<li><a href="/network/relationships/{{ edge.id }}">{{ edge.subject_id }} — {{ edge.relationship_type }} → {{ edge.object_id }}</a></li>{% endfor %}</ul>{% endif %}</section>
+<section class="dashboard-card">
+  <h2>关系网络</h2>
+  <form method="get" action="/network/graph">
+    <select name="entity_type">
+      <option value="organization" {% if entity_type == 'organization' %}selected{% endif %}>机构</option>
+      <option value="person" {% if entity_type == 'person' %}selected{% endif %}>人物</option>
+      <option value="project" {% if entity_type == 'project' %}selected{% endif %}>项目</option>
+      <option value="product" {% if entity_type == 'product' %}selected{% endif %}>产品</option>
+    </select>
+    <input name="entity_id" value="{{ entity_id }}" placeholder="主体 ID" required>
+    <select name="depth">
+      <option value="1" {% if depth == 1 %}selected{% endif %}>1跳</option>
+      <option value="2" {% if depth == 2 %}selected{% endif %}>2跳</option>
+      <option value="3" {% if depth == 3 %}selected{% endif %}>3跳</option>
+    </select>
+    <button class="btn btn-primary" type="submit">展开</button>
+  </form>
+  {% if result %}
+  <p>节点 {{ result.nodes|length }} 个，关系 {{ result.edges|length }} 条{% if result.truncated %}（已按上限截断）{% endif %}</p>
+  <div class="relation-list">
+    {% for edge in result.edges %}
+    <div class="relation-item">
+      <a href="/network/relationships/{{ edge.id }}" class="relation-type">{{ RELATION_TYPE_LABELS.get(edge.relationship_type, edge.relationship_type) }}</a>
+      <a href="/network/entities/{{ edge.subject_type }}/{{ edge.subject_id }}">{{ edge.subject_id }}</a>
+      <span class="relation-arrow">→</span>
+      <a href="/network/entities/{{ edge.object_type }}/{{ edge.object_id }}">{{ edge.object_id }}</a>
+      <span class="relation-status">{{ '当前' if edge.is_current else '历史' }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
 
 {% elif mode == 'connections' %}
-<section class="dashboard-card"><h2>连接候选</h2><p>以下结果只供人工研判，不会自动联系、发消息或创建机会。</p>{% for item in recommendations %}<article><h3>{{ item.recommended_person_id }} · 置信度 {{ item.confidence }}</h3><p>{{ item.reason }}</p><p class="text-muted">{{ item.risk_note }}</p></article>{% else %}<div class="empty-state"><p>暂无具有证据链的二至三跳连接候选。</p></div>{% endfor %}</section>
+<section class="dashboard-card">
+  <h2>人脉推荐</h2>
+  <p>以下结果只供人工研判，不会自动联系、发消息或创建机会。</p>
+  {% if recommendations %}
+  {% for item in recommendations %}
+  <article class="recommendation-card">
+    <h3>{{ item.recommended_person_id }} · 置信度 {{ item.confidence }}</h3>
+    <div class="recommendation-reason">推荐理由：{{ item.reason }}</div>
+    <div class="recommendation-meta">
+      <span>关系距离：{{ item.path.hops }} 跳</span>
+      <span>路径：{% for edge in item.path.edges %}{{ RELATION_TYPE_LABELS.get(edge.relationship_type, edge.relationship_type) }}{% if not loop.last %} → {% endif %}{% endfor %}</span>
+    </div>
+    <div class="recommendation-actions">
+      <a href="/network/entities/person/{{ item.recommended_person_id }}" class="btn btn-sm">查看人物</a>
+      <a href="/network/paths?source_type=person&source_id={{ source_person_id }}&target_type=person&target_id={{ item.recommended_person_id }}" class="btn btn-sm btn-outline">查看路径</a>
+    </div>
+    <p class="text-muted">{{ item.risk_note }}</p>
+  </article>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state">
+    <p>暂无具有证据链的二至三跳连接候选。</p>
+    <p>请完善您的产业身份信息，系统将基于您的关系网络推荐值得认识的人物。</p>
+  </div>
+  {% endif %}
+</section>
+
+{% elif mode == 'timeline' %}
+<section class="dashboard-card">
+  <h2>关系时间线</h2>
+  <form method="get" action="/network/timeline">
+    <select name="entity_type">
+      <option value="organization" {% if entity_type == 'organization' %}selected{% endif %}>机构</option>
+      <option value="person" {% if entity_type == 'person' %}selected{% endif %}>人物</option>
+      <option value="project" {% if entity_type == 'project' %}selected{% endif %}>项目</option>
+      <option value="product" {% if entity_type == 'product' %}selected{% endif %}>产品</option>
+    </select>
+    <input name="entity_id" value="{{ entity_id }}" placeholder="主体 ID" required>
+    <button class="btn btn-primary" type="submit">查看时间线</button>
+  </form>
+  {% if relationships %}
+  <div class="timeline">
+    {% for rel in relationships %}
+    <div class="timeline-item">
+      <span class="timeline-date">{{ rel.valid_from or '未知' }}</span>
+      <div class="timeline-content">
+        <span class="timeline-relation">{{ RELATION_TYPE_LABELS.get(rel.relationship_type, rel.relationship_type) }}</span>
+        <span>{{ rel.subject_id }} → {{ rel.object_id }}</span>
+        <span class="timeline-status">{{ '当前' if rel.is_current else '历史' }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif entity_id %}
+  <div class="empty-state"><p>暂无关系时间线数据。</p></div>
+  {% endif %}
+</section>
+
 {% endif %}
 {% endblock %}

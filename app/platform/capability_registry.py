@@ -47,12 +47,9 @@ CAPABILITIES: tuple[Capability, ...] = (
 
     cap("network", "产业关系", "关系", "人物、机构、身份和产业关系", "network", None, "/network", "/api/v1/network", "network", order=20),
     cap("network.people", "人物与机构", "人物", "产业人物和机构发现", "network", "network", "/network/people", "/api/v1/network/people", "users", order=21, legacy=("/people",)),
-    cap("network.organizations", "机构发现", "机构", "公开机构发现", "network", "network", "/network/organizations", "/api/v1/organizations", "building", "organization.view_self", order=22, legacy=("/organizations",)),
-    cap("network.graph", "关系网络", "图谱", "主体关系图谱", "network", "network", "/network?tab=graph", "/api/v1/relationships", "share-2", order=23),
-    cap("network.admin", "主体治理", "治理", "人物和机构主数据管理", "network", "network", "/admin/people", "/api/v1/subjects/people", "users-round", "edit_data", clients=("web", "admin"), order=24),
-    cap("network.recommendations", "人脉推荐", "推荐", "推荐人脉和连接理由", "network", "network", "/network?tab=recommendations", "/api/v1/network/recommendations/people", "sparkles", "use_recommendations", order=25),
-    cap("network.contact_intents", "联系意向", "联系", "联系请求和处理", "network", "network", "/network?tab=intents", "/api/v1/network/contact-intents", "send", order=26),
-    cap("network.identity", "我的产业身份", "身份", "当前用户产业身份", "network", "network", "/me/industry-profile", "/api/v1/me/person-link", "badge-check", "identity.view_self", "person", order=27),
+    cap("network.graph", "关系网络", "图谱", "主体关系图谱、路径查询和时间线", "network", "network", "/network/graph", "/api/v1/relationships", "share-2", order=22),
+    cap("network.governance", "主体治理", "治理", "主体消歧、重复合并和关系审核", "network", "network", "/network/governance", "/api/v1/subjects/people", "users-round", "edit_data", clients=("web", "admin"), order=23),
+    cap("network.recommendations", "人脉推荐", "推荐", "推荐人脉和连接理由", "network", "network", "/network/recommendations", "/api/v1/network/recommendations/people", "sparkles", "use_recommendations", order=24),
 
     cap("intelligence", "情报中心", "情报", "情报动态、订阅、研究和运营", "intelligence", None, "/intelligence", "/api/v1/intelligence", "newspaper", order=30),
     cap("intelligence.feed", "情报首页", "首页", "已发布情报流和订阅", "intelligence", "intelligence", "/intelligence", "/api/v1/intelligence", "rss", order=31),

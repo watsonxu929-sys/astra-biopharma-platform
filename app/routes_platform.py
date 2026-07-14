@@ -272,9 +272,38 @@ async def update_industry_profile(request: Request, db: Session = Depends(get_db
 def network_home(request: Request, db: Session = Depends(get_db)):
     user_id = get_current_user_id(request)
     rec = recommend_people(db, user_id, limit=8) if user_id is not None else []
-    my_contacts = list_contact_intents(db, user_id, "sent") if user_id is not None else []
-    my_follows = list(db.scalars(select(Follow).where(Follow.user_id == user_id)).all()) if user_id is not None else []
-    return render(request, "platform/network.html", rec=rec, my_contacts=my_contacts, my_follows=my_follows, user_id=user_id)
+    
+    people_count = int(db.scalar(select(func.count()).select_from(Person).where(Person.is_active == True)) or 0)
+    org_count = int(db.scalar(select(func.count()).select_from(Organization).where(Organization.is_active == True)) or 0)
+    
+    stats = {
+        "people_count": people_count,
+        "org_count": org_count,
+        "project_count": 0,
+        "relation_count": 0,
+        "history_relation_count": 0,
+        "pending_review_count": 0,
+        "unidentified_count": 0,
+        "duplicate_count": 0,
+    }
+    
+    try:
+        from app.v04c_review import db_connection, default_db_path
+        from app.settings import resolved_db_path
+        db_path = resolved_db_path()
+        with db_connection(db_path) as conn:
+            stats["relation_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_canonical_relationships WHERE review_status='approved' AND is_current=1").fetchone()[0] or 0)
+            stats["history_relation_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_canonical_relationships WHERE review_status='approved' AND is_current=0").fetchone()[0] or 0)
+            stats["pending_review_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_relationship_candidates WHERE status='pending'").fetchone()[0] or 0)
+            stats["unidentified_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_entity_resolution_candidates WHERE resolution_status='pending'").fetchone()[0] or 0)
+            stats["duplicate_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_entity_merge_records WHERE merge_status='preview'").fetchone()[0] or 0)
+    except Exception:
+        pass
+    
+    can_access_governance = _can_manage_people_orgs(request)
+    
+    return render(request, "platform/network.html", 
+        rec=rec, stats=stats, can_access_governance=can_access_governance, user_id=user_id)
 
 
 @router.get("/network/people", response_class=HTMLResponse)
@@ -304,16 +333,45 @@ def network_people(
 
 
 @router.get("/network/people/{person_id}", response_class=HTMLResponse)
-def person_card(request: Request, person_id: int, db: Session = Depends(get_db)):
+def person_card(request: Request, person_id: int, history: bool = False, db: Session = Depends(get_db)):
     person = db.get(Person, person_id)
     if not person:
-        raise HTTPException(404, "request failed")
+        raise HTTPException(404, "person not found")
     person_data = get_person_full_profile(db, person_id)
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "person", person_id) if user_id is not None else False
     following = is_following(db, user_id, "person", person_id) if user_id is not None else False
+    
+    person_relationships = []
+    evidence_list = []
+    RELATION_TYPE_LABELS = {
+        "employment": "雇佣关系", "board_membership": "董事/监事",
+        "investment": "投资关系", "cooperation": "合作关系",
+        "licensing": "授权许可", "partnership": "战略伙伴",
+        "supply": "供应关系", "distribution": "分销关系",
+        "clinical_trial": "临床试验", "research_collaboration": "研究合作",
+        "acquisition": "收购并购", "equity": "股权关系",
+    }
+    
+    try:
+        from app.services.canonical_relationship_service import CanonicalRelationshipService
+        external_id = person.external_id
+        if external_id:
+            include_private = _can_manage_people_orgs(request)
+            person_relationships = CanonicalRelationshipService().entity_relationships(
+                "person", external_id, history=history, include_private=include_private
+            )
+            for rel in person_relationships:
+                rel_evidence = CanonicalRelationshipService().detail(rel["id"], include_private=include_private)
+                if rel_evidence and rel_evidence.get("evidence"):
+                    evidence_list.extend(rel_evidence["evidence"])
+    except Exception:
+        pass
+    
     return render(request, "platform/person_card.html",
-        person=person, person_data=person_data, is_favorited=fav, is_following=following, user_id=user_id)
+        person=person, person_data=person_data, is_favorited=fav, is_following=following,
+        user_id=user_id, person_relationships=person_relationships,
+        evidence_list=evidence_list, RELATION_TYPE_LABELS=RELATION_TYPE_LABELS)
 
 
 @router.get("/network/organizations", response_class=HTMLResponse)

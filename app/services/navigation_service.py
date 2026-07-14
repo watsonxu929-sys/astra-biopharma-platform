@@ -14,7 +14,7 @@ INTELLIGENCE_WORK_ENTRY_KEYS = {
 NETWORK_WORK_ENTRY_KEYS = {
     "network.people",
     "network.graph",
-    "network.admin",
+    "network.governance",
     "network.recommendations",
 }
 RESOURCES_WORK_ENTRY_KEYS = {

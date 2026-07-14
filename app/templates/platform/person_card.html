@@ -1,78 +1,120 @@
 {% extends "platform/base.html" %}
 {% set active_nav = "network" %}
 {% set active_subnav = "network.people" %}
-{% block platform_title %}{{ person.name }} - ????{% endblock %}
+{% block platform_title %}{{ person.name }} - 人物详情{% endblock %}
 {% block platform_content %}
-<div class="platform-content" style="max-width:800px;margin:0 auto;padding:24px 32px;">
-  <h1 class="page-title">{{ person.name }}</h1>
-  <p class="text-muted">{{ person.public_role or '' }} | {{ person.organization_network or '' }}</p>
-
-  <div class="platform-card">
-    <h3>产业画像</h3>
-    <div class="person-tags">
-      {% for t in person_data.tags %}
-      <span class="tag {% if t.tag_group == 'capability' %}tag-green{% elif t.tag_group == 'need' %}tag-orange{% elif t.tag_group == 'industry_direction' %}tag-blue{% else %}tag-purple{% endif %}">{{ t.label }}</span>
-      {% endfor %}
+<div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1 class="page-title">{{ person.name }}</h1>
+      <p class="text-muted">{{ person.public_role or '' }} | {{ person.organization_network or '' }}</p>
     </div>
-    {% if not person_data.tags %}<p class="text-muted text-sm">暂无标签</p>{% endif %}
-  </div>
-
-  {% if person_data.profile %}
-  <div class="platform-card">
-    <h3>个人简介</h3>
-    <p>{{ person_data.profile.bio or '暂无简介' }}</p>
-    {% if person_data.profile.cooperation_preferences %}<p class="text-sm">合作偏好：{{ person_data.profile.cooperation_preferences }}</p>{% endif %}
-    {% if person_data.profile.province %}<p class="text-sm">所在地区：{{ person_data.profile.province }}</p>{% endif %}
-  </div>
-  {% endif %}
-
-  {% if person_data.needs %}
-  <div class="platform-card">
-    <h3>当前需求</h3>
-    <div class="person-tags">{% for n in person_data.needs %}<span class="tag tag-orange">{{ n.label }}</span>{% endfor %}</div>
-  </div>
-  {% endif %}
-
-  {% if person_data.capabilities %}
-  <div class="platform-card">
-    <h3>核心能力</h3>
-    <div class="person-tags">{% for c in person_data.capabilities %}<span class="tag tag-green">{{ c.label }}</span>{% endfor %}</div>
-  </div>
-  {% endif %}
-
-  {% if authenticated %}
-  <div class="platform-card">
-    <div class="flex-between">
-      <div>
-        <span class="text-sm">关注与收藏：</span>
-        <form method="post" action="/api/v1/follows/toggle" style="display:inline">
-          <input type="hidden" name="target_type" value="person"><input type="hidden" name="target_id" value="{{ person.id }}">
-          <button type="submit" class="btn btn-sm">{{ '取消关注' if is_following else '关注' }}</button>
-        </form>
-        <form method="post" action="/api/v1/favorites/toggle" style="display:inline">
-          <input type="hidden" name="target_type" value="person"><input type="hidden" name="target_id" value="{{ person.id }}">
-          <button type="submit" class="btn btn-sm">{{ '取消收藏' if is_favorited else '收藏' }}</button>
-        </form>
-      </div>
-      <div>
-        <form method="post" action="/network/contact-intent/create" style="display:inline">
-          <input type="hidden" name="target_type" value="person"><input type="hidden" name="target_id" value="{{ person.id }}">
-          <select name="intent_type" style="padding:4px 8px;font-size:12px;"><option value="connection">建立联系</option><option value="cooperation">合作意向</option><option value="investment">投资意向</option><option value="consulting">咨询</option></select>
-          <input name="message" placeholder="简短说明" style="padding:4px 8px;font-size:12px;width:120px;">
-          <button type="submit" class="btn btn-primary btn-sm">发出联系意向</button>
-        </form>
-      </div>
+    <div class="page-header-right">
+      <a href="/network/people" class="btn btn-outline">返回列表</a>
     </div>
   </div>
 
-  {% if person_data.profile and person_data.profile.contact_visibility != 'private' %}
-  <div class="platform-card">
-    <h3>联系方式</h3>
-    {% if person_data.profile.contact_email %}<p class="text-sm">邮箱：{{ person_data.profile.contact_email }}</p>{% endif %}
-    {% if person_data.profile.contact_phone %}<p class="text-sm">电话：{{ person_data.profile.contact_phone }}</p>{% endif %}
-    <p class="text-sm text-muted">可见级别：{{ person_data.profile.contact_visibility }}</p>
+  <div class="dashboard-grid">
+    <div class="dashboard-card">
+      <h3>基本资料</h3>
+      <div class="person-tags">
+        {% for t in person_data.tags %}
+        <span class="tag {% if t.tag_group == 'capability' %}tag-green{% elif t.tag_group == 'need' %}tag-orange{% elif t.tag_group == 'industry_direction' %}tag-blue{% else %}tag-purple{% endif %}">{{ t.label }}</span>
+        {% endfor %}
+      </div>
+      {% if not person_data.tags %}<p class="text-muted text-sm">暂无标签</p>{% endif %}
+    </div>
+
+    {% if person_data.profile %}
+    <div class="dashboard-card">
+      <h3>个人简介</h3>
+      <p>{{ person_data.profile.bio or '暂无简介' }}</p>
+      {% if person_data.profile.cooperation_preferences %}<p class="text-sm">合作偏好：{{ person_data.profile.cooperation_preferences }}</p>{% endif %}
+      {% if person_data.profile.province %}<p class="text-sm">所在地区：{{ person_data.profile.province }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    {% if person_data.needs %}
+    <div class="dashboard-card">
+      <h3>当前需求</h3>
+      <div class="person-tags">{% for n in person_data.needs %}<span class="tag tag-orange">{{ n.label }}</span>{% endfor %}</div>
+    </div>
+    {% endif %}
+
+    {% if person_data.capabilities %}
+    <div class="dashboard-card">
+      <h3>核心能力</h3>
+      <div class="person-tags">{% for c in person_data.capabilities %}<span class="tag tag-green">{{ c.label }}</span>{% endfor %}</div>
+    </div>
+    {% endif %}
+
+    {% if person_relationships %}
+    <div class="dashboard-card">
+      <h3>当前关系</h3>
+      <p><a href="?history=true">查看历史关系</a></p>
+      <div class="relation-list">
+        {% for rel in person_relationships %}
+        <div class="relation-item">
+          <span class="relation-type">{{ RELATION_TYPE_LABELS.get(rel.relationship_type, rel.relationship_type) }}</span>
+          <a href="/network/entities/{{ rel.object_type }}/{{ rel.object_id }}">{{ rel.object_id }}</a>
+          <span class="relation-status">{{ '当前' if rel.is_current else '历史' }}</span>
+          <a href="/network/relationships/{{ rel.id }}" class="btn btn-sm">查看证据</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if evidence_list %}
+    <div class="dashboard-card">
+      <h3>关系证据</h3>
+      <div class="evidence-list">
+        {% for ev in evidence_list %}
+        <div class="evidence-item">
+          <p>{{ ev.evidence_text }}</p>
+          {% if ev.source_url %}<a href="{{ ev.source_url }}" rel="noopener" class="text-sm">原文链接</a>{% endif %}
+          {% if ev.source_date %}<span class="text-sm">{{ ev.source_date }}</span>{% endif %}
+          <span class="text-sm">强度：{{ ev.evidence_strength or '支持' }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if authenticated %}
+    <div class="dashboard-card">
+      <div class="flex-between">
+        <div>
+          <span class="text-sm">关注与收藏：</span>
+          <form method="post" action="/api/v1/follows/toggle" style="display:inline">
+            <input type="hidden" name="target_type" value="person"><input type="hidden" name="target_id" value="{{ person.id }}">
+            <button type="submit" class="btn btn-sm">{{ '取消关注' if is_following else '关注' }}</button>
+          </form>
+          <form method="post" action="/api/v1/favorites/toggle" style="display:inline">
+            <input type="hidden" name="target_type" value="person"><input type="hidden" name="target_id" value="{{ person.id }}">
+            <button type="submit" class="btn btn-sm">{{ '取消收藏' if is_favorited else '收藏' }}</button>
+          </form>
+        </div>
+        <div>
+          <form method="post" action="/network/contact-intent/create" style="display:inline">
+            <input type="hidden" name="target_type" value="person"><input type="hidden" name="target_id" value="{{ person.id }}">
+            <select name="intent_type" style="padding:4px 8px;font-size:12px;"><option value="connection">建立联系</option><option value="cooperation">合作意向</option><option value="investment">投资意向</option><option value="consulting">咨询</option></select>
+            <input name="message" placeholder="简短说明" style="padding:4px 8px;font-size:12px;width:120px;">
+            <button type="submit" class="btn btn-primary btn-sm">发出联系意向</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {% if person_data.profile and person_data.profile.contact_visibility != 'private' %}
+    <div class="dashboard-card">
+      <h3>联系方式</h3>
+      {% if person_data.profile.contact_email %}<p class="text-sm">邮箱：{{ person_data.profile.contact_email }}</p>{% endif %}
+      {% if person_data.profile.contact_phone %}<p class="text-sm">电话：{{ person_data.profile.contact_phone }}</p>{% endif %}
+      <p class="text-sm text-muted">可见级别：{{ person_data.profile.contact_visibility }}</p>
+    </div>
+    {% endif %}
+    {% endif %}
   </div>
-  {% endif %}
-  {% endif %}
 </div>
 {% endblock %}

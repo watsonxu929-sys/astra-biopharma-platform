@@ -23,17 +23,62 @@ from app.services.entity_governance_service import (
     list_resolution_candidates,
 )
 
-
 router = APIRouter(tags=["P3 entity relationship network"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 
+ENTITY_TYPE_LABELS = {
+    "person": "人物",
+    "organization": "机构",
+    "project": "项目",
+    "product": "产品",
+}
+
+RELATION_TYPE_LABELS = {
+    "employment": "雇佣关系",
+    "board_membership": "董事/监事",
+    "investment": "投资关系",
+    "cooperation": "合作关系",
+    "licensing": "授权许可",
+    "partnership": "战略伙伴",
+    "supply": "供应关系",
+    "distribution": "分销关系",
+    "clinical_trial": "临床试验",
+    "research_collaboration": "研究合作",
+    "acquisition": "收购并购",
+    "equity": "股权关系",
+}
+
+EVIDENCE_STATUS_LABELS = {
+    "evidence_backed": "有证据",
+    "manual_unverified": "人工录入，待补证据",
+}
+
+QUALITY_STATUS_LABELS = {
+    "accepted": "已接受",
+    "duplicate": "重复内容",
+    "low_quality": "低质量",
+    "access_denied": "访问受限",
+}
+
 
 def _render(request: Request, mode: str, **context):
+    context.setdefault("ENTITY_TYPE_LABELS", ENTITY_TYPE_LABELS)
+    context.setdefault("RELATION_TYPE_LABELS", RELATION_TYPE_LABELS)
+    context.setdefault("EVIDENCE_STATUS_LABELS", EVIDENCE_STATUS_LABELS)
+    context.setdefault("QUALITY_STATUS_LABELS", QUALITY_STATUS_LABELS)
     return templates.TemplateResponse(request, "p3_network.html", {"mode": mode, **context})
+
+
+def _can_access_governance(request: Request) -> bool:
+    sec = request.scope.get("security_context", {})
+    permissions = set(sec.get("permissions") or [])
+    return bool(sec.get("can_manage_users") or "review_data" in permissions or "edit_data" in permissions or "manage_users" in permissions)
 
 
 @router.get("/network/governance", response_class=HTMLResponse)
 def governance_page(request: Request, status: str = ""):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="主体治理权限不足")
     try:
         candidates = list_resolution_candidates(status=status)
         merges = list_merge_records()
@@ -46,8 +91,9 @@ def governance_page(request: Request, status: str = ""):
 def entity_page(request: Request, entity_type: str, entity_id: str, history: bool = False):
     entity = EntityRegistryService().get(entity_type, entity_id)
     if not entity:
-        raise HTTPException(status_code=404, detail="entity not found")
-    relationships = CanonicalRelationshipService().entity_relationships(entity_type, entity["resolved_id"], history=history)
+        raise HTTPException(status_code=404, detail="主体不存在")
+    include_private = _can_access_governance(request)
+    relationships = CanonicalRelationshipService().entity_relationships(entity_type, entity["resolved_id"], history=history, include_private=include_private)
     return _render(request, "entity", entity_type=entity_type, entity=entity, relationships=relationships, history=history)
 
 
@@ -58,6 +104,8 @@ def product_page(request: Request, product_id: str):
 
 @router.post("/network/resolution-candidates/{candidate_id}/review")
 def resolution_review(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form("")):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="审核权限不足")
     EntityResolutionService().review(candidate_id, decision, actor=current_username(request), permissions={"review_data"}, note=note)
     return RedirectResponse("/network/governance", status_code=303)
 
@@ -67,38 +115,50 @@ def merge_preview(
     request: Request, entity_type: str = Form(...), source_entity_id: str = Form(...),
     target_entity_id: str = Form(...), reason: str = Form(...),
 ):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="合并权限不足")
     record = EntityMergeService().preview(entity_type, source_entity_id, target_entity_id, reason=reason, actor=current_username(request))
     return RedirectResponse(f"/network/merges/{record['id']}", status_code=303)
 
 
 @router.get("/network/merges/{merge_id}", response_class=HTMLResponse)
 def merge_detail(request: Request, merge_id: int):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="合并预览权限不足")
     records = [row for row in list_merge_records() if int(row["id"]) == merge_id]
     if not records:
-        raise HTTPException(status_code=404, detail="merge record not found")
+        raise HTTPException(status_code=404, detail="合并记录不存在")
     return _render(request, "merge", merge=records[0])
 
 
 @router.post("/network/merges/{merge_id}/submit")
 def merge_submit(request: Request, merge_id: int):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="提交合并权限不足")
     EntityMergeService().submit(merge_id, actor=current_username(request), permissions={"edit_data"})
     return RedirectResponse(f"/network/merges/{merge_id}", status_code=303)
 
 
 @router.post("/network/merges/{merge_id}/approve")
 def merge_approve(request: Request, merge_id: int):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="批准合并权限不足")
     EntityMergeService().execute(merge_id, actor=current_username(request), permissions={"review_data"})
     return RedirectResponse(f"/network/merges/{merge_id}", status_code=303)
 
 
 @router.post("/network/merges/{merge_id}/rollback")
 def merge_rollback(request: Request, merge_id: int, reason: str = Form(...)):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="回滚权限不足")
     EntityMergeService().rollback(merge_id, actor=current_username(request), permissions={"review_data"}, reason=reason)
     return RedirectResponse(f"/network/merges/{merge_id}", status_code=303)
 
 
 @router.get("/network/relationship-candidates", response_class=HTMLResponse)
 def relationship_queue(request: Request, status: str = ""):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="关系审核权限不足")
     try:
         candidates, types = list_relationship_candidates(status=status), list_relationship_types()
     except sqlite3.OperationalError:
@@ -108,15 +168,18 @@ def relationship_queue(request: Request, status: str = ""):
 
 @router.post("/network/relationship-candidates/{candidate_id}/review")
 def relationship_review(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form("")):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="审核权限不足")
     CanonicalRelationshipService().review_candidate(candidate_id, decision, actor=current_username(request), permissions={"review_data"}, note=note)
     return RedirectResponse("/network/relationship-candidates", status_code=303)
 
 
 @router.get("/network/relationships/{relationship_id}", response_class=HTMLResponse)
 def relationship_detail(request: Request, relationship_id: int):
-    relationship = CanonicalRelationshipService().detail(relationship_id)
+    include_private = _can_access_governance(request)
+    relationship = CanonicalRelationshipService().detail(relationship_id, include_private=include_private)
     if not relationship:
-        raise HTTPException(status_code=404, detail="relationship not found")
+        raise HTTPException(status_code=404, detail="关系不存在")
     return _render(request, "relationship", relationship=relationship)
 
 
@@ -124,11 +187,17 @@ def relationship_detail(request: Request, relationship_id: int):
 def path_page(
     request: Request, source_type: str = "person", source_id: str = "",
     target_type: str = "organization", target_id: str = "", as_of: str = "",
+    max_depth: int = Query(3, ge=1, le=3), include_history: bool = False,
 ):
     result = None
     if source_id and target_id:
-        result = RelationshipNetworkService().find_paths(source_type, source_id, target_type, target_id, as_of=as_of or None)
-    return _render(request, "paths", result=result, source_type=source_type, source_id=source_id, target_type=target_type, target_id=target_id, as_of=as_of)
+        result = RelationshipNetworkService().find_paths(
+            source_type, source_id, target_type, target_id,
+            max_depth=max_depth, as_of=as_of or None, include_history=include_history,
+        )
+    return _render(request, "paths", result=result, source_type=source_type, source_id=source_id,
+                   target_type=target_type, target_id=target_id, as_of=as_of,
+                   max_depth=max_depth, include_history=include_history)
 
 
 @router.get("/network/graph", response_class=HTMLResponse)
@@ -137,7 +206,32 @@ def graph_page(request: Request, entity_type: str = "organization", entity_id: s
     return _render(request, "graph", result=result, entity_type=entity_type, entity_id=entity_id, depth=depth)
 
 
+@router.get("/network/recommendations", response_class=HTMLResponse)
+def recommendations_page(request: Request, source_person_id: str = ""):
+    if not source_person_id:
+        sec = request.scope.get("security_context", {})
+        user_info = sec.get("user", {})
+        source_person_id = user_info.get("person_id", "")
+    
+    recommendations = []
+    if source_person_id:
+        recommendations = ConnectionRecommendationService().recommend(source_person_id)
+    
+    return _render(request, "connections", source_person_id=source_person_id, recommendations=recommendations)
+
+
 @router.get("/network/connection-candidates/{source_person_id}", response_class=HTMLResponse)
 def connection_page(request: Request, source_person_id: str):
     recommendations = ConnectionRecommendationService().recommend(source_person_id)
     return _render(request, "connections", source_person_id=source_person_id, recommendations=recommendations)
+
+
+@router.get("/network/timeline", response_class=HTMLResponse)
+def timeline_page(request: Request, entity_type: str = "organization", entity_id: str = ""):
+    relationships = []
+    if entity_id:
+        include_private = _can_access_governance(request)
+        relationships = CanonicalRelationshipService().entity_relationships(
+            entity_type, entity_id, history=True, include_private=include_private
+        )
+    return _render(request, "timeline", entity_type=entity_type, entity_id=entity_id, relationships=relationships)
