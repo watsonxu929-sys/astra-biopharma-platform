@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}质量诊断{% endblock %}
+{% block content %}
+<section class="page-head action-head"><div><p class="eyebrow">情报中心</p><h1>质量诊断</h1><p>查看情报采集和加工的质量统计数据。</p></div><div class="actions"><a class="primary" href="/today-intelligence">今日情报</a></div></section>
+<section class="stats stats-4">
+    <div><strong>{{ data.overall.total or 0 }}</strong><span>原始内容总数</span></div>
+    <div><strong>{{ data.overall.accepted or 0 }}</strong><span>质量通过</span></div>
+    <div><strong>{{ data.overall.duplicate or 0 }}</strong><span>重复内容</span></div>
+    <div><strong>{{ data.overall.low_quality or 0 }}</strong><span>低质量</span></div>
+    <div><strong>{{ data.overall.irrelevant or 0 }}</strong><span>无关内容</span></div>
+    <div><strong>{{ data.overall.access_denied or 0 }}</strong><span>访问受限</span></div>
+    <div><strong>{{ data.overall.parse_failed or 0 }}</strong><span>解析失败</span></div>
+</section>
+<section class="panel"><div class="panel-title"><h2>今日统计</h2></div>
+    <table>
+        <tr><th>今日采集</th><td>{{ data.today.total or 0 }}条</td></tr>
+        <tr><th>今日通过</th><td>{{ data.today.accepted or 0 }}条</td></tr>
+        <tr><th>今日已加工</th><td>{{ data.today.processed or 0 }}条</td></tr>
+    </table>
+</section>
+<section class="panel"><div class="panel-title"><h2>候选统计</h2></div>
+    <table>
+        <tr><th>候选总数</th><td>{{ data.candidates.total_candidates or 0 }}</td></tr>
+        <tr><th>事件候选</th><td>{{ data.candidates.event_candidates or 0 }}</td></tr>
+        <tr><th>机构候选</th><td>{{ data.candidates.org_candidates or 0 }}</td></tr>
+        <tr><th>人物候选</th><td>{{ data.candidates.person_candidates or 0 }}</td></tr>
+        <tr><th>项目候选</th><td>{{ data.candidates.project_candidates or 0 }}</td></tr>
+        <tr><th>无证据候选</th><td>{{ data.candidates.no_evidence_candidates or 0 }}</td></tr>
+        <tr><th>平均每篇候选数</th><td>{{ "%.2f"|format(data.avg_candidates_per_item) }}</td></tr>
+    </table>
+</section>
+{% if data.feedback %}
+<section class="panel"><div class="panel-title"><h2>用户反馈</h2></div>
+    <table>
+        {% for feedback_type, count in data.feedback.items() %}
+        <tr><th>{{ feedback_type }}</th><td>{{ count }}次</td></tr>
+        {% endfor %}
+    </table>
+</section>
+{% endif %}
+{% endblock %}

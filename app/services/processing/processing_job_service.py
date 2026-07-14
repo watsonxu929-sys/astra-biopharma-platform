@@ -13,7 +13,7 @@ from scripts.migrate_v05g import migrate as migrate_v05g
 from .confidence_service import confidence_level, quality_gate
 from .content_block_service import split_blocks, text_hash
 from .document_classifier import classify_page
-from .entity_extraction_service import extract_candidates
+from .entity_extraction_service import extract_candidates, apply_global_limits
 from .subject_matching_service import SUBJECT_CONFIG, match_subject
 
 APPLY_FIELD_WHITELIST = {
@@ -160,6 +160,7 @@ def process_job(job_id: int, db_path: str | Path | None = None) -> dict[str, Any
             if not blocks:
                 raise ValueError("empty_content")
             block_ids: list[int] = []
+            all_candidates: list[dict] = []
             warning_count = 0
             for block in blocks:
                 block_warnings = list(block.get("warnings") or [])
@@ -198,9 +199,12 @@ def process_job(job_id: int, db_path: str | Path | None = None) -> dict[str, Any
                 source = {"source_url": source_url, "source_title": title}
                 for raw_candidate in extract_candidates(block, str(page["page_type"]), source):
                     raw_candidate["block_id"] = block_id
-                    candidate_id = _insert_candidate(conn, job_id, job, raw_candidate)
-                    if candidate_id:
-                        _insert_matches(conn, job_id, job["collection_item_id"], candidate_id)
+                    all_candidates.append(raw_candidate)
+            limited_candidates = apply_global_limits(all_candidates)
+            for raw_candidate in limited_candidates:
+                candidate_id = _insert_candidate(conn, job_id, job, raw_candidate)
+                if candidate_id:
+                    _insert_matches(conn, job_id, job["collection_item_id"], candidate_id)
             totals = _job_totals(conn, job_id)
             status = "needs_review" if totals["blocked"] or warning_count else "success"
             conn.execute(

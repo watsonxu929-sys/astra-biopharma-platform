@@ -59,6 +59,7 @@ class FactCandidateOutput:
 class AnalysisResult:
     summary: str = ""
     event_classification: str = "unknown"
+    event_label: str = "其他"
     entities: list[dict[str, Any]] = field(default_factory=list)
     candidates: list[FactCandidateOutput] = field(default_factory=list)
     importance: int = 1

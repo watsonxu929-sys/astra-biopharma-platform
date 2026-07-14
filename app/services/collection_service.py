@@ -19,7 +19,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.services.collectors import PlaywrightAdapter, PlaywrightCollectionError, PlaywrightUnavailable
-from app.services.content_quality_service import assess_content_quality
+from app.services.processing.content_quality_service import check_content_quality, QUALITY_STATUS_LABELS
 from app.v04c_review import db_connection, default_db_path
 from scripts.migrate_v05f import migrate as migrate_v05f
 
@@ -757,6 +757,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             (quality.status, _json(quality.to_dict()), snapshot_id),
         )
 
+    quality_result = check_content_quality(page.title or "", page.text or "", page.url)
     cur = conn.execute(
         """
         INSERT INTO v05f_collection_items(
@@ -765,8 +766,8 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             content_type, page_structure, language, dedup_status, change_status,
             processing_status, priority, subject_type_candidate, subject_id_candidate,
             content_hash, structure_hash, duplicate_of_item_id, warning_json, metadata_json,
-            created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'medium', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            quality_status, quality_reason, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'medium', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             _next_no(conn, "COL"), source["id"], run_id, snapshot_id, discovered_link_id,
@@ -774,7 +775,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             page.content_type, page.page_structure, page.language, dedup_status, change_status,
             processing_status, source["subject_type"], source["subject_id"], page.content_hash, page.structure_hash,
             duplicate_of, _json(page.warnings), _json({"summary": page.summary, "description": page.description, "author": page.author}),
-            ts, ts,
+            quality_result["quality_status"], quality_result["quality_reason"], ts, ts,
         ),
     )
     item_id = int(cur.lastrowid)
@@ -787,7 +788,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             """,
             (int(duplicate_of), item_id, "same_url" if previous else "duplicate", dedup_status, ts),
         )
-    return {"item_id": item_id, "snapshot_id": snapshot_id, "dedup_status": dedup_status, "change_status": change_status, "processing_status": processing_status, "quality_status": quality.status}
+    return {"item_id": item_id, "snapshot_id": snapshot_id, "dedup_status": dedup_status, "change_status": change_status, "processing_status": processing_status, "quality_status": quality_result["quality_status"], "quality_reason": quality_result["quality_reason"]}
 
 
 def _source_allowed_domains(source: sqlite3.Row) -> list[str]:

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block content %}
+{% set quality_labels = {"accepted":"通过","pending":"待检查","duplicate":"重复","low_quality":"低质量","insufficient_content":"内容不足","access_denied":"访问受限","parse_failed":"解析失败","irrelevant":"无关内容","needs_manual_review":"需人工判断"} %}
+{% set processing_labels = {"new":"新建","queued":"待加工","processing":"加工中","processed":"已加工","failed":"失败","needs_review":"待复核"} %}
+{% set candidate_type_labels = {"organization":"机构","person":"人物","project":"项目","event":"事件","field":"字段","relationship":"关系","risk":"风险","opportunity":"机会","need":"需求","resource":"资源"} %}
+<section class="page-head"><div><p class="eyebrow">情报中心 · 今日情报</p><h1>{{ item.title }}</h1></div><div class="actions"><a class="primary" href="/today-intelligence">返回列表</a></div></section>
+<section class="panel"><div class="panel-title"><h2>基本信息</h2></div>
+    <table>
+        <tr><th>来源</th><td><a href="/collection/sources">{{ item.source_name }}</a></td></tr>
+        <tr><th>来源类型</th><td>{{ item.source_type }}</td></tr>
+        <tr><th>原始URL</th><td><a href="{{ item.original_url }}" target="_blank">{{ item.original_url }}</a></td></tr>
+        <tr><th>发布时间</th><td>{{ item.published_at or '-' }}</td></tr>
+        <tr><th>采集时间</th><td>{{ item.captured_at }}</td></tr>
+        <tr><th>质量状态</th><td><span class="badge">{{ quality_labels.get(item.quality_status, item.quality_status) }}</span></td></tr>
+        <tr><th>质量原因</th><td>{{ item.quality_reason or '-' }}</td></tr>
+        <tr><th>加工状态</th><td><span class="badge">{{ processing_labels.get(item.processing_status, item.processing_status) }}</span></td></tr>
+        <tr><th>候选数量</th><td>{{ item.candidate_count or 0 }}</td></tr>
+    </table>
+</section>
+{% if item.watch_reason %}
+<section class="panel"><div class="watch-reason">关注理由：{{ item.watch_reason }}</div></section>
+{% endif %}
+{% if item.summary %}
+<section class="panel"><div class="panel-title"><h2>摘要</h2></div>
+    <p>{{ item.summary }}</p>
+</section>
+{% endif %}
+{% if item.snapshot and item.snapshot.cleaned_text %}
+<section class="panel"><div class="panel-title"><h2>原始内容</h2></div>
+    <pre class="raw-content">{{ item.snapshot.cleaned_text[:5000] }}</pre>
+</section>
+{% endif %}
+{% if item.candidates %}
+<section class="panel"><div class="panel-title"><h2>提取候选</h2><span class="badge">{{ item.candidates|length }}条</span></div>
+    {% for candidate in item.candidates %}
+    <div class="candidate-row">
+        <div class="candidate-header">
+            <span class="badge">{{ candidate_type_labels.get(candidate.candidate_type, candidate.candidate_type) }}</span>
+            <span>置信度：{{ candidate.confidence_score }}</span>
+        </div>
+        <div class="candidate-body">
+            <strong>{{ candidate.subject_label or candidate.normalized_value }}</strong>
+            {% if candidate.field_name %}<span>· {{ candidate.field_name }}</span>{% endif %}
+        </div>
+        {% if candidate.evidence_excerpt %}
+        <div class="evidence">证据：{{ candidate.evidence_excerpt }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+<section class="panel"><div class="panel-title"><h2>用户反馈</h2></div>
+    <form method="post" action="/today-intelligence/{{ item.id }}/feedback">
+        <div class="feedback-options">
+            <button type="submit" name="feedback_type" value="useful">有价值</button>
+            <button type="submit" name="feedback_type" value="not_useful">无价值</button>
+            <button type="submit" name="feedback_type" value="summary_inaccurate">摘要不准确</button>
+            <button type="submit" name="feedback_type" value="entity_wrong">主体识别错误</button>
+            <button type="submit" name="feedback_type" value="fact_wrong">关键事实错误</button>
+            <button type="submit" name="feedback_type" value="duplicate">重复内容</button>
+            <button type="submit" name="feedback_type" value="not_relevant">与我无关</button>
+        </div>
+        <textarea name="note" placeholder="备注（可选）"></textarea>
+        <button type="submit" class="primary">提交反馈</button>
+    </form>
+    {% if item.feedback %}
+    <div class="feedback-history">
+        <h3>反馈记录</h3>
+        {% for f in item.feedback %}
+        <div class="feedback-item">{{ f.feedback_type }} · {{ f.user_name }} · {{ f.created_at }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+<style>
+.candidate-row { border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+.candidate-row .candidate-header { margin-bottom: 6px; }
+.candidate-row .candidate-header .badge { margin-right: 8px; }
+.candidate-row .evidence { color: #6b7280; font-size: 13px; margin-top: 4px; }
+.feedback-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.feedback-options button { padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; cursor: pointer; }
+.feedback-options button:hover { background: #f3f4f6; }
+.feedback-history { margin-top: 16px; }
+.feedback-item { color: #6b7280; font-size: 13px; margin-bottom: 4px; }
+.raw-content { white-space: pre-wrap; font-family: monospace; font-size: 13px; line-height: 1.6; max-height: 400px; overflow-y: auto; }
+.watch-reason { background: #eff6ff; padding: 12px; border-radius: 6px; font-size: 14px; color: #1e40af; }
+</style>
+{% endblock %}

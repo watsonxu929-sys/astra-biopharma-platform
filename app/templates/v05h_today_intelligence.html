@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}今日情报{% endblock %}
+{% block content %}
+{% set quality_labels = {"accepted":"通过","pending":"待检查","duplicate":"重复","low_quality":"低质量","insufficient_content":"内容不足","access_denied":"访问受限","parse_failed":"解析失败","irrelevant":"无关内容","needs_manual_review":"需人工判断"} %}
+{% set processing_labels = {"new":"新建","queued":"待加工","processing":"加工中","processed":"已加工","failed":"失败","needs_review":"待复核"} %}
+<section class="page-head action-head"><div><p class="eyebrow">情报中心</p><h1>今日情报</h1><p>查看今日自动采集的情报内容、质量状态和加工结果。</p></div><div class="actions"><a class="primary" href="/quality-dashboard">质量诊断</a></div></section>
+<section class="process-flow" aria-label="今日情报流程"><a href="/today-intelligence"><strong>今日采集</strong><span>{{ data.stats.total or 0 }}条</span></a><a href="/today-intelligence"><strong>质量通过</strong><span>{{ data.stats.accepted or 0 }}条</span></a><a href="/processing/jobs"><strong>待加工</strong><span>{{ data.stats.pending_processing or 0 }}条</span></a><a href="/processing/candidates"><strong>待审核</strong><span>{{ data.stats.pending or 0 }}条</span></a></section>
+<section class="stats stats-4">
+    <a href="/today-intelligence"><strong>{{ data.stats.total or 0 }}</strong><span>今日采集</span></a>
+    <a href="/today-intelligence"><strong>{{ data.stats.accepted or 0 }}</strong><span>质量通过</span></a>
+    <a href="/today-intelligence"><strong>{{ data.stats.pending_processing or 0 }}</strong><span>待加工</span></a>
+    <a href="/today-intelligence"><strong>{{ data.stats.duplicate or 0 }}</strong><span>重复过滤</span></a>
+    <a href="/today-intelligence"><strong>{{ data.stats.low_quality or 0 }}</strong><span>低质量过滤</span></a>
+    <a href="/today-intelligence"><strong>{{ data.stats.irrelevant or 0 }}</strong><span>无关内容</span></a>
+    <a href="/processing/jobs"><strong>{{ data.stats.processed or 0 }}</strong><span>已加工</span></a>
+    <a href="/processing/jobs"><strong>{{ data.stats.failed_processing or 0 }}</strong><span>加工失败</span></a>
+</section>
+{% if data.latest_run %}
+<section class="panel"><div class="panel-title"><h2>最近采集运行</h2></div>
+    <div class="record-row">
+        <div><strong>{{ data.latest_run.run_no }}</strong>
+        <p>状态：{{ data.latest_run.status }} · 来源：{{ data.latest_run.monitoring_source_id }} · 发现：{{ data.latest_run.new_item_count or 0 }}条 · 开始：{{ data.latest_run.started_at }}</p></div>
+    </div>
+</section>
+{% endif %}
+{% if data.items %}
+<section class="panel"><div class="panel-title"><h2>今日新增情报</h2><span class="badge">{{ data.items|length }}条</span></div>
+    {% for item in data.items %}
+    <article class="intelligence-card">
+        <div class="card-header">
+            <span class="badge">{{ item.event_type or "其他" }}</span>
+            <span class="badge">{{ quality_labels.get(item.quality_status, item.quality_status) }}</span>
+            <span class="badge">{{ processing_labels.get(item.processing_status, item.processing_status) }}</span>
+        </div>
+        <h3><a href="/today-intelligence/{{ item.id }}">{{ item.title }}</a></h3>
+        <p class="summary">{{ item.summary }}</p>
+        <div class="card-meta">
+            <span>来源：{{ item.source_name }}</span>
+            <span>发布：{{ item.published_at or '-' }}</span>
+            <span>采集：{{ item.captured_at }}</span>
+        </div>
+        {% if item.watch_reason %}
+        <div class="watch-reason">关注理由：{{ item.watch_reason }}</div>
+        {% endif %}
+        {% if item.entities %}
+        <div class="entities">
+            {% for entity in item.entities[:3] %}
+            <span class="entity-tag">{{ entity.subject_label }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="card-actions">
+            <a href="/today-intelligence/{{ item.id }}">查看详情</a>
+            <a href="{{ item.original_url }}" target="_blank">查看原文</a>
+        </div>
+    </article>
+    {% endfor %}
+</section>
+{% else %}
+<section class="panel"><div class="empty">
+    <p>今日暂无通过质量检查的情报。</p>
+    <p>系统将根据已配置的来源自动采集内容。</p>
+    <p>可点击 <a href="/collection/sources">采集来源</a> 查看已启用来源状态。</p>
+</div></section>
+{% endif %}
+<style>
+.intelligence-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #fff; }
+.intelligence-card .card-header { margin-bottom: 8px; }
+.intelligence-card .card-header .badge { margin-right: 8px; }
+.intelligence-card h3 { margin: 0 0 8px 0; font-size: 16px; }
+.intelligence-card h3 a { color: #1f2937; text-decoration: none; }
+.intelligence-card h3 a:hover { text-decoration: underline; }
+.intelligence-card .summary { color: #4b5563; font-size: 14px; line-height: 1.6; margin: 0 0 8px 0; }
+.intelligence-card .card-meta { color: #6b7280; font-size: 12px; margin-bottom: 8px; }
+.intelligence-card .card-meta span { margin-right: 16px; }
+.intelligence-card .watch-reason { background: #eff6ff; padding: 6px 10px; border-radius: 4px; font-size: 13px; color: #1e40af; margin-bottom: 8px; }
+.intelligence-card .entities { margin-bottom: 8px; }
+.intelligence-card .entity-tag { display: inline-block; background: #f3f4f6; padding: 3px 8px; border-radius: 4px; font-size: 12px; margin-right: 6px; }
+.intelligence-card .card-actions { margin-top: 8px; }
+.intelligence-card .card-actions a { margin-right: 16px; font-size: 13px; color: #3b82f6; text-decoration: none; }
+.intelligence-card .card-actions a:hover { text-decoration: underline; }
+</style>
+{% endblock %}

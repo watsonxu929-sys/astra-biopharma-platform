@@ -12,6 +12,7 @@ from app.services.signal_service import convert_signal_to_action, generate_from_
 from app.services.intelligence_flow_service import convert_signal_to_investment_lead
 from app.services.signals import generate_signals, list_rules, set_rule_enabled, signal_dashboard
 from app.services.watchlist_service import add_item, create_watchlist, list_items, list_watchlists
+from app.services.today_intelligence_service import get_today_intelligence, get_intelligence_detail, submit_feedback, get_quality_dashboard, generate_summary, generate_watch_reason
 
 router = APIRouter(tags=["v0.5E intelligence API and dashboard"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
@@ -119,6 +120,37 @@ def watchlist_detail_page(request: Request, watchlist_id: int, page: int = 1):
 def watchlist_add_item_page(request: Request, watchlist_id: int, subject_type: str = Form(...), subject_id: str = Form(...), priority: str = Form("medium"), reason: str = Form("")):
     add_item(current_user_dict(request), watchlist_id=watchlist_id, subject_type=subject_type, subject_id=subject_id, priority=priority, reason=reason)
     return RedirectResponse(f"/watchlists/{watchlist_id:int}", status_code=303)
+
+
+@router.get("/today-intelligence", response_class=HTMLResponse)
+def today_intelligence_page(request: Request):
+    data = get_today_intelligence()
+    for item in data["items"]:
+        item["summary"] = generate_summary(item)
+        item["watch_reason"] = generate_watch_reason(item)
+    return templates.TemplateResponse(request, "v05h_today_intelligence.html", {"data": data})
+
+
+@router.get("/today-intelligence/{item_id:int}", response_class=HTMLResponse)
+def today_intelligence_detail(request: Request, item_id: int):
+    item = get_intelligence_detail(item_id)
+    if not item:
+        return templates.TemplateResponse(request, "v05h_today_intelligence.html", {"error": "情报不存在"})
+    item["summary"] = generate_summary(item)
+    item["watch_reason"] = generate_watch_reason(item)
+    return templates.TemplateResponse(request, "v05h_intelligence_detail.html", {"item": item})
+
+
+@router.post("/today-intelligence/{item_id:int}/feedback")
+def today_intelligence_feedback(request: Request, item_id: int, feedback_type: str = Form(...), note: str = Form("")):
+    submit_feedback(item_id, current_username(request), feedback_type, note)
+    return RedirectResponse(f"/today-intelligence/{item_id}", status_code=303)
+
+
+@router.get("/quality-dashboard", response_class=HTMLResponse)
+def quality_dashboard_page(request: Request):
+    data = get_quality_dashboard()
+    return templates.TemplateResponse(request, "v05h_quality_dashboard.html", {"data": data})
 
 
 @router.get("/v05e/health")
