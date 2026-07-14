@@ -1,13 +1,16 @@
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, Form, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import text, bindparam
 from sqlalchemy.exc import OperationalError
 
 from app.database import engine
 from app.routes_platform import get_current_user_id, get_user_role
+from app.services.business_collaboration_service import BusinessCollaborationService
+from app.database import get_db
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["p5_collaboration"])
 
@@ -16,9 +19,11 @@ def _templates():
     from app.main import templates
     return templates
 
+
 STAGE_MAP = {
     "draft": "草稿",
     "pending_validation": "待验证",
+    "validating": "待验证",
     "matching": "匹配中",
     "introduced": "已引荐",
     "negotiation": "商务洽谈",
@@ -32,6 +37,7 @@ STAGE_MAP = {
 
 TASK_STATUS_MAP = {
     "pending": "待处理",
+    "todo": "待处理",
     "in_progress": "进行中",
     "blocked": "已阻塞",
     "completed": "已完成",
@@ -130,18 +136,53 @@ def collaboration_home(request: Request):
         metrics["无下一步行动机会"] = _scalar(
             "SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND next_action IS NULL"
         )
+        metrics["本月成交"] = _scalar(
+            "SELECT COUNT(*) FROM v06_opportunities WHERE stage='won' AND strftime('%Y-%m', created_at)=strftime('%Y-%m', 'now')"
+        )
+        metrics["本月关闭"] = _scalar(
+            "SELECT COUNT(*) FROM v06_opportunities WHERE stage IN ('lost','closed') AND strftime('%Y-%m', created_at)=strftime('%Y-%m', 'now')"
+        )
+
+    if _db_has_table("v04f_lead_records"):
+        metrics["新线索"] = _scalar(
+            "SELECT COUNT(*) FROM v04f_lead_records WHERE lifecycle_status='new'"
+        )
+        metrics["待确认线索"] = _scalar(
+            "SELECT COUNT(*) FROM v04f_lead_records WHERE lifecycle_status IN ('new','reviewing')"
+        )
+
+    if _db_has_table("v06_follow_ups"):
+        metrics["本周待跟进"] = _scalar(
+            "SELECT COUNT(*) FROM v06_follow_ups WHERE next_follow_at IS NOT NULL AND date(next_follow_at) BETWEEN date('now') AND date('now','+7 days')"
+        )
+        metrics["已逾期跟进"] = _scalar(
+            "SELECT COUNT(*) FROM v06_follow_ups WHERE next_follow_at IS NOT NULL AND date(next_follow_at)<date('now')"
+        )
+
+    if _db_has_table("v06_collab_tasks"):
+        metrics["待完成任务"] = _scalar(
+            "SELECT COUNT(*) FROM v06_collab_tasks WHERE status IN ('pending','todo','in_progress')"
+        )
+        metrics["逾期任务"] = _scalar(
+            "SELECT COUNT(*) FROM v06_collab_tasks WHERE status IN ('pending','todo','in_progress') AND due_date IS NOT NULL AND date(due_date)<date('now')"
+        )
+
+    if _db_has_table("p5_opportunity_meetings"):
+        metrics["待召开会议"] = _scalar(
+            "SELECT COUNT(*) FROM p5_opportunity_meetings WHERE status='scheduled' AND starts_at >= datetime('now')"
+        )
 
     urgent_opportunities = _list(
         "SELECT id, title, stage, priority, next_follow_at, owner_id FROM v06_opportunities WHERE status='active' AND next_follow_at IS NOT NULL AND date(next_follow_at)<=date('now','+3 days') ORDER BY next_follow_at LIMIT 10"
     ) if _db_has_table("v06_opportunities") else []
 
     overdue_tasks = _list(
-        "SELECT id, title, opportunity_id, due_date FROM p5_collab_tasks WHERE status IN ('pending','in_progress') AND due_date IS NOT NULL AND date(due_date)<date('now') ORDER BY due_date LIMIT 10"
-    ) if _db_has_table("p5_collab_tasks") else []
+        "SELECT id, title, opportunity_id, due_date FROM v06_collab_tasks WHERE status IN ('pending','todo','in_progress') AND due_date IS NOT NULL AND date(due_date)<date('now') ORDER BY due_date LIMIT 10"
+    ) if _db_has_table("v06_collab_tasks") else []
 
     upcoming_meetings = _list(
-        "SELECT id, subject, opportunity_id, starts_at FROM p5_collab_meetings WHERE status='scheduled' AND starts_at >= datetime('now') ORDER BY starts_at LIMIT 10"
-    ) if _db_has_table("p5_collab_meetings") else []
+        "SELECT id, subject, opportunity_id, starts_at FROM p5_opportunity_meetings WHERE status='scheduled' AND starts_at >= datetime('now') ORDER BY starts_at LIMIT 10"
+    ) if _db_has_table("p5_opportunity_meetings") else []
 
     return _templates().TemplateResponse(
         request, "collaboration_home.html", {
@@ -161,7 +202,10 @@ def collaboration_leads(request: Request, tab: str = "pending"):
         "disqualified": "已否决", "converted": "已转化",
     }
 
-    if not _db_has_table("p5_club_leads"):
+    has_v04f = _db_has_table("v04f_lead_records")
+    has_p5 = _db_has_table("p5_club_leads")
+
+    if not has_v04f and not has_p5:
         return _templates().TemplateResponse(
             request, "collaboration_leads.html", {
                 "tab": tab, "tab_map": tab_map, "leads": [],
@@ -177,10 +221,16 @@ def collaboration_leads(request: Request, tab: str = "pending"):
         "converted": ["converted"],
     }.get(tab, ["new", "reviewing"])
 
-    leads = _list(
-        "SELECT id, title, source_type, source_id, priority, owner_user_id, lifecycle_status, converted_opportunity_id, updated_at FROM p5_club_leads WHERE lifecycle_status IN :status ORDER BY updated_at DESC LIMIT 50",
-        {"status": status_filter}
-    )
+    if has_v04f:
+        leads = _list(
+            "SELECT id, title, source_type, source_id, priority, owner_user_id, lifecycle_status, converted_opportunity_id, updated_at FROM v04f_lead_records WHERE lifecycle_status IN :status ORDER BY updated_at DESC LIMIT 50",
+            {"status": status_filter}
+        )
+    else:
+        leads = _list(
+            "SELECT id, title, source_type, source_id, priority, owner_user_id, lifecycle_status, converted_opportunity_id, updated_at FROM p5_club_leads WHERE lifecycle_status IN :status ORDER BY updated_at DESC LIMIT 50",
+            {"status": status_filter}
+        )
 
     return _templates().TemplateResponse(
         request, "collaboration_leads.html", {
@@ -189,6 +239,121 @@ def collaboration_leads(request: Request, tab: str = "pending"):
             "is_operator": _is_operator(request),
         }
     )
+
+
+@router.post("/collaboration/leads", response_class=HTMLResponse)
+async def create_lead(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return _templates().TemplateResponse(
+            request, "collaboration_leads.html", {
+                "tab": "pending", "tab_map": {"pending": "待确认"},
+                "leads": [], "no_table": False,
+                "status_map": LEAD_STATUS_MAP,
+                "is_operator": _is_operator(request),
+                "error": "请先登录",
+            }
+        )
+
+    try:
+        svc = BusinessCollaborationService(db)
+        result = svc.create_lead({
+            "title": form.get("title", ""),
+            "source_type": form.get("source_type", "manual"),
+            "subject_type": "organization",
+            "subject_id": str(form.get("subject_id", "")),
+            "demand_organization_id": int(form.get("demand_org_id", 0)) or None,
+            "supply_organization_id": int(form.get("supply_org_id", 0)) or None,
+            "recommendation_reason": form.get("reason", ""),
+            "owner_user_id": user_id,
+            "priority": form.get("priority", "P2"),
+            "suggested_next_action": form.get("next_action", ""),
+            "pilot_batch_id": "T5-1-WRITE-CLOSURE",
+        }, actor_user_id=user_id)
+        return RedirectResponse(url="/collaboration/leads?tab=pending", status_code=302)
+    except Exception as e:
+        return _templates().TemplateResponse(
+            request, "collaboration_leads.html", {
+                "tab": "pending", "tab_map": {"pending": "待确认"},
+                "leads": [], "no_table": False,
+                "status_map": LEAD_STATUS_MAP,
+                "is_operator": _is_operator(request),
+                "error": str(e),
+            }
+        )
+
+
+@router.post("/collaboration/leads/{lead_id}/review", response_class=HTMLResponse)
+async def review_lead(request: Request, lead_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return _templates().TemplateResponse(
+            request, "collaboration_leads.html", {
+                "tab": "pending", "tab_map": {"pending": "待确认"},
+                "leads": [], "no_table": False,
+                "status_map": LEAD_STATUS_MAP,
+                "is_operator": _is_operator(request),
+                "error": "请先登录",
+            }
+        )
+
+    decision = form.get("decision", "")
+    reason = form.get("reason", "")
+
+    try:
+        svc = BusinessCollaborationService(db)
+        svc.review_lead(lead_id, decision=decision, actor_user_id=user_id, reason=reason)
+        tab = "qualified" if decision == "qualified" else "disqualified"
+        return RedirectResponse(url=f"/collaboration/leads?tab={tab}", status_code=302)
+    except Exception as e:
+        return _templates().TemplateResponse(
+            request, "collaboration_leads.html", {
+                "tab": "pending", "tab_map": {"pending": "待确认"},
+                "leads": [], "no_table": False,
+                "status_map": LEAD_STATUS_MAP,
+                "is_operator": _is_operator(request),
+                "error": str(e),
+            }
+        )
+
+
+@router.post("/collaboration/leads/{lead_id}/convert", response_class=HTMLResponse)
+async def convert_lead(request: Request, lead_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return _templates().TemplateResponse(
+            request, "collaboration_leads.html", {
+                "tab": "pending", "tab_map": {"pending": "待确认"},
+                "leads": [], "no_table": False,
+                "status_map": LEAD_STATUS_MAP,
+                "is_operator": _is_operator(request),
+                "error": "请先登录",
+            }
+        )
+
+    try:
+        svc = BusinessCollaborationService(db)
+        result = svc.convert_lead(lead_id, actor_user_id=user_id, fields={
+            "title": form.get("title", ""),
+            "opp_type": form.get("opp_type", "collaboration"),
+            "priority": form.get("priority", "P2"),
+            "next_action": form.get("next_action", ""),
+        })
+        opp_id = result["opportunity"]["id"]
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+    except Exception as e:
+        return _templates().TemplateResponse(
+            request, "collaboration_leads.html", {
+                "tab": "qualified", "tab_map": {"qualified": "已确认"},
+                "leads": [], "no_table": False,
+                "status_map": LEAD_STATUS_MAP,
+                "is_operator": _is_operator(request),
+                "error": str(e),
+            }
+        )
 
 
 @router.get("/collaboration/opportunities", response_class=HTMLResponse)
@@ -266,9 +431,9 @@ def collaboration_opportunity_detail(request: Request, opp_id: int):
     ) if _db_has_table("p5_opportunity_participants") else []
 
     followups = _list(
-        "SELECT follow_type, followed_at, content, next_action, next_follow_at FROM p5_opportunity_followups WHERE opportunity_id = :opp_id ORDER BY followed_at DESC",
+        "SELECT follow_type, followed_at, content, result, next_action, next_follow_at, created_by FROM v06_follow_ups WHERE opportunity_id = :opp_id ORDER BY followed_at DESC",
         {"opp_id": opp_id}
-    ) if _db_has_table("p5_opportunity_followups") else []
+    ) if _db_has_table("v06_follow_ups") else []
 
     stage_history = _list(
         "SELECT old_stage, new_stage, reason, created_at FROM p5_opportunity_stage_history WHERE opportunity_id = :opp_id ORDER BY created_at DESC",
@@ -276,23 +441,27 @@ def collaboration_opportunity_detail(request: Request, opp_id: int):
     ) if _db_has_table("p5_opportunity_stage_history") else []
 
     tasks = _list(
-        "SELECT title, status, due_date, priority, owner_id FROM p5_collab_tasks WHERE opportunity_id = :opp_id ORDER BY due_date",
+        "SELECT id, title, status, due_date, priority, owner_id FROM v06_collab_tasks WHERE opportunity_id = :opp_id ORDER BY due_date",
         {"opp_id": opp_id}
-    ) if _db_has_table("p5_collab_tasks") else []
+    ) if _db_has_table("v06_collab_tasks") else []
 
     meetings = _list(
-        "SELECT subject, starts_at, ends_at, location, online_url, organizer_user_id, status FROM p5_collab_meetings WHERE opportunity_id = :opp_id ORDER BY starts_at DESC",
+        "SELECT id, subject, starts_at, ends_at, location, online_url, organizer_user_id, status FROM p5_opportunity_meetings WHERE opportunity_id = :opp_id ORDER BY starts_at DESC",
         {"opp_id": opp_id}
-    ) if _db_has_table("p5_collab_meetings") else []
+    ) if _db_has_table("p5_opportunity_meetings") else []
 
     artifacts = _list(
-        "SELECT file_name, artifact_type, version, visibility, uploaded_by_user_id FROM p5_collab_artifacts WHERE opportunity_id = :opp_id",
+        "SELECT id, file_name, artifact_type, version, visibility, uploaded_by_user_id, external_url FROM p5_opportunity_artifacts WHERE opportunity_id = :opp_id",
         {"opp_id": opp_id}
-    ) if _db_has_table("p5_collab_artifacts") else []
+    ) if _db_has_table("p5_opportunity_artifacts") else []
 
     risks = []
-    if opportunity.get("next_follow_at") and date.fromisoformat(opportunity["next_follow_at"]) < date.today():
-        risks.append({"risk_level": "high", "reason": "下次跟进已过期", "suggested_action": "尽快安排跟进"})
+    if opportunity.get("next_follow_at") and opportunity["next_follow_at"]:
+        try:
+            if date.fromisoformat(opportunity["next_follow_at"].split("T")[0]) < date.today():
+                risks.append({"risk_level": "high", "reason": "下次跟进已过期", "suggested_action": "尽快安排跟进"})
+        except:
+            pass
     if not opportunity.get("next_action"):
         risks.append({"risk_level": "medium", "reason": "没有下一步行动", "suggested_action": "设置下一步行动"})
     if not opportunity.get("owner_id"):
@@ -304,9 +473,144 @@ def collaboration_opportunity_detail(request: Request, opp_id: int):
             "followups": followups, "stage_history": stage_history,
             "tasks": tasks, "meetings": meetings, "artifacts": artifacts,
             "risks": risks, "stage_map": STAGE_MAP, "task_status_map": TASK_STATUS_MAP,
-            "is_admin": _is_admin(request),
+            "is_admin": _is_admin(request), "user_id": user_id,
         }
     )
+
+
+@router.post("/collaboration/opportunities/{opp_id}/follow-ups", response_class=HTMLResponse)
+async def add_follow_up(request: Request, opp_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+    try:
+        svc = BusinessCollaborationService(db)
+        svc.add_follow_up(opp_id, {
+            "follow_type": form.get("follow_type", "other"),
+            "content": form.get("content", ""),
+            "result": form.get("result", ""),
+            "next_action": form.get("next_action", ""),
+            "next_follow_at": form.get("next_follow_at", ""),
+        }, actor_user_id=user_id)
+    except Exception as e:
+        pass
+    return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+
+@router.post("/collaboration/opportunities/{opp_id}/tasks", response_class=HTMLResponse)
+async def add_task(request: Request, opp_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+    try:
+        svc = BusinessCollaborationService(db)
+        svc.create_task(opp_id, {
+            "title": form.get("title", ""),
+            "owner_id": int(form.get("owner_id", user_id)),
+            "priority": form.get("priority", "P2"),
+            "due_date": form.get("due_date", ""),
+            "completion_criteria": form.get("completion_criteria", ""),
+        }, actor_user_id=user_id)
+    except Exception as e:
+        pass
+    return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+
+@router.post("/collaboration/opportunities/{opp_id}/tasks/{task_id}/update", response_class=HTMLResponse)
+async def update_task(request: Request, opp_id: int, task_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+    try:
+        svc = BusinessCollaborationService(db)
+        status = form.get("status", "")
+        blocked_reason = form.get("blocked_reason", "") if status == "blocked" else None
+        svc.update_task(task_id, status=status, actor_user_id=user_id, blocked_reason=blocked_reason)
+    except Exception as e:
+        pass
+    return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+
+@router.post("/collaboration/opportunities/{opp_id}/meetings", response_class=HTMLResponse)
+async def add_meeting(request: Request, opp_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+    try:
+        svc = BusinessCollaborationService(db)
+        svc.schedule_meeting(opp_id, {
+            "subject": form.get("subject", ""),
+            "starts_at": form.get("starts_at", ""),
+            "ends_at": form.get("ends_at", ""),
+            "location": form.get("location", ""),
+            "online_url": form.get("online_url", ""),
+            "agenda": form.get("agenda", ""),
+        }, actor_user_id=user_id)
+    except Exception as e:
+        pass
+    return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+
+@router.post("/collaboration/opportunities/{opp_id}/meetings/{meeting_id}/complete", response_class=HTMLResponse)
+async def complete_meeting(request: Request, opp_id: int, meeting_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+    try:
+        svc = BusinessCollaborationService(db)
+        svc.complete_meeting(meeting_id, {
+            "minutes": form.get("minutes", ""),
+            "decisions": form.get("decisions", ""),
+            "task_drafts": [],
+        }, actor_user_id=user_id)
+    except Exception as e:
+        pass
+    return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+
+@router.post("/collaboration/opportunities/{opp_id}/participants", response_class=HTMLResponse)
+async def add_participant(request: Request, opp_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+    try:
+        svc = BusinessCollaborationService(db)
+        svc.add_participant(opp_id, {
+            "participant_type": form.get("participant_type", "user"),
+            "participant_id": form.get("participant_id", ""),
+            "role": form.get("role", "collaborator"),
+        }, actor_user_id=user_id)
+    except Exception as e:
+        pass
+    return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+
+@router.post("/collaboration/opportunities/{opp_id}/stage", response_class=HTMLResponse)
+async def update_stage(request: Request, opp_id: int, db: Session = Depends(get_db)):
+    form = await request.form()
+    user_id = _get_user_id(request)
+    if not user_id:
+        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
+
+    try:
+        svc = BusinessCollaborationService(db)
+        svc.update_stage(opp_id, stage=form.get("stage", ""), actor_user_id=user_id,
+                         reason=form.get("reason", ""), is_admin=_is_admin(request))
+    except Exception as e:
+        pass
+    return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
 
 
 @router.get("/collaboration/tasks", response_class=HTMLResponse)
@@ -314,7 +618,7 @@ def collaboration_tasks(request: Request, tab: str = "my"):
     user_id = _get_user_id(request)
     tab_map = {"my": "我的", "overdue": "超期", "all": "全部"}
 
-    if not _db_has_table("p5_collab_tasks"):
+    if not _db_has_table("v06_collab_tasks"):
         return _templates().TemplateResponse(
             request, "collaboration_tasks.html", {
                 "tab": tab, "tab_map": tab_map, "tasks": [], "followups": [],
@@ -323,20 +627,20 @@ def collaboration_tasks(request: Request, tab: str = "my"):
             }
         )
 
-    base_sql = "SELECT id, title, opportunity_id, owner_id, due_date, priority, status, created_at FROM p5_collab_tasks WHERE 1=1"
+    base_sql = "SELECT id, title, opportunity_id, owner_id, due_date, priority, status, created_at FROM v06_collab_tasks WHERE 1=1"
     params = {}
 
     if tab == "my" and user_id:
         base_sql += " AND owner_id = :user_id"
         params["user_id"] = user_id
     elif tab == "overdue":
-        base_sql += " AND status IN ('pending','in_progress') AND due_date IS NOT NULL AND date(due_date)<date('now')"
+        base_sql += " AND status IN ('pending','todo','in_progress') AND due_date IS NOT NULL AND date(due_date)<date('now')"
 
     tasks = _list(base_sql + " ORDER BY due_date, priority DESC LIMIT 50", params)
 
     followups = _list(
-        "SELECT follow_type, followed_at, content, opportunity_id FROM p5_opportunity_followups ORDER BY followed_at DESC LIMIT 20"
-    ) if _db_has_table("p5_opportunity_followups") else []
+        "SELECT follow_type, followed_at, content, opportunity_id FROM v06_follow_ups ORDER BY followed_at DESC LIMIT 20"
+    ) if _db_has_table("v06_follow_ups") else []
 
     return _templates().TemplateResponse(
         request, "collaboration_tasks.html", {
@@ -354,14 +658,14 @@ def collaboration_meetings(request: Request, tab: str = "meetings"):
     meetings = []
     artifacts = []
 
-    if tab == "meetings" and _db_has_table("p5_collab_meetings"):
+    if tab == "meetings" and _db_has_table("p5_opportunity_meetings"):
         meetings = _list(
-            "SELECT id, subject, opportunity_id, starts_at, ends_at, location, online_url, organizer_user_id, status FROM p5_collab_meetings ORDER BY starts_at DESC LIMIT 50"
+            "SELECT id, subject, opportunity_id, starts_at, ends_at, location, online_url, organizer_user_id, status FROM p5_opportunity_meetings ORDER BY starts_at DESC LIMIT 50"
         )
 
-    if tab == "materials" and _db_has_table("p5_collab_artifacts"):
+    if tab == "materials" and _db_has_table("p5_opportunity_artifacts"):
         artifacts = _list(
-            "SELECT id, file_name, artifact_type, opportunity_id, uploaded_by_user_id, version, visibility FROM p5_collab_artifacts ORDER BY uploaded_at DESC LIMIT 50"
+            "SELECT id, file_name, artifact_type, opportunity_id, uploaded_by_user_id, version, visibility, external_url FROM p5_opportunity_artifacts ORDER BY uploaded_at DESC LIMIT 50"
         )
 
     return _templates().TemplateResponse(

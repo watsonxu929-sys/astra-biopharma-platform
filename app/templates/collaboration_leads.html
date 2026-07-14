@@ -13,6 +13,64 @@
   </nav>
 </div>
 
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if is_operator %}
+<div class="card">
+  <h2>创建线索</h2>
+  <form method="post" action="/collaboration/leads">
+    <div class="form-grid">
+      <div>
+        <label>标题</label>
+        <input type="text" name="title" required placeholder="输入线索标题">
+      </div>
+      <div>
+        <label>来源</label>
+        <select name="source_type">
+          <option value="manual">人工录入</option>
+          <option value="club">Club推荐</option>
+          <option value="match">资源匹配</option>
+          <option value="event">活动反馈</option>
+          <option value="network">人脉推荐</option>
+          <option value="intelligence">情报发现</option>
+        </select>
+      </div>
+      <div>
+        <label>优先级</label>
+        <select name="priority">
+          <option value="P1">P1 高</option>
+          <option value="P2" selected>P2 中</option>
+          <option value="P3">P3 低</option>
+        </select>
+      </div>
+      <div>
+        <label>推荐理由</label>
+        <textarea name="reason" placeholder="说明推荐理由"></textarea>
+      </div>
+      <div>
+        <label>下一步建议</label>
+        <input type="text" name="next_action" placeholder="建议的下一步行动">
+      </div>
+      <div>
+        <label>需求方ID</label>
+        <input type="number" name="demand_org_id" placeholder="需求方组织ID">
+      </div>
+      <div>
+        <label>资源方ID</label>
+        <input type="number" name="supply_org_id" placeholder="资源方组织ID">
+      </div>
+      <div>
+        <label>主体ID</label>
+        <input type="number" name="subject_id" placeholder="关联主体ID">
+      </div>
+    </div>
+    <button type="submit">创建线索</button>
+  </form>
+</div>
+{% endif %}
+
 {% if no_table %}
 <div class="empty-state">当前暂无线索数据。线索功能需要P5增量迁移支持。</div>
 {% else %}
@@ -32,7 +90,13 @@
   <tbody>
     {% for lead in leads %}
     <tr>
-      <td><a href="/collaboration/opportunities/{{ lead.converted_opportunity_id }}">{{ lead.title }}</a></td>
+      <td>
+        {% if lead.converted_opportunity_id %}
+        <a href="/collaboration/opportunities/{{ lead.converted_opportunity_id }}">{{ lead.title }}</a>
+        {% else %}
+        {{ lead.title }}
+        {% endif %}
+      </td>
       <td>{{ lead.source_type or '人工录入' }}</td>
       <td>{{ status_map.get(lead.lifecycle_status, lead.lifecycle_status) }}</td>
       <td>{{ lead.priority or 'P2' }}</td>
@@ -41,14 +105,27 @@
       <td>
         {% if is_operator %}
         {% if lead.lifecycle_status in ['new', 'reviewing'] %}
-        <button>确认有效</button>
-        <button>否决</button>
+        <form method="post" action="/collaboration/leads/{{ lead.id }}/review" style="display: inline;">
+          <input type="hidden" name="decision" value="qualified">
+          <input type="hidden" name="reason" value="业务匹配">
+          <button type="submit">确认有效</button>
+        </form>
+        <form method="post" action="/collaboration/leads/{{ lead.id }}/review" style="display: inline;">
+          <input type="hidden" name="decision" value="disqualified">
+          <input type="hidden" name="reason" value="信息不足">
+          <button type="submit">否决</button>
+        </form>
         {% endif %}
         {% if lead.lifecycle_status == 'qualified' and not lead.converted_opportunity_id %}
-        <button>转为机会</button>
+        <form method="post" action="/collaboration/leads/{{ lead.id }}/convert" style="display: inline;">
+          <input type="hidden" name="title" value="{{ lead.title }}">
+          <input type="hidden" name="opp_type" value="collaboration">
+          <input type="hidden" name="priority" value="{{ lead.priority or 'P2' }}">
+          <input type="hidden" name="next_action" value="{{ lead.suggested_next_action or '安排首次沟通' }}">
+          <button type="submit">转为机会</button>
+        </form>
         {% endif %}
         {% endif %}
-        <button>查看详情</button>
       </td>
     </tr>
     {% endfor %}

@@ -28,10 +28,6 @@
     <h2>下一步行动</h2>
     <p>{{ opportunity.next_action or '暂无下一步行动' }}</p>
     <p>下次跟进：{{ opportunity.next_follow_at or '未设置' }}</p>
-    {% if is_admin %}
-    <button>添加跟进记录</button>
-    <button>推进阶段</button>
-    {% endif %}
   </section>
 
   <section class="card">
@@ -46,6 +42,106 @@
     <div class="empty-state">暂无风险提示</div>
     {% endif %}
   </section>
+
+  {% if is_admin %}
+  <section class="card">
+    <h2>推进阶段</h2>
+    <form method="post" action="/collaboration/opportunities/{{ opportunity.id }}/stage">
+      <select name="stage">
+        <option value="draft">草稿</option>
+        <option value="validating">待验证</option>
+        <option value="matching">匹配中</option>
+        <option value="introduced">已引荐</option>
+        <option value="negotiation">商务洽谈</option>
+        <option value="intent">已达成意向</option>
+        <option value="executing">执行中</option>
+        <option value="on_hold">暂停</option>
+        <option value="won">已成交</option>
+        <option value="lost">已失败</option>
+        <option value="closed">已关闭</option>
+      </select>
+      <input type="text" name="reason" placeholder="变更原因">
+      <button type="submit">推进阶段</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>添加参与者</h2>
+    <form method="post" action="/collaboration/opportunities/{{ opportunity.id }}/participants">
+      <select name="participant_type">
+        <option value="user">用户</option>
+        <option value="person">人物</option>
+        <option value="organization">机构</option>
+        <option value="member">会员</option>
+      </select>
+      <input type="text" name="participant_id" placeholder="参与者ID" required>
+      <select name="role">
+        <option value="demander">需求方</option>
+        <option value="supplier">资源方</option>
+        <option value="owner">机会负责人</option>
+        <option value="decision_maker">决策人</option>
+        <option value="technical_evaluator">技术评估人</option>
+        <option value="business_contact">商务联系人</option>
+        <option value="advisor">顾问</option>
+        <option value="collaborator">协同人员</option>
+      </select>
+      <button type="submit">添加</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>添加跟进记录</h2>
+    <form method="post" action="/collaboration/opportunities/{{ opportunity.id }}/follow-ups">
+      <select name="follow_type">
+        <option value="phone">电话</option>
+        <option value="meeting">会议</option>
+        <option value="email">邮件</option>
+        <option value="wechat">微信</option>
+        <option value="visit">拜访</option>
+        <option value="other">其他</option>
+      </select>
+      <textarea name="content" placeholder="跟进内容" required></textarea>
+      <select name="result">
+        <option value="">结果</option>
+        <option value="positive">积极</option>
+        <option value="neutral">中性</option>
+        <option value="negative">消极</option>
+      </select>
+      <input type="text" name="next_action" placeholder="下一步行动">
+      <input type="datetime-local" name="next_follow_at">
+      <button type="submit">添加跟进</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>创建任务</h2>
+    <form method="post" action="/collaboration/opportunities/{{ opportunity.id }}/tasks">
+      <input type="text" name="title" placeholder="任务标题" required>
+      <select name="priority">
+        <option value="P1">P1 高</option>
+        <option value="P2" selected>P2 中</option>
+        <option value="P3">P3 低</option>
+      </select>
+      <input type="number" name="owner_id" placeholder="负责人ID" value="{{ user_id }}">
+      <input type="datetime-local" name="due_date">
+      <textarea name="completion_criteria" placeholder="完成标准"></textarea>
+      <button type="submit">创建任务</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>创建会议</h2>
+    <form method="post" action="/collaboration/opportunities/{{ opportunity.id }}/meetings">
+      <input type="text" name="subject" placeholder="会议主题" required>
+      <input type="datetime-local" name="starts_at" required>
+      <input type="datetime-local" name="ends_at">
+      <input type="text" name="location" placeholder="地点">
+      <input type="text" name="online_url" placeholder="线上地址">
+      <textarea name="agenda" placeholder="议程"></textarea>
+      <button type="submit">创建会议</button>
+    </form>
+  </section>
+  {% endif %}
 
   <section class="card">
     <h2>参与方</h2>
@@ -72,6 +168,8 @@
         <span class="date">{{ f.followed_at }}</span>
         <span class="type">{{ f.follow_type }}</span>
         <p>{{ f.content }}</p>
+        {% if f.result %}<span class="result">{{ f.result }}</span>{% endif %}
+        {% if f.next_action %}<p>下一步：{{ f.next_action }}</p>{% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -105,6 +203,18 @@
       <li>
         <span class="status {{ t.status }}">{{ task_status_map.get(t.status, t.status) }}</span>
         {{ t.title }} - {{ t.due_date or '无截止日期' }}
+        {% if is_admin %}
+        <form method="post" action="/collaboration/opportunities/{{ opportunity.id }}/tasks/{{ t.id }}/update" style="display: inline;">
+          <select name="status">
+            <option value="pending" {% if t.status == 'pending' or t.status == 'todo' %}selected{% endif %}>待处理</option>
+            <option value="in_progress" {% if t.status == 'in_progress' %}selected{% endif %}>进行中</option>
+            <option value="blocked" {% if t.status == 'blocked' %}selected{% endif %}>已阻塞</option>
+            <option value="completed" {% if t.status == 'completed' %}selected{% endif %}>已完成</option>
+            <option value="cancelled" {% if t.status == 'cancelled' %}selected{% endif %}>已取消</option>
+          </select>
+          <button type="submit">更新</button>
+        </form>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -118,7 +228,16 @@
     {% if meetings %}
     <ul>
       {% for m in meetings %}
-      <li>{{ m.subject }} - {{ m.starts_at }}</li>
+      <li>
+        {{ m.subject }} - {{ m.starts_at }}
+        {% if m.status != 'completed' and is_admin %}
+        <form method="post" action="/collaboration/opportunities/{{ opportunity.id }}/meetings/{{ m.id }}/complete" style="display: inline;">
+          <textarea name="minutes" placeholder="会议纪要"></textarea>
+          <textarea name="decisions" placeholder="会议决议"></textarea>
+          <button type="submit">完成会议</button>
+        </form>
+        {% endif %}
+      </li>
       {% endfor %}
     </ul>
     {% else %}
@@ -131,7 +250,10 @@
     {% if artifacts %}
     <ul>
       {% for a in artifacts %}
-      <li>{{ a.file_name }} - {{ a.artifact_type }}</li>
+      <li>
+        {{ a.file_name }} - {{ a.artifact_type }}
+        {% if a.external_url %}<a href="{{ a.external_url }}" target="_blank">查看</a>{% endif %}
+      </li>
       {% endfor %}
     </ul>
     {% else %}
