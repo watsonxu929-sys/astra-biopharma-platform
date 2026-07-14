@@ -140,13 +140,18 @@ def get_workspace_for_role(request: Request, db: Session, user_id: int | None):
         ]
 
     elif role == "admin":
+        people_count = int(db.scalar(select(func.count()).select_from(Person).where(Person.is_active == True)) or 0)
+        org_count = int(db.scalar(select(func.count()).select_from(Organization).where(Organization.is_active == True)) or 0)
+        from sqlalchemy import text
+        member_count = int(db.scalar(text("SELECT COUNT(*) FROM v04f_club_memberships WHERE status='active'"))) or 0
+        user_count = int(db.scalar(text("SELECT COUNT(*) FROM v05a_users"))) or 0
         workspace["cards"] = [
             {"title": "系统管理", "value": "", "url": "/admin/platform", "icon": "shield"},
-            {"title": "人物与机构", "value": 0, "url": "/admin/people", "icon": "users-round"},
-            {"title": "会员管理", "value": 0, "url": "/club/members", "icon": "id-card"},
+            {"title": "人物与机构", "value": f"{people_count}人 {org_count}家", "url": "/admin/people", "icon": "users-round"},
+            {"title": "会员管理", "value": member_count, "url": "/club/members", "icon": "id-card"},
             {"title": "情报运营", "value": 0, "url": "/admin/intelligence", "icon": "newspaper"},
             {"title": "数据治理", "value": 0, "url": "/admin/data-integrity", "icon": "shield-alert"},
-            {"title": "用户与权限", "value": 0, "url": "/admin/users", "icon": "user-cog"},
+            {"title": "用户与权限", "value": user_count, "url": "/admin/users", "icon": "user-cog"},
         ]
 
     else:

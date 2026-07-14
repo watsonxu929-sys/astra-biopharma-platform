@@ -371,11 +371,17 @@ def club_home(request: Request):
     }
     with db_connection() as conn:
         today_str = date.today().isoformat()
-        upcoming = conn.execute(
-            "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status IN ('registration_open','ongoing') OR (event_date >= ? AND status='published')",
-            (today_str,),
-        ).fetchone()
-        stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
+        try:
+            upcoming = conn.execute(
+                "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status IN ('registration_open','ongoing') OR (event_date >= ? AND status='published')",
+                (today_str,),
+            ).fetchone()
+            stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
+        except sqlite3.Error:
+            upcoming = conn.execute(
+                "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status IN ('registration_open','ongoing')",
+            ).fetchone()
+            stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
         open_events = conn.execute(
             "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE registration_status='open'",
         ).fetchone()
@@ -398,10 +404,15 @@ def club_home(request: Request):
             stats["lead_candidates"] = int(leads[0]) if leads else 0
         except sqlite3.Error:
             stats["lead_candidates"] = 0
-        upcoming_events = [dict(row) for row in conn.execute(
-            "SELECT id, event_no, event_date, venue, status, registration_status FROM v05c_club_event_profiles WHERE event_date >= ? ORDER BY event_date LIMIT 5",
-            (today_str,),
-        ).fetchall()]
+        try:
+            upcoming_events = [dict(row) for row in conn.execute(
+                "SELECT id, event_no, event_date, venue, status, registration_status FROM v05c_club_event_profiles WHERE event_date >= ? ORDER BY event_date LIMIT 5",
+                (today_str,),
+            ).fetchall()]
+        except sqlite3.Error:
+            upcoming_events = [dict(row) for row in conn.execute(
+                "SELECT id, event_no, '' as event_date, venue, status, registration_status FROM v05c_club_event_profiles WHERE status='published' LIMIT 5",
+            ).fetchall()]
     my_membership = None
     user_id = request.scope.get("user", {}).get("id")
     if user_id:
