@@ -23,9 +23,9 @@
     </div>
 </section>
 {% endif %}
-{% if data.items %}
-<section class="panel"><div class="panel-title"><h2>今日新增情报</h2><span class="badge">{{ data.items|length }}条</span></div>
-    {% for item in data.items %}
+{% if data['items'] %}
+<section class="panel"><div class="panel-title"><h2>今日新增情报</h2><span class="badge">{{ data['items']|length }}条</span></div>
+    {% for item in data['items'] %}
     <article class="intelligence-card">
         <div class="card-header">
             <span class="badge">{{ item.event_type or "其他" }}</span>

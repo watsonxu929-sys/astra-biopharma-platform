@@ -107,3 +107,25 @@ QUALITY_STATUS_LABELS = {
     "irrelevant": "无关内容",
     "needs_manual_review": "需人工判断",
 }
+
+
+class QualityResult:
+    def __init__(self, status: str, reason: str, accepted: bool):
+        self.status = status
+        self.reason = reason
+        self.accepted_for_analysis = accepted
+
+
+def assess_content_quality(
+    title: str,
+    text: str,
+    source_url: str = "",
+    published_at: str = "",
+    language: str = "",
+    duplicate_score: float = 0.0,
+    http_status: int = 200,
+) -> QualityResult:
+    result = check_content_quality(title, text, source_url)
+    if duplicate_score >= 0.9:
+        return QualityResult("duplicate", "重复内容", False)
+    return QualityResult(result["quality_status"], result["quality_reason"], result["is_accepted"])

@@ -7,6 +7,7 @@ set APP_HOST=127.0.0.1
 set APP_PORT=8000
 set APP_RELOAD=true
 set APP_OPEN_BROWSER=true
+set SCHEDULER_ENABLED=true
 if exist ".env" (
   for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
     if /i "%%A"=="APP_HOST" set APP_HOST=%%B

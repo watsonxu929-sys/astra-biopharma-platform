@@ -117,7 +117,7 @@ def get_settings() -> Settings:
         log_level=_env("LOG_LEVEL", "INFO").upper(),
         worker_enabled=_bool("WORKER_ENABLED", True),
         worker_concurrency=_int("WORKER_CONCURRENCY", 1),
-        scheduler_enabled=_bool("SCHEDULER_ENABLED", False),
+        scheduler_enabled=_bool("SCHEDULER_ENABLED", True),
         backup_enabled=_bool("BACKUP_ENABLED", True),
         backup_retention_days=_int("BACKUP_RETENTION_DAYS", 30),
         playwright_enabled=_bool("PLAYWRIGHT_ENABLED", False),

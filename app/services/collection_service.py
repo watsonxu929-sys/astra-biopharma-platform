@@ -19,7 +19,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.services.collectors import PlaywrightAdapter, PlaywrightCollectionError, PlaywrightUnavailable
-from app.services.processing.content_quality_service import check_content_quality, QUALITY_STATUS_LABELS
+from app.services.processing.content_quality_service import check_content_quality, assess_content_quality, QUALITY_STATUS_LABELS
 from app.v04c_review import db_connection, default_db_path
 from scripts.migrate_v05f import migrate as migrate_v05f
 
