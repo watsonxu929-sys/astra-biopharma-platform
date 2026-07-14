@@ -54,7 +54,7 @@ class Settings:
     log_level: str = "INFO"
     worker_enabled: bool = True
     worker_concurrency: int = 1
-    scheduler_enabled: bool = False
+    scheduler_enabled: bool = True
     backup_enabled: bool = True
     backup_retention_days: int = 30
     playwright_enabled: bool = False

@@ -78,6 +78,26 @@ from .models import (
 )
 
 app = FastAPI(title="生物医药产业情报系统")
+
+
+@app.on_event("startup")
+async def startup_event():
+    from app.services.collection_scheduler import start_scheduler
+    try:
+        started = start_scheduler()
+        print(f"[SCHEDULER] Started: {started}")
+    except Exception as exc:
+        print(f"[SCHEDULER] Startup failed: {exc}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    from app.services.collection_scheduler import stop_scheduler
+    try:
+        stop_scheduler()
+        print("[SCHEDULER] Stopped")
+    except Exception as exc:
+        print(f"[SCHEDULER] Shutdown failed: {exc}")
 app.state.navigation_for = navigation_for
 app.add_middleware(SecurityMiddleware)
 app.include_router(v04c_review_router)

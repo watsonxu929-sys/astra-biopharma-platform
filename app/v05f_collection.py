@@ -18,6 +18,12 @@ from app.services.collection_service import (
     process_job,
     snapshot_detail,
 )
+from app.services.collection_scheduler import (
+    get_scheduler_info,
+    get_sources_with_next_run,
+    is_scheduler_running,
+    run_scheduler_once,
+)
 
 router = APIRouter(tags=["信息采集"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
@@ -25,7 +31,11 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "tem
 
 @router.get("/collection", response_class=HTMLResponse)
 def collection_home(request: Request):
-    return templates.TemplateResponse(request, "v05f_collection.html", {"mode": "home", **dashboard()})
+    data = dashboard()
+    data["scheduler_info"] = get_scheduler_info()
+    data["scheduler_running"] = is_scheduler_running()
+    data["sources_with_next_run"] = get_sources_with_next_run()
+    return templates.TemplateResponse(request, "v05f_collection.html", {"mode": "home", **data})
 
 
 @router.get("/collection/sources", response_class=HTMLResponse)
@@ -154,6 +164,14 @@ def collection_snapshot(request: Request, snapshot_id: int):
     if not snapshot:
         raise HTTPException(status_code=404, detail="来源快照不存在")
     return templates.TemplateResponse(request, "v05f_collection.html", {"mode": "snapshot", "snapshot": snapshot})
+
+
+@router.post("/collection/run-now")
+def collection_run_now(request: Request):
+    result = run_scheduler_once()
+    processed = result.get("processed", 0)
+    msg = f"已执行 {processed} 个采集任务"
+    return RedirectResponse(f"/collection?message={msg}", status_code=303)
 
 
 @router.get("/v05f/health")

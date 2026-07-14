@@ -721,7 +721,11 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
         "SELECT * FROM v04g_source_snapshots WHERE monitoring_source_id=? AND normalized_url=? ORDER BY id DESC LIMIT 1",
         (source["id"], page.normalized_url),
     ).fetchone()
-    snapshot_id = old_snapshot["id"] if old_snapshot and old_snapshot["content_hash"] == page.content_hash else None
+    same_content_snapshot = conn.execute(
+        "SELECT * FROM v04g_source_snapshots WHERE monitoring_source_id=? AND content_hash=? ORDER BY id DESC LIMIT 1",
+        (source["id"], page.content_hash),
+    ).fetchone()
+    snapshot_id = old_snapshot["id"] if old_snapshot and old_snapshot["content_hash"] == page.content_hash else (same_content_snapshot["id"] if same_content_snapshot else None)
     if not snapshot_id:
         cur = conn.execute(
             """

@@ -29,13 +29,57 @@
   <a href="/collection/items?processing_status=queued"><strong>{{ counts.queued_items }}</strong><span>待加工情报</span></a>
   <a href="/collection/sources?status=paused"><strong>{{ counts.paused_sources }}</strong><span>暂停来源</span></a>
 </section>
+<section class="panel">
+  <div class="panel-title">
+    <h2>调度器状态</h2>
+    <span class="badge {{ 'success' if scheduler_running else 'warning' }}">{{ '运行中' if scheduler_running else '已停止' }}</span>
+  </div>
+  {% if scheduler_info.jobs %}
+  <div class="grid-2">
+    {% for job in scheduler_info.jobs %}
+    <div class="record-row">
+      <div><strong>{{ job.name }}</strong><p>{{ job.trigger }}</p></div>
+      <span class="muted">下次运行：{{ job.next_run_time }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">调度器未启动或未配置定时任务。</div>
+  {% endif %}
+  <form method="post" action="/collection/run-now" style="margin-top:12px">
+    <button class="button primary">立即执行一轮采集</button>
+  </form>
+</section>
+<section class="panel">
+  <div class="panel-title"><h2>采集来源运行状态</h2><a href="/collection/sources">管理来源</a></div>
+  <div class="grid-3">
+    {% for source in sources_with_next_run %}
+    <div class="record-row compact">
+      <div>
+        <strong>{{ source.name }}</strong>
+        <p>{{ source.source_type }} · {{ status_labels.get(source.check_frequency, source.check_frequency) }}</p>
+        <span class="badge {{ 'inactive' if not source.is_enabled else '' }}">{{ source.status_label }}</span>
+      </div>
+      <div class="muted" style="font-size:12px">
+        {% if source.last_checked_at %}上次：{{ source.last_checked_at[:16] }}{% endif %}
+        {% if source.next_run_time %}<br>下次：{{ source.next_run_time[:16] }}{% endif %}
+      </div>
+      <div>
+        {% if source.latest_job_status_label %}<span class="badge">{{ source.latest_job_status_label }}</span>{% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">暂无采集来源。</div>
+    {% endfor %}
+  </div>
+</section>
 <section class="flow-steps compact-flow">
   {% for title, desc, href in [("数据源","管理需要持续监测的网站、RSS、企业官网或手工来源。","/collection/sources"),("采集任务","执行抓取或采集，记录成功、失败、跳过和失败原因。","/collection/jobs"),("原始情报","保存采集到的标题、正文、来源链接和快照。","/collection/items"),("数据处理","对原始内容进行清洗、摘要、结构化和实体识别。","/processing/jobs"),("候选匹配","将情报与企业、人物、项目或产业方向建立候选关联。","/processing/candidates"),("情报审核","人工确认、修正、驳回或发布。","/admin/intelligence")] %}
   <a class="flow-card" href="{{ href }}"><strong>{{ title }}</strong><span>{{ desc }}</span></a>
   {% endfor %}
 </section>
 <section class="two-columns">
-  <article class="panel"><div class="panel-title"><h2>最近采集任务</h2><a href="/collection/jobs">查看全部</a></div>{% for job in latest_jobs %}<div class="record-row"><div><strong>{{ job.source_name }}</strong><p>{{ job.run_no }} · {{ status_labels.get(job.status, job.status) }}</p></div><span class="badge">新增 {{ job.new_content_count }} 条</span></div>{% else %}<div class="empty">暂无采集任务。添加信息来源后，系统将按计划自动获取公开信息。</div>{% endfor %}</article>
+  <article class="panel"><div class="panel-title"><h2>最近采集任务</h2><a href="/collection/jobs">查看全部</a></div>{% for job in latest_jobs %}<div class="record-row"><div><strong>{{ job.source_name }}</strong><p>{{ job.run_no }} · {{ status_labels.get(job.status, job.status) }}</p></div><span class="badge">新增 {{ job.new_content_count }} 条 / 重复 {{ job.duplicate_content_count }} 条</span></div>{% else %}<div class="empty">暂无采集任务。添加信息来源后，系统将按计划自动获取公开信息。</div>{% endfor %}</article>
   <article class="panel"><div class="panel-title"><h2>最近原始情报</h2><a href="/collection/items">查看全部</a></div>{% for item in latest_items %}<div class="record-row"><div><strong>{{ item.title or item.item_no }}</strong><p>{{ item.source_name }} · {{ item.captured_at }}</p></div><span class="badge">{{ status_labels.get(item.processing_status, item.processing_status) }}</span></div>{% else %}<div class="empty">暂无原始情报。新增采集来源后会在这里沉淀采集结果。</div>{% endfor %}</article>
 </section>
 {% elif mode == "sources" %}
