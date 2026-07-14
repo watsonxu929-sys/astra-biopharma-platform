@@ -1,0 +1,56 @@
+{% extends "platform/base.html" %}
+
+{% block title %}合作机会 - 业务协同{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>合作机会</h1>
+  <nav class="sub-tabs">
+    <a href="/collaboration/opportunities?tab=all" class="tab {% if tab == 'all' %}active{% endif %}">全部</a>
+    <a href="/collaboration/opportunities?tab=my" class="tab {% if tab == 'my' %}active{% endif %}">我负责的</a>
+    <a href="/collaboration/opportunities?tab=active" class="tab {% if tab == 'active' %}active{% endif %}">推进中</a>
+    <a href="/collaboration/opportunities?tab=on_hold" class="tab {% if tab == 'on_hold' %}active{% endif %}">暂停</a>
+    <a href="/collaboration/opportunities?tab=won" class="tab {% if tab == 'won' %}active{% endif %}">已成交</a>
+    <a href="/collaboration/opportunities?tab=closed" class="tab {% if tab == 'closed' %}active{% endif %}">已关闭</a>
+  </nav>
+</div>
+
+{% if no_table %}
+<div class="empty-state">当前暂无合作机会数据。</div>
+{% else %}
+{% if opportunities %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>机会名称</th>
+      <th>阶段</th>
+      <th>优先级</th>
+      <th>预计金额</th>
+      <th>下一步</th>
+      <th>下次跟进</th>
+      <th>负责人</th>
+      <th>更新时间</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for opp in opportunities %}
+    <tr>
+      <td><a href="/collaboration/opportunities/{{ opp.id }}">{{ opp.title }}</a></td>
+      <td>{{ stage_map.get(opp.stage, opp.stage) }}</td>
+      <td>{{ opp.priority or 'P2' }}</td>
+      <td>{{ opp.estimated_amount or '-' }}</td>
+      <td>{{ opp.next_action or '-' }}</td>
+      <td>{{ opp.next_follow_at or '-' }}</td>
+      <td>{{ opp.owner_id or '-' }}</td>
+      <td>{{ opp.updated_at }}</td>
+      <td><a href="/collaboration/opportunities/{{ opp.id }}">查看详情</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">暂无{{ tab_map.get(tab, '') }}合作机会</div>
+{% endif %}
+{% endif %}
+{% endblock %}

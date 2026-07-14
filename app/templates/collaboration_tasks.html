@@ -1,0 +1,75 @@
+{% extends "platform/base.html" %}
+
+{% block title %}任务与跟进 - 业务协同{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>任务与跟进</h1>
+  <nav class="sub-tabs">
+    <a href="/collaboration/tasks?tab=my" class="tab {% if tab == 'my' %}active{% endif %}">我的任务</a>
+    <a href="/collaboration/tasks?tab=overdue" class="tab {% if tab == 'overdue' %}active{% endif %}">超期任务</a>
+    <a href="/collaboration/tasks?tab=all" class="tab {% if tab == 'all' %}active{% endif %}">全部任务</a>
+  </nav>
+</div>
+
+{% if no_table %}
+<div class="empty-state">当前暂无任务数据。任务功能需要P5增量迁移支持。</div>
+{% else %}
+{% if tasks %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>任务标题</th>
+      <th>所属机会</th>
+      <th>负责人</th>
+      <th>截止日期</th>
+      <th>优先级</th>
+      <th>状态</th>
+      <th>创建时间</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for task in tasks %}
+    <tr>
+      <td>{{ task.title }}</td>
+      <td><a href="/collaboration/opportunities/{{ task.opportunity_id }}">#{{ task.opportunity_id }}</a></td>
+      <td>{{ task.owner_id }}</td>
+      <td {% if task.due_date %}class="overdue"{% endif %}>{{ task.due_date or '-' }}</td>
+      <td>{{ task.priority or 'P2' }}</td>
+      <td>{{ task_status_map.get(task.status, task.status) }}</td>
+      <td>{{ task.created_at }}</td>
+      <td>
+        {% if user_id == task.owner_id or is_admin %}
+        <button>更新状态</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">暂无{{ tab_map.get(tab, '') }}任务</div>
+{% endif %}
+{% endif %}
+
+{% if followups %}
+<section class="card">
+  <h2>近期跟进记录</h2>
+  <table class="data-table">
+    <thead>
+      <tr><th>类型</th><th>时间</th><th>内容</th><th>所属机会</th></tr>
+    </thead>
+    <tbody>
+      {% for f in followups %}
+      <tr>
+        <td>{{ f.follow_type }}</td>
+        <td>{{ f.followed_at }}</td>
+        <td>{{ f.content[:100] }}...</td>
+        <td><a href="/collaboration/opportunities/{{ f.opportunity_id }}">#{{ f.opportunity_id }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

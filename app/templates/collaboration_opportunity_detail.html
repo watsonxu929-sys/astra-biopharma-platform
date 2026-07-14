@@ -1,0 +1,142 @@
+{% extends "platform/base.html" %}
+
+{% block title %}{{ opportunity.title }} - 合作机会{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ opportunity.title }}</h1>
+  <div class="status-badge">{{ stage_map.get(opportunity.stage, opportunity.stage) }}</div>
+</div>
+
+<div class="grid-3">
+  <section class="card">
+    <h2>基本信息</h2>
+    <dl>
+      <dt>机会类型</dt><dd>{{ opportunity.opp_type or '-' }}</dd>
+      <dt>来源</dt><dd>{{ opportunity.source_type or '-' }} #{{ opportunity.source_id }}</dd>
+      <dt>优先级</dt><dd>{{ opportunity.priority or 'P2' }}</dd>
+      <dt>预计金额</dt><dd>{{ opportunity.estimated_amount or '-' }}</dd>
+      <dt>需求方</dt><dd>{{ opportunity.demand_organization_id or '-' }}</dd>
+      <dt>资源方</dt><dd>{{ opportunity.supply_organization_id or '-' }}</dd>
+      <dt>负责人</dt><dd>{{ opportunity.owner_id or '-' }}</dd>
+      <dt>状态</dt><dd>{{ opportunity.status or '-' }}</dd>
+      <dt>可见性</dt><dd>{{ opportunity.visibility or '-' }}</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>下一步行动</h2>
+    <p>{{ opportunity.next_action or '暂无下一步行动' }}</p>
+    <p>下次跟进：{{ opportunity.next_follow_at or '未设置' }}</p>
+    {% if is_admin %}
+    <button>添加跟进记录</button>
+    <button>推进阶段</button>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>风险提示</h2>
+    {% if risks %}
+    <ul>
+      {% for risk in risks %}
+      <li class="risk-{{ risk.risk_level }}">{{ risk.reason }} - {{ risk.suggested_action }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无风险提示</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>参与方</h2>
+    {% if participants %}
+    <table class="mini-table">
+      <thead><tr><th>类型</th><th>ID</th><th>角色</th></tr></thead>
+      <tbody>
+        {% for p in participants %}
+        <tr><td>{{ p.participant_type }}</td><td>{{ p.participant_id }}</td><td>{{ p.role }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">当前暂无可靠关系路径</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>跟进记录</h2>
+    {% if followups %}
+    <ul class="timeline">
+      {% for f in followups %}
+      <li>
+        <span class="date">{{ f.followed_at }}</span>
+        <span class="type">{{ f.follow_type }}</span>
+        <p>{{ f.content }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无跟进记录</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>阶段历史</h2>
+    {% if stage_history %}
+    <ul class="timeline">
+      {% for h in stage_history %}
+      <li>
+        <span class="date">{{ h.created_at }}</span>
+        <span>{{ h.old_stage or '初始' }} → {{ h.new_stage }}</span>
+        {% if h.reason %}<p>{{ h.reason }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无阶段变更记录</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>协同任务</h2>
+    {% if tasks %}
+    <ul>
+      {% for t in tasks %}
+      <li>
+        <span class="status {{ t.status }}">{{ task_status_map.get(t.status, t.status) }}</span>
+        {{ t.title }} - {{ t.due_date or '无截止日期' }}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无协同任务</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>会议</h2>
+    {% if meetings %}
+    <ul>
+      {% for m in meetings %}
+      <li>{{ m.subject }} - {{ m.starts_at }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无会议记录</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>文件材料</h2>
+    {% if artifacts %}
+    <ul>
+      {% for a in artifacts %}
+      <li>{{ a.file_name }} - {{ a.artifact_type }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无文件材料</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

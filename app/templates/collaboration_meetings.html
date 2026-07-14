@@ -1,0 +1,84 @@
+{% extends "platform/base.html" %}
+
+{% block title %}会议与材料 - 业务协同{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>会议与材料</h1>
+  <nav class="sub-tabs">
+    <a href="/collaboration/meetings?tab=meetings" class="tab {% if tab == 'meetings' %}active{% endif %}">会议</a>
+    <a href="/collaboration/meetings?tab=materials" class="tab {% if tab == 'materials' %}active{% endif %}">文件材料</a>
+  </nav>
+</div>
+
+{% if tab == 'meetings' %}
+{% if meetings %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>会议主题</th>
+      <th>所属机会</th>
+      <th>时间</th>
+      <th>地点</th>
+      <th>组织人</th>
+      <th>状态</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for meeting in meetings %}
+    <tr>
+      <td>{{ meeting.subject }}</td>
+      <td><a href="/collaboration/opportunities/{{ meeting.opportunity_id }}">#{{ meeting.opportunity_id }}</a></td>
+      <td>{{ meeting.starts_at }} - {{ meeting.ends_at }}</td>
+      <td>{{ meeting.location or meeting.online_url or '-' }}</td>
+      <td>{{ meeting.organizer_user_id }}</td>
+      <td>{{ meeting.status }}</td>
+      <td>
+        {% if meeting.status == 'scheduled' %}
+        <button>完成会议</button>
+        {% endif %}
+        <button>查看详情</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">暂无会议记录。会议功能需要P5增量迁移支持。</div>
+{% endif %}
+{% endif %}
+
+{% if tab == 'materials' %}
+{% if artifacts %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>文件名</th>
+      <th>类型</th>
+      <th>所属机会</th>
+      <th>上传人</th>
+      <th>版本</th>
+      <th>可见范围</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for artifact in artifacts %}
+    <tr>
+      <td>{{ artifact.file_name }}</td>
+      <td>{{ artifact.artifact_type }}</td>
+      <td><a href="/collaboration/opportunities/{{ artifact.opportunity_id }}">#{{ artifact.opportunity_id }}</a></td>
+      <td>{{ artifact.uploaded_by_user_id }}</td>
+      <td>{{ artifact.version }}</td>
+      <td>{{ artifact.visibility }}</td>
+      <td><button>查看</button></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">暂无文件材料。材料管理功能需要P5增量迁移支持。</div>
+{% endif %}
+{% endif %}
+{% endblock %}

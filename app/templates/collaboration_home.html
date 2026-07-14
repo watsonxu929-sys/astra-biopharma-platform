@@ -1,0 +1,86 @@
+{% extends "platform/base.html" %}
+
+{% block title %}协同首页 - 业务协同{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>业务协同工作台</h1>
+  <p>线索、合作机会、任务与跟进管理</p>
+</div>
+
+<section class="card-stats">
+  <div class="stat-item"><span class="stat-value">{{ metrics['新线索'] or 0 }}</span><span class="stat-label">新线索</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['待确认线索'] or 0 }}</span><span class="stat-label">待确认线索</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['推进中机会'] or 0 }}</span><span class="stat-label">推进中机会</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['本周待跟进'] or 0 }}</span><span class="stat-label">本周待跟进</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['已逾期跟进'] or 0 }}</span><span class="stat-label">已逾期跟进</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['待完成任务'] or 0 }}</span><span class="stat-label">待完成任务</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['逾期任务'] or 0 }}</span><span class="stat-label">逾期任务</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['待召开会议'] or 0 }}</span><span class="stat-label">待召开会议</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['谈判中机会'] or 0 }}</span><span class="stat-label">谈判中机会</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['执行中机会'] or 0 }}</span><span class="stat-label">执行中机会</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['高风险机会'] or 0 }}</span><span class="stat-label">高风险机会</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['无负责人机会'] or 0 }}</span><span class="stat-label">无负责人机会</span></div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>紧急跟进任务</h2>
+    {% if urgent_opportunities %}
+    <ul class="task-list">
+      {% for opp in urgent_opportunities %}
+      <li>
+        <a href="/collaboration/opportunities/{{ opp.id }}">{{ opp.title }}</a>
+        <span class="status">{{ stage_map.get(opp.stage, opp.stage) }}</span>
+        <span class="date">{{ opp.next_follow_at }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无紧急跟进任务</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>逾期任务</h2>
+    {% if overdue_tasks %}
+    <ul class="task-list">
+      {% for task in overdue_tasks %}
+      <li>
+        <a href="/collaboration/opportunities/{{ task.opportunity_id }}">{{ task.title }}</a>
+        <span class="date">{{ task.due_date }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无逾期任务</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>待召开会议</h2>
+    {% if upcoming_meetings %}
+    <ul class="task-list">
+      {% for meeting in upcoming_meetings %}
+      <li>
+        <a href="/collaboration/opportunities/{{ meeting.opportunity_id }}">{{ meeting.subject }}</a>
+        <span class="date">{{ meeting.starts_at }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">暂无待召开会议</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>快捷入口</h2>
+    <div class="quick-links">
+      <a href="/collaboration/leads" class="quick-link">线索审核</a>
+      <a href="/collaboration/opportunities" class="quick-link">合作机会</a>
+      <a href="/collaboration/tasks" class="quick-link">任务管理</a>
+      <a href="/collaboration/meetings" class="quick-link">会议安排</a>
+    </div>
+  </section>
+</div>
+{% endblock %}

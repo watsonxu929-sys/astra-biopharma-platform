@@ -1,0 +1,61 @@
+{% extends "platform/base.html" %}
+
+{% block title %}线索 - 业务协同{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>线索</h1>
+  <nav class="sub-tabs">
+    <a href="/collaboration/leads?tab=pending" class="tab {% if tab == 'pending' %}active{% endif %}">待确认</a>
+    <a href="/collaboration/leads?tab=qualified" class="tab {% if tab == 'qualified' %}active{% endif %}">已确认</a>
+    <a href="/collaboration/leads?tab=disqualified" class="tab {% if tab == 'disqualified' %}active{% endif %}">已否决</a>
+    <a href="/collaboration/leads?tab=converted" class="tab {% if tab == 'converted' %}active{% endif %}">已转化</a>
+  </nav>
+</div>
+
+{% if no_table %}
+<div class="empty-state">当前暂无线索数据。线索功能需要P5增量迁移支持。</div>
+{% else %}
+{% if leads %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>标题</th>
+      <th>来源</th>
+      <th>状态</th>
+      <th>优先级</th>
+      <th>负责人</th>
+      <th>更新时间</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for lead in leads %}
+    <tr>
+      <td><a href="/collaboration/opportunities/{{ lead.converted_opportunity_id }}">{{ lead.title }}</a></td>
+      <td>{{ lead.source_type or '人工录入' }}</td>
+      <td>{{ status_map.get(lead.lifecycle_status, lead.lifecycle_status) }}</td>
+      <td>{{ lead.priority or 'P2' }}</td>
+      <td>{{ lead.owner_user_id or '-' }}</td>
+      <td>{{ lead.updated_at }}</td>
+      <td>
+        {% if is_operator %}
+        {% if lead.lifecycle_status in ['new', 'reviewing'] %}
+        <button>确认有效</button>
+        <button>否决</button>
+        {% endif %}
+        {% if lead.lifecycle_status == 'qualified' and not lead.converted_opportunity_id %}
+        <button>转为机会</button>
+        {% endif %}
+        {% endif %}
+        <button>查看详情</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">暂无{{ tab_map.get(tab, '') }}线索</div>
+{% endif %}
+{% endif %}
+{% endblock %}
