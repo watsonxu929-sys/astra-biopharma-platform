@@ -54,16 +54,16 @@
         <input type="text" name="next_action" placeholder="建议的下一步行动">
       </div>
       <div>
-        <label>需求方ID</label>
-        <input type="number" name="demand_org_id" placeholder="需求方组织ID">
+        <label>需求方组织</label>
+        <input type="number" name="demand_org_id" placeholder="需求方组织ID（可选）">
       </div>
       <div>
-        <label>资源方ID</label>
-        <input type="number" name="supply_org_id" placeholder="资源方组织ID">
+        <label>资源方组织</label>
+        <input type="number" name="supply_org_id" placeholder="资源方组织ID（可选）">
       </div>
       <div>
-        <label>主体ID</label>
-        <input type="number" name="subject_id" placeholder="关联主体ID">
+        <label>关联主体</label>
+        <input type="number" name="subject_id" placeholder="关联主体ID（可选）">
       </div>
     </div>
     <button type="submit">创建线索</button>
@@ -100,7 +100,7 @@
       <td>{{ lead.source_type or '人工录入' }}</td>
       <td>{{ status_map.get(lead.lifecycle_status, lead.lifecycle_status) }}</td>
       <td>{{ lead.priority or 'P2' }}</td>
-      <td>{{ lead.owner_user_id or '-' }}</td>
+      <td>{{ lead.owner_name or lead.owner_user_id or '-' }}</td>
       <td>{{ lead.updated_at }}</td>
       <td>
         {% if is_operator %}

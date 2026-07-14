@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-VALID_CATEGORIES = {"workspace", "network", "intelligence", "resources", "club", "admin", "account", "experimental"}
+VALID_CATEGORIES = {"workspace", "network", "intelligence", "resources", "collaboration", "club", "admin", "account", "experimental"}
 VALID_CLIENTS = {"web", "app", "miniprogram", "admin"}
 VALID_STATUS = {"active", "beta", "planned", "disabled"}
 
@@ -67,12 +67,18 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("intelligence.sources", "数据源管理", "来源", "监测和采集来源", "intelligence", "intelligence", "/collection/sources", "/api/v1/collection/sources", "database", "manage_monitoring", clients=("web", "admin"), order=43),
     cap("intelligence.operations", "情报运营总览", "运营", "情报采集、加工、审核和发布总览", "intelligence", "intelligence", "/intelligence/operations", "/api/v1/collection", "activity", "manage_monitoring", clients=("web", "admin"), order=44),
 
-    cap("resources", "业务协同", "协同", "线索、合作机会、跟进和任务", "resources", None, "/collaboration", "/api/v1/opportunities", "handshake", order=50),
-    cap("resources.home", "协同首页", "首页", "业务协同工作台和任务队列", "resources", "resources", "/collaboration", "/api/v1/opportunities", "layout-dashboard", order=51),
-    cap("resources.leads", "线索", "线索", "业务线索和线索审核", "resources", "resources", "/collaboration/leads", "/api/v1/opportunities", "target", order=52),
-    cap("resources.opportunities", "合作机会", "机会", "合作机会管理和阶段推进", "resources", "resources", "/collaboration/opportunities", "/api/v1/opportunities", "handshake", order=53),
-    cap("resources.tasks", "任务与跟进", "任务", "协作任务和商务跟进记录", "resources", "resources", "/collaboration/tasks", "/api/v1/opportunities", "list-checks", order=54),
-    cap("resources.meetings", "会议与材料", "会议", "会议安排和材料管理", "resources", "resources", "/collaboration/meetings", "/api/v1/opportunities", "clock", order=55),
+    cap("resources", "资源市场", "资源", "需求、供给和匹配", "resources", None, "/resources", "/api/v1/resources", "package", order=40),
+    cap("resources.home", "资源首页", "首页", "资源需求、供给和匹配", "resources", "resources", "/resources", "/api/v1/resources", "layout-dashboard", order=41),
+    cap("resources.demand", "需求发布", "需求", "发布和查看资源需求", "resources", "resources", "/resources/demand", "/api/v1/resources", "message-circle", order=42),
+    cap("resources.supply", "供给发布", "供给", "发布和查看资源供给", "resources", "resources", "/resources/supply", "/api/v1/resources", "package-check", order=43),
+    cap("resources.matching", "匹配推荐", "匹配", "供需匹配推荐", "resources", "resources", "/resources/matching", "/api/v1/resources", "shuffle", order=44),
+
+    cap("collaboration", "业务协同", "协同", "线索、合作机会、跟进和任务", "collaboration", None, "/collaboration", "/api/v1/opportunities", "handshake", order=50),
+    cap("collaboration.home", "协同首页", "首页", "业务协同工作台和任务队列", "collaboration", "collaboration", "/collaboration", "/api/v1/opportunities", "layout-dashboard", order=51),
+    cap("collaboration.leads", "线索", "线索", "业务线索和线索审核", "collaboration", "collaboration", "/collaboration/leads", "/api/v1/opportunities", "target", order=52),
+    cap("collaboration.opportunities", "合作机会", "机会", "合作机会管理和阶段推进", "collaboration", "collaboration", "/collaboration/opportunities", "/api/v1/opportunities", "handshake", order=53),
+    cap("collaboration.tasks", "任务与跟进", "任务", "协作任务和商务跟进记录", "collaboration", "collaboration", "/collaboration/tasks", "/api/v1/opportunities", "list-checks", order=54),
+    cap("collaboration.meetings", "会议与材料", "会议", "会议安排和材料管理", "collaboration", "collaboration", "/collaboration/meetings", "/api/v1/opportunities", "clock", order=55),
 
     cap("club", "Q-BAY俱乐部", "俱乐部", "Q-BAY俱乐部、会员和活动", "club", None, "/club", "/api/v1/me/club-context", "landmark", order=60),
     cap("club.home", "俱乐部首页", "首页", "俱乐部工作台和任务队列", "club", "club", "/club", "/api/v1/me/club-context", "home", order=61),

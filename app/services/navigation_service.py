@@ -19,10 +19,16 @@ NETWORK_WORK_ENTRY_KEYS = {
 }
 RESOURCES_WORK_ENTRY_KEYS = {
     "resources.home",
-    "resources.leads",
-    "resources.opportunities",
-    "resources.tasks",
-    "resources.meetings",
+    "resources.demand",
+    "resources.supply",
+    "resources.matching",
+}
+COLLABORATION_WORK_ENTRY_KEYS = {
+    "collaboration.home",
+    "collaboration.leads",
+    "collaboration.opportunities",
+    "collaboration.tasks",
+    "collaboration.meetings",
 }
 CLUB_WORK_ENTRY_KEYS = {
     "club.home",
@@ -31,7 +37,7 @@ CLUB_WORK_ENTRY_KEYS = {
     "club.matching",
     "club.operations",
 }
-PRIMARY_ORDER = ["workspace", "network", "intelligence", "resources", "club"]
+PRIMARY_ORDER = ["workspace", "network", "intelligence", "resources", "collaboration", "club"]
 CLIENTS = {"web", "app", "miniprogram", "admin"}
 
 
@@ -82,7 +88,7 @@ def get_primary_navigation(context: dict[str, Any] | None, path: str = "/", *, c
         cap = by_key.get(key)
         if cap:
             result.append(_nav_item(cap, path))
-    return result[:5]
+    return result[:6]
 
 
 def get_secondary_navigation(context: dict[str, Any] | None, active_category: str | None = None, path: str = "/", *, client: str = "web") -> list[dict[str, Any]]:
@@ -94,6 +100,8 @@ def get_secondary_navigation(context: dict[str, Any] | None, active_category: st
         caps = [cap for cap in caps if cap.get("capability_key") in NETWORK_WORK_ENTRY_KEYS]
     elif active_category == "resources":
         caps = [cap for cap in caps if cap.get("capability_key") in RESOURCES_WORK_ENTRY_KEYS]
+    elif active_category == "collaboration":
+        caps = [cap for cap in caps if cap.get("capability_key") in COLLABORATION_WORK_ENTRY_KEYS]
     elif active_category == "club":
         caps = [cap for cap in caps if cap.get("capability_key") in CLUB_WORK_ENTRY_KEYS]
     return [_nav_item(cap, path) for cap in sorted(caps, key=lambda item: item.get("order", 0))]
@@ -170,7 +178,7 @@ def validate_registered_routes(app: Any | None = None) -> list[str]:
         route = (cap.get("web_route") or "").split("?", 1)[0]
         if not route or route == "#" or cap.get("status") in {"planned", "disabled"}:
             continue
-        if route not in registered and not any(route.startswith(prefix) for prefix in ["/resources", "/intelligence", "/network", "/opportunities", "/workspace", "/club", "/member", "/review", "/collection", "/processing", "/reports", "/signals", "/research", "/system", "/admin"]):
+        if route not in registered and not any(route.startswith(prefix) for prefix in ["/resources", "/collaboration", "/intelligence", "/network", "/opportunities", "/workspace", "/club", "/member", "/review", "/collection", "/processing", "/reports", "/signals", "/research", "/system", "/admin"]):
             errors.append(f"unregistered route for {cap['capability_key']}: {route}")
     return errors
 

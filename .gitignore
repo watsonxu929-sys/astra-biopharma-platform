@@ -1,4 +1,4 @@
-﻿﻿.venv/
+﻿﻿﻿.venv/
 venv/
 __pycache__/
 **/__pycache__/
@@ -17,6 +17,7 @@ data/backups/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/acceptance/
 *.log
 .pytest_cache/
 .vscode/

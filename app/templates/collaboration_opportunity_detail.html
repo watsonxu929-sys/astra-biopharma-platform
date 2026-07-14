@@ -13,12 +13,12 @@
     <h2>基本信息</h2>
     <dl>
       <dt>机会类型</dt><dd>{{ opportunity.opp_type or '-' }}</dd>
-      <dt>来源</dt><dd>{{ opportunity.source_type or '-' }} #{{ opportunity.source_id }}</dd>
+      <dt>来源</dt><dd>{{ opportunity.source_type or '-' }} {% if opportunity.source_id %}#{{ opportunity.source_id }}{% endif %}</dd>
       <dt>优先级</dt><dd>{{ opportunity.priority or 'P2' }}</dd>
       <dt>预计金额</dt><dd>{{ opportunity.estimated_amount or '-' }}</dd>
-      <dt>需求方</dt><dd>{{ opportunity.demand_organization_id or '-' }}</dd>
-      <dt>资源方</dt><dd>{{ opportunity.supply_organization_id or '-' }}</dd>
-      <dt>负责人</dt><dd>{{ opportunity.owner_id or '-' }}</dd>
+      <dt>需求方</dt><dd>{{ opportunity.demand_organization_name or opportunity.demand_organization_id or '-' }}</dd>
+      <dt>资源方</dt><dd>{{ opportunity.supply_organization_name or opportunity.supply_organization_id or '-' }}</dd>
+      <dt>负责人</dt><dd>{{ opportunity.owner_name or opportunity.owner_id or '-' }}</dd>
       <dt>状态</dt><dd>{{ opportunity.status or '-' }}</dd>
       <dt>可见性</dt><dd>{{ opportunity.visibility or '-' }}</dd>
     </dl>
@@ -147,10 +147,10 @@
     <h2>参与方</h2>
     {% if participants %}
     <table class="mini-table">
-      <thead><tr><th>类型</th><th>ID</th><th>角色</th></tr></thead>
+      <thead><tr><th>类型</th><th>名称</th><th>角色</th></tr></thead>
       <tbody>
         {% for p in participants %}
-        <tr><td>{{ p.participant_type }}</td><td>{{ p.participant_id }}</td><td>{{ p.role }}</td></tr>
+        <tr><td>{{ p.participant_type }}</td><td>{{ p.participant_name or p.participant_id }}</td><td>{{ p.role }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

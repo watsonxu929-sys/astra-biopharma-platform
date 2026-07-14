@@ -566,3 +566,20 @@
 .action-links{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
 .subject-table td.actions{min-width:150px;}
 .subject-table td.actions .button,.subject-table td.actions form{margin:2px 4px 2px 0;display:inline-block;}
+
+/* ── Environment Badge ── */
+.environment-badge {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  z-index: 10;
+}
+.environment-badge.acceptance {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}

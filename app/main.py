@@ -83,7 +83,11 @@ app = FastAPI(title="生物医药产业情报系统")
 
 @app.on_event("startup")
 async def startup_event():
+    import os
     from app.services.collection_scheduler import start_scheduler
+    db_url = os.environ.get("DATABASE_URL", "")
+    app.state.is_acceptance = "acceptance" in db_url.lower()
+    print(f"[ENVIRONMENT] Acceptance Mode: {app.state.is_acceptance}")
     try:
         started = start_scheduler()
         print(f"[SCHEDULER] Started: {started}")
