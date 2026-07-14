@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.api_common import Pagination, normalize_page, paginated, require_permission, single
+from app.services.business_collaboration_service import BusinessCollaborationService
 from app.services.unified_opportunity_service import UnifiedOpportunityService
 
 router = APIRouter()
@@ -37,12 +38,18 @@ class OpportunityCreate(BaseModel):
 
 class StageUpdate(BaseModel):
     stage: str
+    reason: str = ""
 
 
 class FollowUpCreate(BaseModel):
-    follow_type: str = "note"
+    follow_type: str = "other"
     content: str
     visibility: str = "organization"
+    result: str | None = None
+    next_action: str | None = None
+    next_follow_at: datetime | None = None
+    shared_summary: str | None = None
+    internal_note: str | None = None
 
 
 class TaskCreate(BaseModel):
@@ -50,6 +57,9 @@ class TaskCreate(BaseModel):
     owner_id: int | None = None
     priority: str = "P2"
     participants: str | None = None
+    task_type: str = "other"
+    due_date: datetime | None = None
+    completion_criteria: str | None = None
 
 
 def _is_admin(user: dict) -> bool:
@@ -83,6 +93,10 @@ def create_opportunity(request: Request, payload: OpportunityCreate, db: Session
 @router.post("/opportunities/{opp_id}/stage", summary="Update opportunity stage")
 def update_stage(request: Request, opp_id: int, payload: StageUpdate, db: Session = Depends(get_db)):
     user = require_permission(request, "edit_data")
+    p5 = BusinessCollaborationService(db)
+    if p5.schema_ready():
+        return single(p5.update_stage(opp_id, actor_user_id=int(user["id"]), stage=payload.stage,
+                                      reason=payload.reason, is_admin=_is_admin(user)))
     svc = UnifiedOpportunityService(db)
     return single(svc.to_api(svc.update_stage(opp_id, actor_user_id=int(user["id"]), stage=payload.stage, is_admin=_is_admin(user))))
 
@@ -90,6 +104,9 @@ def update_stage(request: Request, opp_id: int, payload: StageUpdate, db: Sessio
 @router.post("/opportunities/{opp_id}/follow-ups", summary="Create opportunity follow-up")
 def create_follow_up(request: Request, opp_id: int, payload: FollowUpCreate, db: Session = Depends(get_db)):
     user = require_permission(request, "edit_data")
+    p5 = BusinessCollaborationService(db)
+    if p5.schema_ready():
+        return single(p5.add_follow_up(opp_id, payload.model_dump(), actor_user_id=int(user["id"]), is_admin=_is_admin(user)))
     follow = UnifiedOpportunityService(db).create_follow_up(opp_id=opp_id, actor_user_id=int(user["id"]), fields=payload.model_dump(), is_admin=_is_admin(user))
     return single({"id": follow.id, "opportunity_id": follow.opportunity_id})
 
@@ -97,6 +114,9 @@ def create_follow_up(request: Request, opp_id: int, payload: FollowUpCreate, db:
 @router.post("/opportunities/{opp_id}/tasks", summary="Create opportunity task")
 def create_task(request: Request, opp_id: int, payload: TaskCreate, db: Session = Depends(get_db)):
     user = require_permission(request, "edit_data")
-    owner_id = int(payload.owner_id or user["id"])
+    p5 = BusinessCollaborationService(db)
+    if p5.schema_ready():
+        return single(p5.create_task(opp_id, payload.model_dump(), actor_user_id=int(user["id"]), is_admin=_is_admin(user)))
+    owner_id = int(payload.owner_id or user["id"] )
     task = UnifiedOpportunityService(db).create_task(opp_id=opp_id, actor_user_id=int(user["id"]), owner_id=owner_id, fields=payload.model_dump(), is_admin=_is_admin(user))
     return single({"id": task.id, "opportunity_id": task.opportunity_id, "owner_id": task.owner_id})

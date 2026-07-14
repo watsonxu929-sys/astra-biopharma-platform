@@ -68,7 +68,7 @@ class UnifiedOpportunityService:
             raise HTTPException(status_code=403, detail={"code": "OPPORTUNITY_FORBIDDEN", "message": "无权访问该机会", "details": {}})
         return opp
 
-    def create(self, *, actor_user_id: int, fields: dict[str, Any]) -> CooperationOpportunity:
+    def create(self, *, actor_user_id: int, fields: dict[str, Any], commit: bool = True) -> CooperationOpportunity:
         if fields.get("human_confirmed") is not True:
             raise HTTPException(status_code=409, detail={"code": "OPPORTUNITY_HUMAN_CONFIRMATION_REQUIRED", "message": "正式商机必须由人工确认", "details": {}})
         source_type = fields.get("source_type")
@@ -105,7 +105,11 @@ class UnifiedOpportunityService:
         self.db.add(opp)
         self.db.flush()
         self.db.add(TimelineEntry(opportunity_id=opp.id, event_type="created", description=f"Opportunity created: {opp.title}", actor_id=actor_user_id))
-        self.db.commit(); self.db.refresh(opp)
+        if commit:
+            self.db.commit()
+            self.db.refresh(opp)
+        else:
+            self.db.flush()
         return opp
 
     def update_stage(self, opp_id: int, *, actor_user_id: int, stage: str, is_admin: bool = False) -> CooperationOpportunity:
