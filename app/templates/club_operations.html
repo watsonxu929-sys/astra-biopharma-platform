@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}运营管理{% endblock %}
+{% block content %}
+{% set sec = request.scope.get('security_context', {}) %}
+{% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
+{% set tab = request.query_params.get('tab', 'dashboard') %}
+
+{% if not is_operator %}
+<div class="warning-box">权限不足：需要运营人员或管理员权限才能访问此页面。</div>
+{% else %}
+
+<section class="page-head action-head">
+  <div>
+    <p class="eyebrow">Q-BAY俱乐部</p>
+    <h1>运营管理</h1>
+    <p>集中处理会员审核、报名审核、签到管理和会后跟进。</p>
+  </div>
+</section>
+
+<nav class="sub-tabs">
+  <a href="/club/operations?tab=dashboard" class="tab {% if tab == 'dashboard' %}active{% endif %}">工作台</a>
+  <a href="/club/members?tab=applications" class="tab {% if tab == 'applications' %}active{% endif %}">会员审核</a>
+  <a href="/club/events?tab=manage" class="tab {% if tab == 'events' %}active{% endif %}">活动管理</a>
+  <a href="/club/operations?tab=registrations" class="tab {% if tab == 'registrations' %}active{% endif %}">报名审核</a>
+  <a href="/club/operations?tab=checkin" class="tab {% if tab == 'checkin' %}active{% endif %}">签到管理</a>
+  <a href="/club/operations?tab=resources" class="tab {% if tab == 'resources' %}active{% endif %}">供需审核</a>
+  <a href="/club/operations?tab=followups" class="tab {% if tab == 'followups' %}active{% endif %}">会后跟进</a>
+  <a href="/club/operations?tab=leads" class="tab {% if tab == 'leads' %}active{% endif %}">潜在线索</a>
+</nav>
+
+{% if tab == 'dashboard' %}
+<div class="card-stats">
+  <div class="stat-item"><span class="stat-value">{{ stats.pending_applications or 0 }}</span><span class="stat-label">待审核会员</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.pending_registrations or 0 }}</span><span class="stat-label">待审核报名</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.today_events or 0 }}</span><span class="stat-label">今日活动</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.pending_resources or 0 }}</span><span class="stat-label">待审核供需</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.pending_matches or 0 }}</span><span class="stat-label">待处理匹配</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.followups or 0 }}</span><span class="stat-label">会后待跟进</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.leads or 0 }}</span><span class="stat-label">潜在线索</span></div>
+</div>
+
+<section class="profile-sections">
+  <a class="panel" href="/club/members?tab=applications"><h2>待审核会员</h2><p>{{ stats.pending_applications or 0 }} 个申请</p></a>
+  <a class="panel" href="/club/operations?tab=registrations"><h2>待审核报名</h2><p>{{ stats.pending_registrations or 0 }} 个报名</p></a>
+  <a class="panel" href="/club/operations?tab=checkin"><h2>今日签到</h2><p>{{ stats.today_events or 0 }} 个活动</p></a>
+  <a class="panel" href="/club/operations?tab=resources"><h2>待审核供需</h2><p>{{ stats.pending_resources or 0 }} 个</p></a>
+  <a class="panel" href="/club/operations?tab=followups"><h2>会后待跟进</h2><p>{{ stats.followups or 0 }} 个</p></a>
+  <a class="panel" href="/club/operations?tab=leads"><h2>潜在线索</h2><p>{{ stats.leads or 0 }} 个</p></a>
+</section>
+
+{% elif tab == 'registrations' %}
+<section class="panel">
+  <h2>待审核报名</h2>
+  <table>
+    <thead>
+      <tr><th>活动</th><th>编号</th><th>姓名</th><th>机构</th><th>状态</th><th>时间</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for reg in pending_registrations %}
+      <tr>
+        <td>{{ reg.event_name }}</td>
+        <td>{{ reg.registration_no }}</td>
+        <td>{{ reg.applicant_name }}</td>
+        <td>{{ reg.organization_name or "暂无" }}</td>
+        <td>{{ {"submitted":"已提交","approved":"已通过","waitlisted":"候补","rejected":"已拒绝"}.get(reg.status, reg.status) }}</td>
+        <td>{{ reg.registered_at }}</td>
+        <td>
+          <a href="/club/events/{{ reg.club_event_id }}/registrations/{{ reg.id }}" class="btn btn-sm">审核</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty">暂无待审核报名</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% elif tab == 'checkin' %}
+<section class="panel">
+  <h2>今日活动签到</h2>
+  {% if today_events %}
+  {% for event in today_events %}
+  <div class="event-checkin">
+    <h3><a href="/club/events/{{ event.id }}">{{ event.name }}</a></h3>
+    <p>{{ event.event_date }} · {{ event.venue }}</p>
+    <a href="/club/events/{{ event.id }}/registrations" class="btn btn-sm">管理签到</a>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">今日暂无活动。</div>
+  {% endif %}
+</section>
+
+{% elif tab == 'resources' %}
+<section class="panel">
+  <h2>待审核供需</h2>
+  <table>
+    <thead>
+      <tr><th>标题</th><th>方向</th><th>类型</th><th>机构</th><th>状态</th><th>审核</th></tr>
+    </thead>
+    <tbody>
+      {% for resource in pending_resources %}
+      <tr>
+        <td><a href="/resources/{{ resource.id }}">{{ resource.title }}</a></td>
+        <td>{{ "需求" if resource.direction == "demand" else "供给" }}</td>
+        <td>{{ resource.resource_type }}</td>
+        <td>{{ resource.organization_id or "个人" }}</td>
+        <td>{{ {"pending_review":"待审核","published":"已发布","rejected":"已拒绝"}.get(resource.status, resource.status) }}</td>
+        <td>
+          <form method="post" action="/club/resources/{{ resource.id }}/review" class="inline-form">
+            <select name="decision">
+              <option value="approved">通过</option>
+              <option value="need_more_info">需补充</option>
+              <option value="rejected">拒绝</option>
+            </select>
+            <input name="note" placeholder="审核说明">
+            <button class="btn btn-sm" type="submit">保存</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无待审核供需</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% elif tab == 'followups' %}
+<section class="panel">
+  <h2>会后关系候选</h2>
+  <p>同场活动不等于认识，认识不等于合作。需人工复核后才进入正式关系网络。</p>
+  <table>
+    <thead>
+      <tr><th>编号</th><th>活动</th><th>关系类型</th><th>主体</th><th>状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for candidate in relationship_candidates %}
+      <tr>
+        <td>{{ candidate.candidate_no }}</td>
+        <td>{{ candidate.club_event_id }}</td>
+        <td>{{ candidate.relationship_type }}</td>
+        <td>{{ candidate.subject_type }} {{ candidate.subject_id }} → {{ candidate.object_type }} {{ candidate.object_id }}</td>
+        <td>{{ candidate.status }}</td>
+        <td>
+          <form method="post" action="/club/relationship-candidates/{{ candidate.id }}/review" class="inline-form">
+            <select name="decision">
+              <option value="reviewed">已复核</option>
+              <option value="accepted">接受候选</option>
+              <option value="rejected">拒绝</option>
+            </select>
+            <button class="btn btn-sm" type="submit">保存</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无会后关系候选</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% elif tab == 'leads' %}
+<section class="panel">
+  <h2>潜在线索候选</h2>
+  <p>线索候选需人工核实，不会自动创建正式商机。</p>
+  <table>
+    <thead>
+      <tr><th>编号</th><th>标题</th><th>来源</th><th>理由</th><th>下一步</th><th>状态</th></tr>
+    </thead>
+    <tbody>
+      {% for lead in leads %}
+      <tr>
+        <td>{{ lead.lead_no }}</td>
+        <td>{{ lead.title }}</td>
+        <td>{{ lead.source_type }} / {{ lead.source_id }}</td>
+        <td>{{ lead.reason }}</td>
+        <td>{{ lead.next_action or "运营核实" }}</td>
+        <td>{{ {"pending_review":"待审核","accepted":"已接受","rejected":"已拒绝","closed":"已关闭"}.get(lead.status, lead.status) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">暂无潜在线索候选</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endif %}
+
+{% endif %}
+
+{% endblock %}

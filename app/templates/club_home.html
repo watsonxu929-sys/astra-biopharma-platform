@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Q-BAY俱乐部{% endblock %}
+{% block content %}
+{% set sec = request.scope.get('security_context', {}) %}
+{% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
+
+<section class="page-head action-head">
+  <div>
+    <p class="eyebrow">Q-BAY俱乐部</p>
+    <h1>俱乐部工作台</h1>
+    <p>{{ "运营人员入口：集中处理审核、签到和会后跟进。" if is_operator else "会员入口：查看活动、提交供需和获取推荐。" }}</p>
+  </div>
+  <div class="actions">
+    <a class="button secondary" href="/club/apply">会员申请</a>
+    {% if is_operator %}
+    <a class="button primary" href="/club/operations">运营管理</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card-stats">
+  <div class="stat-item"><span class="stat-value">{{ stats.total_members or 0 }}</span><span class="stat-label">会员总数</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.active_members or 0 }}</span><span class="stat-label">正常会员</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.pending_applications or 0 }}</span><span class="stat-label">待审核申请</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.upcoming_events or 0 }}</span><span class="stat-label">近期活动</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.open_events or 0 }}</span><span class="stat-label">开放报名</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.pending_registrations or 0 }}</span><span class="stat-label">待审核报名</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.valid_demands or 0 }}</span><span class="stat-label">有效需求</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.valid_supplies or 0 }}</span><span class="stat-label">有效供给</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.pending_matches or 0 }}</span><span class="stat-label">待处理匹配</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.post_event_followups or 0 }}</span><span class="stat-label">会后待跟进</span></div>
+  <div class="stat-item"><span class="stat-value">{{ stats.lead_candidates or 0 }}</span><span class="stat-label">潜在线索</span></div>
+</section>
+
+{% if is_operator %}
+<section class="profile-sections">
+  <a class="panel" href="/club/members?tab=applications"><h2>待审核会员</h2><p>{{ stats.pending_applications or 0 }} 个申请待处理</p></a>
+  <a class="panel" href="/club/events?tab=registrations"><h2>待审核报名</h2><p>{{ stats.pending_registrations or 0 }} 个报名待审核</p></a>
+  <a class="panel" href="/club/events?tab=today"><h2>今日活动与签到</h2><p>管理今日活动签到</p></a>
+  <a class="panel" href="/club/matches?tab=review"><h2>待审核供需</h2><p>{{ stats.pending_matches or 0 }} 个匹配待审核</p></a>
+  <a class="panel" href="/club/operations?tab=followups"><h2>会后待跟进</h2><p>{{ stats.post_event_followups or 0 }} 个会后候选</p></a>
+  <a class="panel" href="/club/operations?tab=leads"><h2>潜在线索</h2><p>{{ stats.lead_candidates or 0 }} 个线索候选</p></a>
+</section>
+{% else %}
+<section class="profile-sections">
+  <a class="panel" href="/club/events"><h2>我的活动</h2><p>查看已报名和即将参加的活动</p></a>
+  <a class="panel" href="/club/matches?tab=my"><h2>我的需求与供给</h2><p>管理我的供需发布</p></a>
+  <a class="panel" href="/club/matches"><h2>推荐资源</h2><p>系统推荐的供需匹配</p></a>
+  <a class="panel" href="/club/members?tab=recommendations"><h2>推荐认识的人</h2><p>基于您的关系网络推荐</p></a>
+  <a class="panel" href="/member/notifications"><h2>我的申请与通知</h2><p>查看申请状态和系统通知</p></a>
+</section>
+{% endif %}
+
+<section class="dashboard-card">
+  <h2>近期活动</h2>
+  {% if upcoming_events %}
+  <div class="event-list">
+    {% for event in upcoming_events %}
+    <div class="event-item">
+      <h3><a href="/club/events/{{ event.id }}">{{ event.name }}</a></h3>
+      <p>{{ event.event_date or "时间待定" }} · {{ event.venue or "地点待定" }}</p>
+      <p>{{ {"draft":"草稿","pending_review":"待审核","published":"已发布","registration_open":"报名开放","registration_closed":"报名关闭","ongoing":"进行中","completed":"已完成","cancelled":"已取消"}.get(event.status, event.status) }}</p>
+      {% if event.registration_status == "open" %}
+      <a href="/club/events/{{ event.id }}/register" class="btn btn-sm">立即报名</a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><p>暂无近期活动。</p></div>
+  {% endif %}
+</section>
+
+{% if not is_operator %}
+<section class="dashboard-card">
+  <h2>我的会员资料</h2>
+  {% if my_membership %}
+  <div class="membership-summary">
+    <p>会员编号：{{ my_membership.member_no }}</p>
+    <p>姓名：{{ my_membership.person_name }}</p>
+    <p>机构：{{ my_membership.organization_name or "暂无" }}</p>
+    <p>等级：{{ {"standard":"标准会员","premium":"高级会员","vip":"VIP会员","founding":"创始会员"}.get(my_membership.member_level, my_membership.member_level) }}</p>
+    <p>状态：{{ {"pending":"待审核","active":"正常","suspended":"暂停","inactive":"停用","exited":"已退出"}.get(my_membership.status, my_membership.status) }}</p>
+    <a href="/member/profile" class="btn btn-sm">编辑资料</a>
+  </div>
+  {% else %}
+  <div class="empty-state"><p>您尚未成为会员。<a href="/club/apply">立即申请</a></p></div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% endblock %}

@@ -184,8 +184,32 @@ def _render(request: Request, mode: str, **context: Any) -> HTMLResponse:
 
 
 @router.get("/club/events", response_class=HTMLResponse)
-def events_page(request: Request, status: str = ""):
+def events_page(request: Request, status: str = "", tab: str = "list"):
     ensure_schema()
+    user_id = request.scope.get("user", {}).get("id")
+    if tab == "my" and user_id:
+        with db_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT r.*, e.name AS event_name, e.event_date
+                FROM v05c_club_event_registrations r
+                JOIN v05c_club_event_profiles p ON p.id=r.club_event_id
+                JOIN events e ON e.id=p.event_id
+                WHERE r.user_id=?
+                ORDER BY r.registered_at DESC
+                LIMIT 50
+                """,
+                (user_id,),
+            ).fetchall()
+            registrations = [dict(row) for row in rows]
+            for reg in registrations:
+                with db_connection() as c:
+                    event_completed = c.execute(
+                        "SELECT 1 FROM v05c_club_event_profiles WHERE id=? AND status IN ('completed','archived')",
+                        (reg["club_event_id"],),
+                    ).fetchone()
+                    reg["event_completed"] = bool(event_completed)
+            return templates.TemplateResponse(request, "club_events.html", {"tab": "my", "my_registrations": registrations})
     params: list[Any] = []
     where = "1=1"
     if status:
@@ -203,7 +227,7 @@ def events_page(request: Request, status: str = ""):
             """,
             params,
         ).fetchall()
-    return _render(request, "events", events=[dict(row) for row in rows], status=status)
+    return templates.TemplateResponse(request, "club_events.html", {"tab": tab, "events": [dict(row) for row in rows], "status": status})
 
 
 @router.post("/club/events/create")
@@ -452,7 +476,7 @@ def check_in(request: Request, club_event_id: int, identifier: str = Form(...), 
             """
             SELECT * FROM v05c_club_event_registrations
             WHERE club_event_id=? AND (registration_no=? OR CAST(canonical_membership_id AS TEXT)=? OR applicant_name=?)
-            ORDER BY lifecycle_status='approved' DESC, id DESC LIMIT 1
+            ORDER BY status='approved' DESC, id DESC LIMIT 1
             """,
             (club_event_id, ident, ident, ident),
         ).fetchone()

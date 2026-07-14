@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}供需与匹配{% endblock %}
+{% block content %}
+{% set sec = request.scope.get('security_context', {}) %}
+{% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
+{% set tab = request.query_params.get('tab', 'recommendations') %}
+
+<section class="page-head action-head">
+  <div>
+    <p class="eyebrow">Q-BAY俱乐部</p>
+    <h1>供需与匹配</h1>
+    <p>{{ "审核供需、生成匹配和处理候选。" if is_operator else "发布供需、查看推荐匹配。" }}</p>
+  </div>
+</section>
+
+<nav class="sub-tabs">
+  <a href="/club/matches?tab=recommendations" class="tab {% if tab == 'recommendations' %}active{% endif %}">匹配推荐</a>
+  <a href="/club/matches?tab=demands" class="tab {% if tab == 'demands' %}active{% endif %}">资源需求</a>
+  <a href="/club/matches?tab=supplies" class="tab {% if tab == 'supplies' %}active{% endif %}">资源供给</a>
+  <a href="/club/matches?tab=my" class="tab {% if tab == 'my' %}active{% endif %}">我的发布</a>
+</nav>
+
+{% if tab == 'recommendations' %}
+{% if is_operator %}
+<form method="post" action="/club/matches/generate" class="inline-form">
+  <button class="btn btn-primary" type="submit">生成候选匹配</button>
+</form>
+{% endif %}
+{% if matches %}
+<div class="card-grid">
+  {% for match in matches %}
+  <div class="match-card">
+    <h3>匹配 {{ match.match_no }}</h3>
+    <div class="match-score">{{ match.match_score }}分 · {{ match.match_grade }}级</div>
+    <div class="match-pair">
+      <div class="match-item demand">
+        <span class="label">需求</span>
+        <p>{{ match.need_title or "需求" }}</p>
+      </div>
+      <div class="match-arrow">→</div>
+      <div class="match-item supply">
+        <span class="label">供给</span>
+        <p>{{ match.offering_title or "供给" }}</p>
+      </div>
+    </div>
+    <div class="match-reasons">
+      {% if match.reasons_json %}
+      {% set reasons = match.reasons_json.split(',') %}
+      {% for reason in reasons[:3] %}
+      <span class="tag">{{ reason.strip().replace('"','') }}</span>
+      {% endfor %}
+      {% endif %}
+    </div>
+    <div class="match-status">{{ {"candidate":"候选","reviewed":"已复核","accepted":"已接受","rejected":"已拒绝","introduced":"已引荐","closed":"已关闭"}.get(match.status, match.status) }}</div>
+    <div class="match-actions">
+      {% if is_operator %}
+      <form method="post" action="/club/matches/{{ match.id }}/status" class="inline-form">
+        <select name="status">
+          <option value="reviewed">已复核</option>
+          <option value="accepted">接受</option>
+          <option value="rejected">拒绝</option>
+          <option value="introduced">已引荐</option>
+        </select>
+        <button class="btn btn-sm" type="submit">保存</button>
+      </form>
+      {% endif %}
+      <a href="/club/matches/{{ match.id }}" class="btn btn-sm">查看详情</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <p>暂无匹配推荐。</p>
+  <p>当前暂无已审核关系路径。</p>
+</div>
+{% endif %}
+{% elif tab == 'demands' %}
+<div class="card-grid">
+  {% for resource in demands %}
+  <div class="resource-card demand">
+    <h3><a href="/resources/{{ resource.id }}">{{ resource.title }}</a></h3>
+    <p>{{ resource.resource_type }}</p>
+    <p>{{ resource.region or "不限地区" }}</p>
+    <p>{{ resource.tags or resource.industry_direction or "" }}</p>
+    <div class="resource-meta">
+      <span>{{ {"pending_review":"待审核","published":"已发布","rejected":"已拒绝"}.get(resource.status, resource.status) }}</span>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state"><p>暂无资源需求。</p></div>
+  {% endfor %}
+</div>
+{% elif tab == 'supplies' %}
+<div class="card-grid">
+  {% for resource in supplies %}
+  <div class="resource-card supply">
+    <h3><a href="/resources/{{ resource.id }}">{{ resource.title }}</a></h3>
+    <p>{{ resource.resource_type }}</p>
+    <p>{{ resource.region or "不限地区" }}</p>
+    <p>{{ resource.tags or resource.industry_direction or "" }}</p>
+    <div class="resource-meta">
+      <span>{{ {"pending_review":"待审核","published":"已发布","rejected":"已拒绝"}.get(resource.status, resource.status) }}</span>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state"><p>暂无资源供给。</p></div>
+  {% endfor %}
+</div>
+{% elif tab == 'my' %}
+<section class="panel">
+  <h2>我的需求</h2>
+  {% if my_demands %}
+  {% for resource in my_demands %}
+  <div class="record-row">
+    <div><strong>{{ resource.title }}</strong><p>{{ resource.resource_type }} · {{ resource.status }}</p></div>
+    <a href="/resources/{{ resource.id }}" class="btn btn-sm">查看</a>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">暂无需求发布。</div>
+  {% endif %}
+</section>
+<section class="panel">
+  <h2>我的供给</h2>
+  {% if my_supplies %}
+  {% for resource in my_supplies %}
+  <div class="record-row">
+    <div><strong>{{ resource.title }}</strong><p>{{ resource.resource_type }} · {{ resource.status }}</p></div>
+    <a href="/resources/{{ resource.id }}" class="btn btn-sm">查看</a>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">暂无供给发布。</div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% endblock %}

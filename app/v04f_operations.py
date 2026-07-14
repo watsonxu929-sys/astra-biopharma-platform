@@ -352,13 +352,148 @@ def suggestion_to_action(request: Request, lead_id: int, suggestion_id: int, own
 
 
 @router.get("/club", response_class=HTMLResponse)
-@router.get("/club/operations", response_class=HTMLResponse)
 def club_home(request: Request):
     ensure_schema()
     dashboard = ClubOperationsDashboardService().summary()
+    metrics = dashboard.get("metrics", {})
+    stats = {
+        "total_members": metrics.get("members"),
+        "active_members": metrics.get("active_members"),
+        "pending_applications": metrics.get("pending_applications"),
+        "upcoming_events": 0,
+        "open_events": 0,
+        "pending_registrations": 0,
+        "valid_demands": metrics.get("needs"),
+        "valid_supplies": metrics.get("offerings"),
+        "pending_matches": metrics.get("candidate_matches"),
+        "post_event_followups": 0,
+        "lead_candidates": 0,
+    }
+    with db_connection() as conn:
+        today_str = date.today().isoformat()
+        upcoming = conn.execute(
+            "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status IN ('registration_open','ongoing') OR (event_date >= ? AND status='published')",
+            (today_str,),
+        ).fetchone()
+        stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
+        open_events = conn.execute(
+            "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE registration_status='open'",
+        ).fetchone()
+        stats["open_events"] = int(open_events[0]) if open_events else 0
+        pending_reg = conn.execute(
+            "SELECT COUNT(*) FROM v05c_club_event_registrations WHERE status='submitted'",
+        ).fetchone()
+        stats["pending_registrations"] = int(pending_reg[0]) if pending_reg else 0
+        try:
+            followups = conn.execute(
+                "SELECT COUNT(*) FROM p4_event_feedback WHERE status='submitted'",
+            ).fetchone()
+            stats["post_event_followups"] = int(followups[0]) if followups else 0
+        except sqlite3.Error:
+            stats["post_event_followups"] = 0
+        try:
+            leads = conn.execute(
+                "SELECT COUNT(*) FROM p4_club_lead_candidates WHERE status='pending_review'",
+            ).fetchone()
+            stats["lead_candidates"] = int(leads[0]) if leads else 0
+        except sqlite3.Error:
+            stats["lead_candidates"] = 0
+        upcoming_events = [dict(row) for row in conn.execute(
+            "SELECT id, event_no, event_date, venue, status, registration_status FROM v05c_club_event_profiles WHERE event_date >= ? ORDER BY event_date LIMIT 5",
+            (today_str,),
+        ).fetchall()]
+    my_membership = None
+    user_id = request.scope.get("user", {}).get("id")
+    if user_id:
+        with db_connection() as conn:
+            member = conn.execute(
+                "SELECT * FROM v04f_club_memberships WHERE user_id=? AND status IN ('active','pending') ORDER BY id DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            if member:
+                my_membership = dict(member)
     return templates.TemplateResponse(
-        request, "v04f_club.html", {"mode": "home", "counts": dashboard["metrics"], "dashboard": dashboard}
+        request, "club_home.html", {"stats": stats, "upcoming_events": upcoming_events, "my_membership": my_membership}
     )
+
+
+@router.get("/club/operations", response_class=HTMLResponse)
+def club_operations(request: Request, tab: str = "dashboard"):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部管理权限")
+    ensure_schema()
+    today_str = date.today().isoformat()
+    with db_connection() as conn:
+        pending_applications = conn.execute("SELECT COUNT(*) FROM v04f_club_applications WHERE status='under_review'").fetchone()[0]
+        pending_registrations = conn.execute("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE status='submitted'").fetchone()[0]
+        today_events = conn.execute(
+            "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status='ongoing' OR (event_date=? AND status IN ('registration_open','published'))",
+            (today_str,),
+        ).fetchone()[0]
+        pending_resources = conn.execute("SELECT COUNT(*) FROM v06_market_resources WHERE status='pending_review'").fetchone()[0]
+        try:
+            pending_matches = conn.execute("SELECT COUNT(*) FROM p4_resource_match_candidates WHERE status='candidate'").fetchone()[0]
+        except sqlite3.Error:
+            pending_matches = 0
+        try:
+            followups = conn.execute("SELECT COUNT(*) FROM p4_event_feedback WHERE status='submitted'").fetchone()[0]
+        except sqlite3.Error:
+            followups = 0
+        try:
+            leads = conn.execute("SELECT COUNT(*) FROM p4_club_lead_candidates WHERE status='pending_review'").fetchone()[0]
+        except sqlite3.Error:
+            leads = 0
+        stats = {
+            "pending_applications": pending_applications,
+            "pending_registrations": pending_registrations,
+            "today_events": today_events,
+            "pending_resources": pending_resources,
+            "pending_matches": pending_matches,
+            "followups": followups,
+            "leads": leads,
+        }
+        if tab == "registrations":
+            reg_rows = conn.execute(
+                """SELECT r.*, e.name AS event_name
+                   FROM v05c_club_event_registrations r
+                   JOIN v05c_club_event_profiles p ON p.id=r.club_event_id
+                   JOIN events e ON e.id=p.event_id
+                   WHERE r.status='submitted'
+                   ORDER BY r.registered_at DESC LIMIT 50""",
+            ).fetchall()
+            return templates.TemplateResponse(request, "club_operations.html", {"tab": "registrations", "pending_registrations": [dict(r) for r in reg_rows], "stats": stats})
+        elif tab == "checkin":
+            event_rows = conn.execute(
+                """SELECT p.id, e.name, e.event_date, p.venue
+                   FROM v05c_club_event_profiles p
+                   JOIN events e ON e.id=p.event_id
+                   WHERE p.status='ongoing' OR (e.event_date=? AND p.status IN ('registration_open','published'))
+                   ORDER BY e.event_date""",
+                (today_str,),
+            ).fetchall()
+            return templates.TemplateResponse(request, "club_operations.html", {"tab": "checkin", "today_events": [dict(r) for r in event_rows], "stats": stats})
+        elif tab == "resources":
+            resource_rows = conn.execute(
+                """SELECT * FROM v06_market_resources WHERE status='pending_review' ORDER BY id DESC LIMIT 50""",
+            ).fetchall()
+            return templates.TemplateResponse(request, "club_operations.html", {"tab": "resources", "pending_resources": [dict(r) for r in resource_rows], "stats": stats})
+        elif tab == "followups":
+            try:
+                candidate_rows = conn.execute(
+                    """SELECT * FROM p4_event_relationship_candidates ORDER BY id DESC LIMIT 100""",
+                ).fetchall()
+            except sqlite3.Error:
+                candidate_rows = []
+            return templates.TemplateResponse(request, "club_operations.html", {"tab": "followups", "relationship_candidates": [dict(r) for r in candidate_rows], "stats": stats})
+        elif tab == "leads":
+            try:
+                lead_rows = conn.execute(
+                    """SELECT * FROM p4_club_lead_candidates ORDER BY id DESC LIMIT 100""",
+                ).fetchall()
+            except sqlite3.Error:
+                lead_rows = []
+            return templates.TemplateResponse(request, "club_operations.html", {"tab": "leads", "leads": [dict(r) for r in lead_rows], "stats": stats})
+    return templates.TemplateResponse(request, "club_operations.html", {"tab": "dashboard", "stats": stats})
 
 
 @router.get("/club/apply", response_class=HTMLResponse)
@@ -496,8 +631,14 @@ def membership_lifecycle(
 
 
 @router.get("/club/members", response_class=HTMLResponse)
-def members_page(request: Request, q: str = "", status: str = "", level: str = "", page: int = 1):
+def members_page(request: Request, q: str = "", status: str = "", level: str = "", page: int = 1, tab: str = "directory"):
     ensure_schema()
+    if tab == "applications":
+        if not can(request, "manage_club"):
+            raise HTTPException(403, "需要俱乐部管理权限")
+        with db_connection() as conn:
+            rows = conn.execute("SELECT * FROM v04f_club_applications ORDER BY submitted_at DESC LIMIT 100").fetchall()
+        return templates.TemplateResponse(request, "club_members.html", {"tab": "applications", "applications": [dict(r) for r in rows]})
     clauses = ["1=1"]
     params: list[Any] = []
     if status:
@@ -523,7 +664,7 @@ def members_page(request: Request, q: str = "", status: str = "", level: str = "
             """,
             [*params, (max(1, page) - 1) * 20],
         ).fetchall()
-    return templates.TemplateResponse(request, "v04f_club.html", {"mode": "members", "members": [dict(r) for r in rows], "filters": {"q": q, "status": status, "level": level, "page": page}})
+    return templates.TemplateResponse(request, "club_members.html", {"tab": "directory", "members": [dict(r) for r in rows], "filters": {"q": q, "status": status, "level": level, "page": page}})
 
 
 @router.get("/club/members.csv")
@@ -749,17 +890,48 @@ def generate_matches(request: Request):
 
 
 @router.get("/club/matches", response_class=HTMLResponse)
-def matches_page(request: Request, status: str = "", created: int = 0):
+def matches_page(request: Request, status: str = "", created: int = 0, tab: str = "recommendations"):
+    user_id = request.scope.get("user", {}).get("id")
     with db_connection() as conn:
+        if tab == "demands":
+            rows = conn.execute(
+                """SELECT * FROM v06_market_resources WHERE direction='demand' ORDER BY id DESC LIMIT 50""",
+            ).fetchall()
+            return templates.TemplateResponse(request, "club_matches.html", {"tab": "demands", "demands": [dict(r) for r in rows]})
+        elif tab == "supplies":
+            rows = conn.execute(
+                """SELECT * FROM v06_market_resources WHERE direction='supply' ORDER BY id DESC LIMIT 50""",
+            ).fetchall()
+            return templates.TemplateResponse(request, "club_matches.html", {"tab": "supplies", "supplies": [dict(r) for r in rows]})
+        elif tab == "my" and user_id:
+            demands = conn.execute(
+                """SELECT * FROM v06_market_resources WHERE owner_person_id IN (SELECT person_id FROM v04f_club_memberships WHERE user_id=?) AND direction='demand' ORDER BY id DESC LIMIT 20""",
+                (user_id,),
+            ).fetchall()
+            supplies = conn.execute(
+                """SELECT * FROM v06_market_resources WHERE owner_person_id IN (SELECT person_id FROM v04f_club_memberships WHERE user_id=?) AND direction='supply' ORDER BY id DESC LIMIT 20""",
+                (user_id,),
+            ).fetchall()
+            return templates.TemplateResponse(request, "club_matches.html", {"tab": "my", "my_demands": [dict(r) for r in demands], "my_supplies": [dict(r) for r in supplies]})
         where, params = ("WHERE m.status=?", [status]) if status else ("", [])
-        rows = conn.execute(
-            f"""SELECT m.*,m.demand_resource_id AS need_id,m.supply_resource_id AS offering_id,
-                       m.score AS match_score,'受控规则' AS match_grade,l.id AS action_id
-                FROM p4_resource_match_candidates m
-                LEFT JOIN p4_club_lead_candidates l ON l.source_type='resource_match' AND l.source_id=CAST(m.id AS TEXT)
-                {where} ORDER BY m.score DESC,m.id DESC LIMIT 100""", params,
-        ).fetchall()
-    return templates.TemplateResponse(request, "v04f_club.html", {"mode": "matches", "matches": [dict(r) for r in rows], "created": created, "status": status})
+        try:
+            rows = conn.execute(
+                f"""SELECT m.*,m.demand_resource_id AS need_id,m.supply_resource_id AS offering_id,
+                           m.score AS match_score,'受控规则' AS match_grade,l.id AS action_id
+                    FROM p4_resource_match_candidates m
+                    LEFT JOIN p4_club_lead_candidates l ON l.source_type='resource_match' AND l.source_id=CAST(m.id AS TEXT)
+                    {where} ORDER BY m.score DESC,m.id DESC LIMIT 100""", params,
+            ).fetchall()
+            for row in rows:
+                row_dict = dict(row)
+                for resource_id, field_name in [(row["demand_resource_id"], "need_title"), (row["supply_resource_id"], "offering_title")]:
+                    if resource_id:
+                        title_row = conn.execute("SELECT title FROM v06_market_resources WHERE id=?", (resource_id,)).fetchone()
+                        if title_row:
+                            row_dict[field_name] = title_row[0]
+        except sqlite3.Error:
+            rows = []
+        return templates.TemplateResponse(request, "club_matches.html", {"tab": "recommendations", "matches": [dict(r) for r in rows], "created": created, "status": status})
 
 
 @router.post("/club/matches/{match_id}/status")

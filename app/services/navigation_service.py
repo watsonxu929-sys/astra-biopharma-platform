@@ -26,7 +26,7 @@ RESOURCES_WORK_ENTRY_KEYS = {
 }
 CLUB_WORK_ENTRY_KEYS = {
     "club.home",
-    "club.member_center",
+    "club.members",
     "club.events",
     "club.matching",
     "club.operations",

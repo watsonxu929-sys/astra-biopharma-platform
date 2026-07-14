@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}活动{% endblock %}
+{% block content %}
+{% set sec = request.scope.get('security_context', {}) %}
+{% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
+{% set tab = request.query_params.get('tab', 'list') %}
+
+<section class="page-head action-head">
+  <div>
+    <p class="eyebrow">Q-BAY俱乐部</p>
+    <h1>活动</h1>
+    <p>{{ "创建活动、管理报名和签到。" if is_operator else "查看活动、报名和提交反馈。" }}</p>
+  </div>
+</section>
+
+<nav class="sub-tabs">
+  <a href="/club/events?tab=list" class="tab {% if tab == 'list' %}active{% endif %}">活动列表</a>
+  <a href="/club/events?tab=my" class="tab {% if tab == 'my' %}active{% endif %}">我的报名</a>
+  {% if is_operator %}
+  <a href="/club/events?tab=manage" class="tab {% if tab == 'manage' %}active{% endif %}">活动管理</a>
+  {% endif %}
+</nav>
+
+{% if tab == 'list' %}
+<div class="card-grid">
+  {% for event in events %}
+  <div class="event-card">
+    <h3><a href="/club/events/{{ event.id }}">{{ event.name }}</a></h3>
+    <p>{{ event.event_date or "时间待定" }} · {{ event.venue or "地点待定" }}</p>
+    <p>{{ {"draft":"草稿","pending_review":"待审核","published":"已发布","registration_open":"报名开放","registration_closed":"报名关闭","ongoing":"进行中","completed":"已完成","cancelled":"已取消"}.get(event.status, event.status) }}</p>
+    {% if event.registration_status == 'open' %}
+    <a href="/club/events/{{ event.id }}/register" class="btn btn-sm">立即报名</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty-state"><p>暂无活动。</p></div>
+  {% endfor %}
+</div>
+{% elif tab == 'my' %}
+<section class="panel">
+  <table>
+    <thead>
+      <tr><th>活动名称</th><th>日期</th><th>报名状态</th><th>签到状态</th><th>操作</th></tr>
+    </thead>
+    <tbody>
+      {% for reg in my_registrations %}
+      <tr>
+        <td><a href="/club/events/{{ reg.club_event_id }}">{{ reg.event_name }}</a></td>
+        <td>{{ reg.event_date or "时间待定" }}</td>
+        <td>{{ {"submitted":"已提交","approved":"已通过","waitlisted":"候补","rejected":"已拒绝","cancelled":"已取消"}.get(reg.status, reg.status) }}</td>
+        <td>{{ {"registered":"未签到","checked_in":"已签到","no_show":"未到场"}.get(reg.attendance_status, "未签到") }}</td>
+        <td>
+          {% if reg.status == 'approved' and reg.event_completed %}
+          <a href="/club/events/{{ reg.club_event_id }}/registrations/{{ reg.id }}/feedback" class="btn btn-sm">提交反馈</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="empty">暂无报名记录。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% elif tab == 'manage' %}
+{% if is_operator %}
+<section class="panel">
+  <h2>新建活动</h2>
+  <form method="post" action="/club/events/create" class="grid-2">
+    <label>活动名称<input name="name" required></label>
+    <label>活动日期<input name="event_date" type="date"></label>
+    <label>活动类型<input name="event_type" value="club"></label>
+    <label>地点<input name="venue"></label>
+    <label>线上链接<input name="online_link"></label>
+    <label>容量<input name="capacity" type="number" min="0" value="0"></label>
+    <label>报名截止<input name="registration_deadline" type="date"></label>
+    <label>组织方<input name="organizer" value="Q-BAY"></label>
+    <label>负责人<input name="owner"></label>
+    <label>可见范围<select name="visibility"><option value="internal">内部</option><option value="controlled">受控开放</option><option value="public">公开</option></select></label>
+    <label class="checkbox-line"><input type="checkbox" name="member_only" value="1"> 仅会员可报名</label>
+    <label class="grid-span">活动说明<textarea name="description"></textarea></label>
+    <button class="btn btn-primary" type="submit">创建活动</button>
+  </form>
+</section>
+{% endif %}
+{% endif %}
+
+{% endblock %}
