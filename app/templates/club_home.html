@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Q-BAY俱乐部{% endblock %}
+{% block title %}Q-BAY俱乐部运营工作台{% endblock %}
 {% block content %}
 {% set sec = request.scope.get('security_context', {}) %}
 {% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
@@ -7,7 +7,7 @@
 <section class="page-head action-head">
   <div>
     <p class="eyebrow">Q-BAY俱乐部</p>
-    <h1>俱乐部工作台</h1>
+    <h1>Q-BAY俱乐部运营工作台</h1>
     <p>{{ "运营人员入口：集中处理审核、签到和会后跟进。" if is_operator else "会员入口：查看活动、提交供需和获取推荐。" }}</p>
   </div>
   <div class="actions">

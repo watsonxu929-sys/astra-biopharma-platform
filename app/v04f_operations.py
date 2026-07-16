@@ -428,23 +428,16 @@ def club_home(request: Request):
     )
 
 @router.get("/club/operations", response_class=HTMLResponse)
-def club_operations(request: Request):
-    ensure_schema()
-    if not can(request, "manage_club"):
-        raise HTTPException(403, "需要俱乐部运营权限")
-    dashboard = ClubOperationsDashboardService().summary()
-    return templates.TemplateResponse(
-        request, "v04f_club.html",
-        {"mode": "operations", "counts": dashboard["metrics"], "dashboard": dashboard},
-    )
-
-
-
-@router.get("/club/operations", response_class=HTMLResponse)
 def club_operations(request: Request, tab: str = "dashboard"):
     if not can(request, "manage_club"):
         raise HTTPException(403, "需要俱乐部管理权限")
     ensure_schema()
+    if tab == "dashboard":
+        dashboard = ClubOperationsDashboardService().summary()
+        return templates.TemplateResponse(
+            request, "v04f_club.html",
+            {"mode": "operations", "counts": dashboard["metrics"], "dashboard": dashboard},
+        )
     today_str = date.today().isoformat()
     with db_connection() as conn:
         pending_applications = conn.execute("SELECT COUNT(*) FROM v04f_club_applications WHERE status='under_review'").fetchone()[0]

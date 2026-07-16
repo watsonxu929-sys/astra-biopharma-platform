@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}供需与匹配{% endblock %}
+{% block title %}资源匹配工作台{% endblock %}
 {% block content %}
 {% set sec = request.scope.get('security_context', {}) %}
 {% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
@@ -8,7 +8,7 @@
 <section class="page-head action-head">
   <div>
     <p class="eyebrow">Q-BAY俱乐部</p>
-    <h1>供需与匹配</h1>
+    <h1>资源匹配工作台</h1>
     <p>{{ "审核供需、生成匹配和处理候选。" if is_operator else "发布供需、查看推荐匹配。" }}</p>
   </div>
 </section>
