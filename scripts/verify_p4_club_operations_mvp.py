@@ -134,6 +134,13 @@ def _pilot_counts(conn: sqlite3.Connection) -> dict[str, int]:
         "events": scalar("SELECT COUNT(*) FROM v05c_club_event_profiles WHERE pilot_batch_id=?", (PILOT_BATCH_ID,)),
         "registrations": scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE pilot_batch_id=?", (PILOT_BATCH_ID,)),
         "waitlisted": scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE pilot_batch_id=? AND lifecycle_status='waitlisted'", (PILOT_BATCH_ID,)),
+        "cancelled": scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE pilot_batch_id=? AND lifecycle_status='cancelled'", (PILOT_BATCH_ID,)),
+        "waitlist_promotions": scalar("SELECT COUNT(*) FROM p4_operation_audit WHERE pilot_batch_id=? AND action='registration.waitlist_promoted'", (PILOT_BATCH_ID,)),
+        "rejected_matches": scalar("SELECT COUNT(*) FROM p4_resource_match_candidates WHERE pilot_batch_id=? AND status='rejected'", (PILOT_BATCH_ID,)),
+        "cancelled_participations": scalar(
+            "SELECT COUNT(*) FROM v05c_club_event_participation p JOIN v05c_club_event_registrations r ON r.id=p.registration_id WHERE r.pilot_batch_id=? AND r.lifecycle_status='cancelled'",
+            (PILOT_BATCH_ID,),
+        ),
         "checkins": scalar("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE pilot_batch_id=? AND lifecycle_status='checked_in'", (PILOT_BATCH_ID,)),
         "feedback": scalar("SELECT COUNT(*) FROM p4_event_feedback WHERE pilot_batch_id=?", (PILOT_BATCH_ID,)),
         "demands": scalar("SELECT COUNT(*) FROM v06_market_resources WHERE pilot_batch_id=? AND direction='demand'", (PILOT_BATCH_ID,)),
@@ -201,6 +208,7 @@ def run_pilot(source_db: Path) -> dict[str, Any]:
             ]
             conn.commit()
 
+        duplicate_registration_idempotent = False
         registrations_by_event: dict[int, list[dict[str, Any]]] = {}
         for event_index, club_event_id in enumerate(event_ids, 1):
             event_service.transition_event(club_event_id, action="publish", actor="p4_pilot_operator")
@@ -223,6 +231,33 @@ def run_pilot(source_db: Path) -> dict[str, Any]:
                 )
                 registrations.append(reviewed["registration"])
             registrations_by_event[club_event_id] = registrations
+            if event_index == 1:
+                member = memberships[0]
+                duplicate = event_service.register(
+                    club_event_id,
+                    {
+                        "membership_id": member["id"], "user_id": member["user_id"],
+                        "person_id": member["person_id"], "organization_id": member["organization_id"],
+                        "applicant_name": "P4试点会员1", "pilot_batch_id": PILOT_BATCH_ID,
+                    }, actor_user_id=int(member["user_id"]),
+                )
+                duplicate_registration_idempotent = bool(
+                    duplicate.get("idempotent") and duplicate["id"] == registrations[0]["id"]
+                )
+
+        first_event_registration = registrations_by_event[event_ids[0]][0]
+        event_service.review_registration(
+            event_ids[0], first_event_registration["id"], decision="cancelled",
+            actor="p4_pilot_operator", note="P4试点释放名额",
+        )
+        with closing(sqlite3.connect(copy_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            for club_event_id in event_ids:
+                registrations_by_event[club_event_id] = [dict(row) for row in conn.execute(
+                    "SELECT * FROM v05c_club_event_registrations WHERE club_event_id=? ORDER BY id",
+                    (club_event_id,),
+                ).fetchall()]
+
 
         checked_in: list[tuple[int, dict[str, Any]]] = []
         for event_index, club_event_id in enumerate(event_ids):
@@ -271,6 +306,9 @@ def run_pilot(source_db: Path) -> dict[str, Any]:
             resource_service.create_lead_from_match(matches[0]["id"], actor="p4_pilot_operator")
         resource_service.generate_event_relationship_candidates(event_ids[0])
 
+        if len(matches) > 1:
+            resource_service.review_match(matches[1]["id"], decision="rejected", actor="p4_pilot_operator", note="P4试点拒绝")
+        duplicate_matches_prevented = not resource_service.generate_matches(pilot_batch_id=PILOT_BATCH_ID)
         with closing(sqlite3.connect(copy_path)) as conn:
             counts = _pilot_counts(conn)
             total_opportunities = int(conn.execute("SELECT COUNT(*) FROM v06_opportunities").fetchone()[0])
@@ -314,12 +352,18 @@ def run_pilot(source_db: Path) -> dict[str, Any]:
             "two_organizations": counts["organizations"] == 2,
             "two_events": counts["events"] == 2,
             "registrations_8_to_12": 8 <= counts["registrations"] <= 12,
-            "waitlist_present": counts["waitlisted"] >= 1,
+            "waitlist_consumed_after_cancellation": counts["waitlisted"] == 0,
+            "cancelled_slot_recorded": counts["cancelled"] == 1,
+            "waitlist_promoted": counts["waitlist_promotions"] == 1,
+            "duplicate_registration_prevented": duplicate_registration_idempotent,
+            "cancelled_has_no_participation": counts["cancelled_participations"] == 0,
             "at_least_five_checkins": counts["checkins"] >= 5,
             "at_least_three_feedback": counts["feedback"] >= 3,
             "three_demands": counts["demands"] == 3,
             "three_supplies": counts["supplies"] == 3,
             "at_least_three_matches": counts["matches"] >= 3,
+            "rejected_match_not_pending": counts["rejected_matches"] >= 1,
+            "duplicate_matches_prevented": duplicate_matches_prevented,
             "at_least_two_relationship_candidates": counts["relationship_candidates"] >= 2,
             "at_least_two_lead_candidates": counts["lead_candidates"] >= 2,
             "no_opportunity_created": total_opportunities == source_counts_before["v06_opportunities"],

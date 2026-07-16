@@ -24,6 +24,7 @@ from app.security import (
     validate_password,
     verify_password,
 )
+from app.services.club_operations_service import ClubEventService, ClubOperationError, ClubResourceMatchingService
 from app.v04c_review import db_connection, default_db_path
 from app.v04f_operations import _next_no as v04f_next_no
 from app.services.membership_access_service import get_membership_summary, get_user_memberships
@@ -530,9 +531,9 @@ def member_home(request: Request):
     with db_connection() as conn:
         counts = {
             "pending_changes": conn.execute("SELECT COUNT(*) FROM v05d_profile_change_requests WHERE membership_id=? AND status='pending'", (mid,)).fetchone()[0],
-            "my_needs": conn.execute("SELECT COUNT(*) FROM v04f_club_needs WHERE membership_id=?", (mid,)).fetchone()[0],
-            "my_offerings": conn.execute("SELECT COUNT(*) FROM v04f_club_offerings WHERE membership_id=?", (mid,)).fetchone()[0],
-            "registrations": conn.execute("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE membership_id=?", (mid,)).fetchone()[0],
+            "my_needs": conn.execute("SELECT COUNT(*) FROM v06_market_resources WHERE direction='demand' AND legacy_source_type='qbay_membership' AND legacy_source_id=?", (str(mid),)).fetchone()[0],
+            "my_offerings": conn.execute("SELECT COUNT(*) FROM v06_market_resources WHERE direction='supply' AND legacy_source_type='qbay_membership' AND legacy_source_id=?", (str(mid),)).fetchone()[0],
+            "registrations": conn.execute("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE canonical_membership_id=? OR membership_id=?", (mid, mid)).fetchone()[0],
             "unread": conn.execute("SELECT COUNT(*) FROM v05d_member_notifications WHERE membership_id=? AND status='unread'", (mid,)).fetchone()[0],
         }
         notifications = [dict(r) for r in conn.execute("SELECT * FROM v05d_member_notifications WHERE membership_id=? ORDER BY created_at DESC LIMIT 5", (mid,)).fetchall()]
@@ -669,11 +670,16 @@ def my_resources(request: Request):
 def _content_page(request: Request, content_type: str):
     ctx = _member_context(request)
     mid = int(ctx["member"]["id"])
+    direction = "demand" if content_type == "need" else "supply"
     with db_connection() as conn:
-        drafts = [dict(r) for r in conn.execute("SELECT * FROM v05d_member_content_requests WHERE membership_id=? AND content_type=? ORDER BY id DESC", (mid, content_type)).fetchall()]
-        official_table = "v04f_club_needs" if content_type == "need" else "v04f_club_offerings"
-        official = [dict(r) for r in conn.execute(f"SELECT * FROM {official_table} WHERE membership_id=? ORDER BY id DESC", (mid,)).fetchall()]
-    return _render(request, "content", content_type=content_type, drafts=drafts, official=official)
+        official = [dict(r) for r in conn.execute(
+            """SELECT * FROM v06_market_resources
+               WHERE direction=? AND legacy_source_type='qbay_membership' AND legacy_source_id=?
+               ORDER BY created_at DESC,id DESC""",
+            (direction, str(mid)),
+        ).fetchall()]
+    return _render(request, "content", content_type=content_type, official=official,
+                   message=request.query_params.get("message", ""), error=request.query_params.get("error", ""))
 
 
 @router.post("/member/content")
@@ -684,36 +690,33 @@ async def submit_content(request: Request):
     content_type = str(form.get("content_type") or "")
     if content_type not in {"need", "offering"}:
         raise HTTPException(400, "invalid content type")
-    ts = now_iso()
-    with db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO v05d_member_content_requests(
-              request_no,membership_id,content_type,title,description,category,industry_tags,region,
-              urgency_or_availability,valid_until,cooperation_preference,allow_matching,related_candidate,
-              status,submitted_at,created_at,updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'submitted',?,?,?)
-            """,
-            (
-                _next_no(conn, "QBCR"),
-                ctx["member"]["id"],
-                content_type,
-                str(form.get("title") or "").strip(),
-                str(form.get("description") or "").strip(),
-                str(form.get("category") or "").strip(),
-                str(form.get("industry_tags") or "").strip(),
-                str(form.get("region") or "").strip(),
-                str(form.get("urgency_or_availability") or "").strip(),
-                str(form.get("valid_until") or "").strip(),
-                str(form.get("cooperation_preference") or "").strip(),
-                1 if form.get("allow_matching") else 0,
-                str(form.get("related_candidate") or "").strip(),
-                ts,
-                ts,
-                ts,
-            ),
+    target = "/member/needs" if content_type == "need" else "/member/resources"
+    actor_user_id = int(ctx.get("user", {}).get("id") or 0)
+    if not actor_user_id:
+        return RedirectResponse(f"{target}?error={quote('请先关联正式用户账号后再发布')}", status_code=303)
+    fields = {
+        "title": str(form.get("title") or "").strip(),
+        "summary": str(form.get("description") or "").strip()[:300],
+        "description": str(form.get("description") or "").strip(),
+        "category": str(form.get("category") or "").strip() or "其他",
+        "resource_type": str(form.get("category") or "").strip() or "其他",
+        "industry_direction": str(form.get("industry_tags") or "").strip(),
+        "tags": str(form.get("industry_tags") or "").strip(),
+        "region": str(form.get("region") or "").strip(),
+        "valid_until": str(form.get("valid_until") or "").strip() or None,
+        "cooperation_mode": str(form.get("cooperation_preference") or "").strip(),
+        "status": "pending_review",
+    }
+    if not fields["title"] or not fields["description"]:
+        return RedirectResponse(f"{target}?error={quote('标题和说明不能为空')}", status_code=303)
+    try:
+        ClubResourceMatchingService().create_member_resource(
+            int(ctx["member"]["id"]), direction="demand" if content_type == "need" else "supply",
+            fields=fields, actor_user_id=actor_user_id,
         )
-    return RedirectResponse("/member/needs" if content_type == "need" else "/member/resources", status_code=303)
+    except ClubOperationError as exc:
+        return RedirectResponse(f"{target}?error={quote(exc.message)}", status_code=303)
+    return RedirectResponse(f"{target}?message={quote('已提交审核，可在本页查看状态')}", status_code=303)
 
 
 @router.get("/member/events", response_class=HTMLResponse)
@@ -723,15 +726,15 @@ def member_events(request: Request):
     with db_connection() as conn:
         events = [dict(r) for r in conn.execute(
             """
-            SELECT p.*,e.name,e.event_date,e.fact_summary,r.id AS registration_id,r.registration_no,r.status AS registration_status,r.checked_in_at
+            SELECT p.*,e.name,e.event_date,e.fact_summary,r.id AS registration_id,r.registration_no,r.lifecycle_status AS registration_status,r.checked_in_at
             FROM v05c_club_event_profiles p
             JOIN events e ON e.id=p.event_id
-            LEFT JOIN v05c_club_event_registrations r ON r.club_event_id=p.id AND r.membership_id=?
+            LEFT JOIN v05c_club_event_registrations r ON r.club_event_id=p.id AND (r.canonical_membership_id=? OR r.membership_id=?) AND r.lifecycle_status<>'cancelled'
             WHERE p.status IN ('published','registration_open','registration_closed','ongoing','completed','cancelled')
               AND p.visibility IN ('public','controlled','internal')
             ORDER BY COALESCE(e.event_date,p.updated_at) DESC
             """,
-            (mid,),
+            (mid, mid),
         ).fetchall()]
     return _render(request, "events", events=events)
 
@@ -742,40 +745,28 @@ async def member_register_event(request: Request, club_event_id: int):
     _require_csrf(request, form)
     ctx = _member_context(request)
     member = ctx["member"]
-    ts = now_iso()
-    with db_connection() as conn:
-        event = conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone()
-        if not event or event["registration_status"] != "open":
-            return RedirectResponse("/member/events?error=closed", status_code=303)
-        if conn.execute("SELECT 1 FROM v05c_club_event_registrations WHERE club_event_id=? AND membership_id=? AND status<>'cancelled'", (club_event_id, member["id"])).fetchone():
-            return RedirectResponse("/member/events?error=duplicate", status_code=303)
-        count = conn.execute("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE club_event_id=? AND status IN ('submitted','approved')", (club_event_id,)).fetchone()[0]
-        status = "waitlisted" if int(event["capacity"] or 0) and count >= int(event["capacity"]) else "submitted"
-        conn.execute(
-            """
-            INSERT INTO v05c_club_event_registrations(
-              registration_no,club_event_id,membership_id,applicant_name,organization_name,title,mobile,email,
-              registration_source,status,review_note,registered_at,created_at,updated_at
-            ) VALUES (?,?,?,?,?,?,?,?, 'member_portal',?,?,?, ?,?)
-            """,
-            (
-                _next_no(conn, "QBR"),
-                club_event_id,
-                member["id"],
-                member["person_name"],
-                member.get("organization_name"),
-                member.get("public_role") or member.get("member_role"),
-                member.get("mobile"),
-                member.get("email"),
-                status,
-                str(form.get("note") or "")[:500],
-                ts,
-                ts,
-                ts,
-            ),
+    try:
+        result = ClubEventService().register(
+            club_event_id,
+            {
+                "membership_id": int(member["id"]),
+                "user_id": ctx.get("user", {}).get("id"),
+                "person_id": member.get("person_id"),
+                "organization_id": member.get("organization_id"),
+                "applicant_name": member.get("person_name"),
+                "organization_name": member.get("organization_name"),
+                "title": member.get("public_role") or member.get("member_role"),
+                "mobile": member.get("mobile"),
+                "email": member.get("email"),
+                "application_reason": str(form.get("note") or "")[:500],
+                "registration_source": "member_portal",
+            },
+            actor_user_id=ctx.get("user", {}).get("id"),
         )
-        _notify(conn, int(member["id"]), "event", "活动报名已提交", "你已通过会员门户提交活动报名。", "event", str(club_event_id))
-    return RedirectResponse("/member/events", status_code=303)
+    except ClubOperationError as exc:
+        return RedirectResponse(f"/member/events?error={quote(exc.message)}", status_code=303)
+    message = "报名记录已存在" if result.get("idempotent") else "报名已提交，请等待审核"
+    return RedirectResponse(f"/member/events?message={quote(message)}", status_code=303)
 
 
 @router.post("/member/events/{registration_id}/cancel")
@@ -783,12 +774,23 @@ async def member_cancel_event(request: Request, registration_id: int):
     form = await request.form()
     _require_csrf(request, form)
     ctx = _member_context(request)
+    mid = int(ctx["member"]["id"])
     with db_connection() as conn:
-        conn.execute(
-            "UPDATE v05c_club_event_registrations SET status='cancelled',review_note=COALESCE(review_note,'') || ' / member cancelled',updated_at=? WHERE id=? AND membership_id=? AND status IN ('submitted','approved','waitlisted')",
-            (now_iso(), registration_id, ctx["member"]["id"]),
+        registration = conn.execute(
+            "SELECT club_event_id FROM v05c_club_event_registrations WHERE id=? AND (canonical_membership_id=? OR membership_id=?)",
+            (registration_id, mid, mid),
+        ).fetchone()
+    if not registration:
+        raise HTTPException(404, "registration not found")
+    try:
+        ClubEventService().review_registration(
+            int(registration["club_event_id"]), registration_id, decision="cancelled",
+            actor=f"member:{ctx['account']['username']}", actor_user_id=ctx.get("user", {}).get("id"),
+            note="member cancelled",
         )
-    return RedirectResponse("/member/events", status_code=303)
+    except ClubOperationError as exc:
+        return RedirectResponse(f"/member/events?error={quote(exc.message)}", status_code=303)
+    return RedirectResponse(f"/member/events?message={quote('报名已取消；如释放名额，系统已自动递补候补会员')}", status_code=303)
 
 
 @router.get("/member/matches", response_class=HTMLResponse)
@@ -798,18 +800,20 @@ def member_matches(request: Request):
     with db_connection() as conn:
         rows = [dict(r) for r in conn.execute(
             """
-            SELECT cm.*,n.membership_id AS need_member_id,o.membership_id AS offering_member_id,
-                   n.title AS need_title,o.title AS offering_title
-            FROM v04f_club_matches cm
-            JOIN v04f_club_needs n ON n.id=cm.need_id
-            JOIN v04f_club_offerings o ON o.id=cm.offering_id
-            WHERE n.membership_id=? OR o.membership_id=?
-            ORDER BY cm.created_at DESC
+            SELECT cm.*,d.title AS need_title,s.title AS offering_title,
+                   d.legacy_source_id AS need_member_id,s.legacy_source_id AS offering_member_id
+            FROM p4_resource_match_candidates cm
+            JOIN v06_market_resources d ON d.id=cm.demand_resource_id
+            JOIN v06_market_resources s ON s.id=cm.supply_resource_id
+            WHERE (d.legacy_source_type='qbay_membership' AND d.legacy_source_id=?)
+               OR (s.legacy_source_type='qbay_membership' AND s.legacy_source_id=?)
+            ORDER BY cm.created_at DESC,cm.id DESC
             """,
-            (mid, mid),
+            (str(mid), str(mid)),
         ).fetchall()]
-        feedback = [dict(r) for r in conn.execute("SELECT * FROM v05d_member_match_feedback WHERE membership_id=? ORDER BY created_at DESC", (mid,)).fetchall()]
-    return _render(request, "matches", matches=rows, feedback=feedback)
+    for row in rows:
+        row["reasons"] = json.loads(row.get("reasons_json") or "[]")
+    return _render(request, "matches", matches=rows, feedback=[])
 
 
 @router.post("/member/matches/{match_id}/feedback")

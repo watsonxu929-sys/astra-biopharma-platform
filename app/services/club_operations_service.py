@@ -397,10 +397,16 @@ class ClubEventService:
                     params,
                 ).fetchone()
                 if duplicate:
-                    return dict(duplicate)
+                    result = dict(duplicate)
+                    result["idempotent"] = True
+                    return result
             membership_id = int(fields.get("membership_id") or 0) or None
             if membership_id:
-                membership = conn.execute("SELECT * FROM v04f_club_memberships WHERE id=? AND status='active'", (membership_id,)).fetchone()
+                membership = conn.execute(
+                    "SELECT * FROM v04f_club_memberships WHERE id=? AND status='active' "
+                    "AND (expired_at IS NULL OR date(expired_at)>=date('now'))",
+                    (membership_id,),
+                ).fetchone()
                 if not membership:
                     raise ClubOperationError(400, "ACTIVE_MEMBERSHIP_REQUIRED", "会员身份无效")
                 person_id = person_id or membership["person_id"]
@@ -428,6 +434,7 @@ class ClubEventService:
             record_audit(conn, action="registration.submitted", target_type="event_registration",
                          target_id=registration["id"], actor=str(user_id or "guest"), actor_user_id=user_id,
                          after={"status": "pending_review"}, pilot_batch_id=registration.get("pilot_batch_id"))
+            registration["idempotent"] = False
             return registration
 
     def review_registration(
@@ -458,6 +465,8 @@ class ClubEventService:
                 ).fetchone()[0])
                 if approved >= int(event["capacity"]):
                     target, legacy = "waitlisted", "waitlisted"
+            if target == "cancelled" and current == "checked_in":
+                raise ClubOperationError(409, "CHECKED_IN_CANNOT_CANCEL", "已签到报名不能取消")
             if current == target:
                 return {"registration": registration, "idempotent": True}
             conn.execute(
@@ -478,6 +487,40 @@ class ClubEventService:
                     (club_event_id, registration_id, registration.get("canonical_membership_id") or registration.get("membership_id"),
                      registration.get("pilot_batch_id"), ts, ts),
                 )
+            elif target == "cancelled" and current == "approved":
+                conn.execute(
+                    "DELETE FROM v05c_club_event_participation WHERE club_event_id=? AND registration_id=? AND attendance_status='registered'",
+                    (club_event_id, registration_id),
+                )
+                waitlisted = conn.execute(
+                    """
+                    SELECT * FROM v05c_club_event_registrations
+                    WHERE club_event_id=? AND lifecycle_status='waitlisted'
+                    ORDER BY registered_at,id LIMIT 1
+                    """,
+                    (club_event_id,),
+                ).fetchone()
+                if waitlisted:
+                    conn.execute(
+                        "UPDATE v05c_club_event_registrations SET status='approved',lifecycle_status='approved',"
+                        "review_note=COALESCE(review_note,'') || ' / promoted from waitlist',reviewed_at=?,updated_at=? WHERE id=?",
+                        (ts, ts, waitlisted["id"]),
+                    )
+                    conn.execute(
+                        """INSERT INTO v05c_club_event_participation(
+                          club_event_id,registration_id,membership_id,canonical_membership_id,attendance_status,pilot_batch_id,created_at,updated_at
+                        ) VALUES (?,?,NULL,?,'registered',?,?,?)
+                        ON CONFLICT(club_event_id,registration_id) DO NOTHING""",
+                        (club_event_id, waitlisted["id"], waitlisted["canonical_membership_id"] or waitlisted["membership_id"],
+                         waitlisted["pilot_batch_id"], ts, ts),
+                    )
+                    record_audit(conn, action="registration.waitlist_promoted", target_type="event_registration",
+                                 target_id=waitlisted["id"], actor=actor, actor_user_id=actor_user_id,
+                                 before={"status": "waitlisted"}, after={"status": "approved"},
+                                 reason="capacity released", pilot_batch_id=waitlisted["pilot_batch_id"])
+                    emit_domain_event(conn, event_type="registration.approved", aggregate_type="event_registration",
+                                      aggregate_id=waitlisted["id"], payload={"club_event_id": club_event_id, "source": "waitlist_promotion"},
+                                      actor_user_id=actor_user_id, pilot_batch_id=waitlisted["pilot_batch_id"])
             updated = dict(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=?", (registration_id,)).fetchone())
             record_audit(conn, action="registration.reviewed", target_type="event_registration",
                          target_id=registration_id, actor=actor, actor_user_id=actor_user_id,
@@ -672,7 +715,11 @@ class ClubResourceMatchingService:
         from app.services.unified_resource_service import UnifiedResourceService
 
         with db_connection(self.db_path) as conn:
-            member = _row(conn.execute("SELECT * FROM v04f_club_memberships WHERE id=?", (membership_id,)).fetchone())
+            member = _row(conn.execute(
+                "SELECT * FROM v04f_club_memberships WHERE id=? AND status='active' "
+                "AND (expired_at IS NULL OR date(expired_at)>=date('now'))",
+                (membership_id,),
+            ).fetchone())
             if not member:
                 raise ClubOperationError(404, "MEMBERSHIP_NOT_FOUND", "会员不存在")
             if int(member.get("user_id") or actor_user_id) != actor_user_id:
@@ -689,7 +736,9 @@ class ClubResourceMatchingService:
                     "legacy_source_type": "qbay_membership", "legacy_source_id": str(membership_id),
                     "status": fields.get("status") or "pending_review",
                 }
-                duplicates = unified.find_duplicates(create_fields)
+                duplicates = [item for item in unified.find_duplicates(create_fields)
+                              if item.legacy_source_type == "qbay_membership"
+                              and item.legacy_source_id == str(membership_id)]
                 created = not bool(duplicates)
                 resource = duplicates[0] if duplicates else unified.create(actor_user_id=actor_user_id, fields=create_fields)
                 if created:
@@ -741,8 +790,8 @@ class ClubResourceMatchingService:
         created: list[dict[str, Any]] = []
         with db_connection(self.db_path) as conn:
             conn.execute("BEGIN IMMEDIATE")
-            resource_where = "status='published' AND (valid_until IS NULL OR valid_until>=?)"
-            resource_params: list[Any] = [ts]
+            resource_where = "status='published' AND (valid_until IS NULL OR date(valid_until)>=date(?))"
+            resource_params: list[Any] = [ts[:10]]
             if pilot_batch_id:
                 resource_where += " AND pilot_batch_id=?"
                 resource_params.append(pilot_batch_id)

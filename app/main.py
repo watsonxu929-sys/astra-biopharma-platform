@@ -122,6 +122,9 @@ async def custom_404_middleware(request: Request, call_next):
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    if 300 <= exc.status_code < 400 and exc.headers and exc.headers.get("Location"):
+        return RedirectResponse(exc.headers["Location"], status_code=exc.status_code)
+
     if request.url.path.startswith("/api/"):
         detail = exc.detail if isinstance(exc.detail, dict) else {}
         code = detail.get("code") or ("NOT_FOUND" if exc.status_code == 404 else "API_ERROR")

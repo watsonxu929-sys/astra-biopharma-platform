@@ -1,8 +1,10 @@
 import hashlib
 from pathlib import Path
 
+from app.settings import resolved_db_path
+
 ROOT = Path(__file__).resolve().parents[1]
-LIVE_DB_PATH = ROOT / "data" / "app.db"
+LIVE_DB_PATH = resolved_db_path()
 
 
 def compute_sha256(path: Path) -> str:
