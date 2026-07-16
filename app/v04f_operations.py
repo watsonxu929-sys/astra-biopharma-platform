@@ -427,6 +427,18 @@ def club_home(request: Request):
         request, "club_home.html", {"stats": stats, "upcoming_events": upcoming_events, "my_membership": my_membership}
     )
 
+@router.get("/club/operations", response_class=HTMLResponse)
+def club_operations(request: Request):
+    ensure_schema()
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    dashboard = ClubOperationsDashboardService().summary()
+    return templates.TemplateResponse(
+        request, "v04f_club.html",
+        {"mode": "operations", "counts": dashboard["metrics"], "dashboard": dashboard},
+    )
+
+
 
 @router.get("/club/operations", response_class=HTMLResponse)
 def club_operations(request: Request, tab: str = "dashboard"):
@@ -577,6 +589,7 @@ def _application_matches(conn: sqlite3.Connection, app: sqlite3.Row) -> dict[str
     return {"people": people, "organizations": orgs}
 
 
+@router.get("/club/applications", response_class=HTMLResponse)
 @router.get("/club/admin/applications", response_class=HTMLResponse)
 def applications_page(request: Request, status: str = ""):
     ensure_schema()
@@ -925,24 +938,44 @@ def matches_page(request: Request, status: str = "", created: int = 0, tab: str 
             ).fetchall()
             return templates.TemplateResponse(request, "club_matches.html", {"tab": "my", "my_demands": [dict(r) for r in demands], "my_supplies": [dict(r) for r in supplies]})
         where, params = ("WHERE m.status=?", [status]) if status else ("", [])
-        try:
-            rows = conn.execute(
-                f"""SELECT m.*,m.demand_resource_id AS need_id,m.supply_resource_id AS offering_id,
-                           m.score AS match_score,'受控规则' AS match_grade,l.id AS action_id
-                    FROM p4_resource_match_candidates m
-                    LEFT JOIN p4_club_lead_candidates l ON l.source_type='resource_match' AND l.source_id=CAST(m.id AS TEXT)
-                    {where} ORDER BY m.score DESC,m.id DESC LIMIT 100""", params,
-            ).fetchall()
-            for row in rows:
-                row_dict = dict(row)
-                for resource_id, field_name in [(row["demand_resource_id"], "need_title"), (row["supply_resource_id"], "offering_title")]:
-                    if resource_id:
-                        title_row = conn.execute("SELECT title FROM v06_market_resources WHERE id=?", (resource_id,)).fetchone()
-                        if title_row:
-                            row_dict[field_name] = title_row[0]
-        except sqlite3.Error:
-            rows = []
-        return templates.TemplateResponse(request, "club_matches.html", {"tab": "recommendations", "matches": [dict(r) for r in rows], "created": created, "status": status})
+        rows = conn.execute(
+            f"""SELECT m.*,m.demand_resource_id AS need_id,m.supply_resource_id AS offering_id,
+                       m.score AS match_score,'受控规则' AS match_grade,l.id AS action_id,
+                       d.title AS need_title,s.title AS offering_title
+                FROM p4_resource_match_candidates m
+                JOIN v06_market_resources d ON d.id=m.demand_resource_id
+                JOIN v06_market_resources s ON s.id=m.supply_resource_id
+                LEFT JOIN p4_club_lead_candidates l ON l.source_type='resource_match' AND l.source_id=CAST(m.id AS TEXT)
+                {where} ORDER BY m.score DESC,m.id DESC LIMIT 100""", params,
+        ).fetchall()
+    matches = [dict(r) for r in rows]
+    for item in matches:
+        item["reasons"] = json.loads(item.get("reasons_json") or "[]")
+    return templates.TemplateResponse(request, "club_matches.html", {"tab": "recommendations", "matches": matches, "created": created, "status": status})
+
+
+@router.get("/club/matches/{match_id}", response_class=HTMLResponse)
+def match_detail_page(request: Request, match_id: int):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    with db_connection() as conn:
+        row = conn.execute(
+            """SELECT m.*,d.title AS demand_title,d.description AS demand_description,
+                      s.title AS supply_title,s.description AS supply_description,
+                      l.id AS lead_id,l.lead_no,l.title AS lead_title,l.status AS lead_status
+               FROM p4_resource_match_candidates m
+               JOIN v06_market_resources d ON d.id=m.demand_resource_id
+               JOIN v06_market_resources s ON s.id=m.supply_resource_id
+               LEFT JOIN p4_club_lead_candidates l ON l.source_type='resource_match' AND l.source_id=CAST(m.id AS TEXT)
+               WHERE m.id=?""",
+            (match_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "匹配不存在")
+    match = dict(row)
+    match["reasons"] = json.loads(match.get("reasons_json") or "[]")
+    match["risks"] = json.loads(match.get("risks_json") or "[]")
+    return templates.TemplateResponse(request, "v04f_club.html", {"mode": "match_detail", "match": match})
 
 
 @router.post("/club/matches/{match_id}/status")
@@ -957,7 +990,7 @@ def update_match(request: Request, match_id: int, status: str = Form(...), note:
         )
     except ClubOperationError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
-    return RedirectResponse("/club/matches", status_code=303)
+    return RedirectResponse(f"/club/matches/{match_id}", status_code=303)
 
 
 @router.post("/club/matches/{match_id}/action")
@@ -971,7 +1004,7 @@ def match_to_action(request: Request, match_id: int, owner: str = Form("")):
         )
     except ClubOperationError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
-    return RedirectResponse("/club/matches", status_code=303)
+    return RedirectResponse(f"/club/matches/{match_id}", status_code=303)
 
 @router.get("/club/resources", response_class=HTMLResponse)
 def club_resources_page(request: Request, status: str = ""):
@@ -983,6 +1016,29 @@ def club_resources_page(request: Request, status: str = ""):
             f"SELECT * FROM v06_market_resources {where} ORDER BY id DESC LIMIT 200", params,
         ).fetchall()]
     return templates.TemplateResponse(request, "v04f_club.html", {"mode": "resources", "resources": rows, "status": status})
+
+
+@router.get("/club/resources/{resource_id}", response_class=HTMLResponse)
+def club_resource_detail_page(request: Request, resource_id: int):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
+    with db_connection() as conn:
+        row = conn.execute(
+            """SELECT r.*,m.id AS membership_id,m.member_no,p.name AS member_name,
+                      o.standard_name AS organization_name
+               FROM v06_market_resources r
+               LEFT JOIN v04f_club_memberships m
+                 ON r.legacy_source_type='qbay_membership' AND CAST(m.id AS TEXT)=r.legacy_source_id
+               LEFT JOIN people p ON p.id=m.person_id
+               LEFT JOIN organizations o ON o.id=m.organization_id
+               WHERE r.id=?""",
+            (resource_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "资源不存在")
+    return templates.TemplateResponse(
+        request, "v04f_club.html", {"mode": "resource_detail", "resource": dict(row)}
+    )
 
 
 @router.post("/club/resources/{resource_id}/review")

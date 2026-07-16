@@ -67,6 +67,16 @@ def _next_event_external_id(conn: sqlite3.Connection) -> str:
             maximum = max(maximum, int(tail))
     return f"{stem}{maximum + 1:06d}"
 
+def _next_event_id(conn: sqlite3.Connection) -> int:
+    """Avoid reusing an events.id still referenced by a migrated club profile."""
+    row = conn.execute(
+        """SELECT MAX(value) FROM (
+             SELECT COALESCE(MAX(id),0) AS value FROM events
+             UNION ALL SELECT COALESCE(MAX(event_id),0) AS value FROM v05c_club_event_profiles
+           )"""
+    ).fetchone()
+    return int(row[0] or 0) + 1
+
 
 def _event_detail(conn: sqlite3.Connection, club_event_id: int) -> dict[str, Any]:
     row = conn.execute(
@@ -247,6 +257,8 @@ def create_event(
     description: str = Form(""),
 ):
     ensure_schema()
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
     if visibility not in {"public", "controlled", "internal"}:
         raise HTTPException(400, "无效可见性")
     ts = now_iso()
@@ -254,15 +266,16 @@ def create_event(
     with db_connection() as conn:
         event_external_id = _next_event_external_id(conn)
         event_no = _next_no(conn, "QBE")
+        event_id = _next_event_id(conn)
         cur = conn.execute(
             """
             INSERT INTO events(
-              external_id,event_date,name,event_type,fact_summary,visibility,verification_status,
+              id,external_id,event_date,name,event_type,fact_summary,visibility,verification_status,
               created_at,source_type,manually_confirmed,is_active,subject_manually_confirmed
             )
-            VALUES (?,?,?,?,?,'internal','已确认',?,'v0.5C Q-BAY活动',1,1,1)
+            VALUES (?,?,?,?,?,?,'internal','已确认',?,'v0.5C Q-BAY活动',1,1,1)
             """,
-            (event_external_id, event_date or None, name.strip(), event_type, description or None, ts),
+            (event_id, event_external_id, event_date or None, name.strip(), event_type, description or None, ts),
         )
         profile = conn.execute(
             """
@@ -272,7 +285,7 @@ def create_event(
             ) VALUES (?,?,?,'closed',?,?,?,?,?,?,?,?, 'draft',?,?,?)
             """,
             (
-                cur.lastrowid,
+                event_id,
                 event_no,
                 event_type,
                 max(0, int(capacity or 0)),
@@ -328,19 +341,22 @@ def copy_event(request: Request, club_event_id: int):
     ensure_schema()
     actor = current_username(request)
     ts = now_iso()
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部运营权限")
     with db_connection() as conn:
         original = _event_detail(conn, club_event_id)
         event_external_id = _next_event_external_id(conn)
         event_no = _next_no(conn, "QBE")
+        event_id = _next_event_id(conn)
         cur = conn.execute(
             """
             INSERT INTO events(
-              external_id,event_date,name,event_type,fact_summary,visibility,verification_status,
+              id,external_id,event_date,name,event_type,fact_summary,visibility,verification_status,
               created_at,source_type,manually_confirmed,is_active,subject_manually_confirmed
             )
-            VALUES (?,?,?,?,?,'internal','待确认',?,'v0.5C Q-BAY活动复制',1,1,1)
+            VALUES (?,?,?,?,?,?,'internal','待确认',?,'v0.5C Q-BAY活动复制',1,1,1)
             """,
-            (event_external_id, None, f"{original['name']}（复制）", original["event_type"], original.get("description") or original.get("fact_summary"), ts),
+            (event_id, event_external_id, None, f"{original['name']}（复制）", original["event_type"], original.get("description") or original.get("fact_summary"), ts),
         )
         new_profile = conn.execute(
             """
@@ -350,7 +366,7 @@ def copy_event(request: Request, club_event_id: int):
             ) VALUES (?,?,?,'closed',?,?,?,?,?,?,?,'draft',?,?,?)
             """,
             (
-                cur.lastrowid,
+                event_id,
                 event_no,
                 original["event_type"],
                 original["capacity"],

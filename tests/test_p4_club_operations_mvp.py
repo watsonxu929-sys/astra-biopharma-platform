@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from app.settings import resolved_db_path
 
 from app.security import required_permission
 from scripts.verify_p4_club_operations_mvp import PILOT_BATCH_ID, run_pilot
@@ -83,7 +84,7 @@ def test_007_is_idempotent_and_keeps_integrity(p4_db: Path):
 
 
 def test_controlled_pilot_closes_the_workflow_without_formal_mutation():
-    report = run_pilot(ROOT / "data/app.db")
+    report = run_pilot(resolved_db_path())
     assert report["status"] == "passed"
     assert report["pilot_batch_id"] == PILOT_BATCH_ID
     assert all(report["validations"].values())
@@ -92,8 +93,12 @@ def test_controlled_pilot_closes_the_workflow_without_formal_mutation():
         "organizations": 2,
         "events": 2,
         "registrations": 10,
-        "waitlisted": 1,
+        "waitlisted": 0,
         "checkins": 6,
+        "cancelled": 1,
+        "waitlist_promotions": 1,
+        "rejected_matches": 1,
+        "cancelled_participations": 0,
         "feedback": 3,
         "demands": 3,
         "supplies": 3,
