@@ -23,6 +23,7 @@
   <a href="/club/events?tab=manage" class="tab {% if tab == 'events' %}active{% endif %}">活动管理</a>
   <a href="/club/operations?tab=registrations" class="tab {% if tab == 'registrations' %}active{% endif %}">报名审核</a>
   <a href="/club/operations?tab=checkin" class="tab {% if tab == 'checkin' %}active{% endif %}">签到管理</a>
+  <a href="/club/operations?tab=feedback" class="tab {% if tab == 'feedback' %}active{% endif %}">活动反馈</a>
   <a href="/club/operations?tab=resources" class="tab {% if tab == 'resources' %}active{% endif %}">供需审核</a>
   <a href="/club/operations?tab=followups" class="tab {% if tab == 'followups' %}active{% endif %}">会后跟进</a>
   <a href="/club/operations?tab=leads" class="tab {% if tab == 'leads' %}active{% endif %}">潜在线索</a>
@@ -65,7 +66,7 @@
         <td>{{ {"submitted":"已提交","approved":"已通过","waitlisted":"候补","rejected":"已拒绝"}.get(reg.status, reg.status) }}</td>
         <td>{{ reg.registered_at }}</td>
         <td>
-          <a href="/club/events/{{ reg.club_event_id }}/registrations/{{ reg.id }}" class="btn btn-sm">审核</a>
+          <a href="/club/events/{{ reg.club_event_id }}/registrations" class="btn btn-sm">审核</a>
         </td>
       </tr>
       {% else %}
@@ -121,6 +122,20 @@
       {% else %}
       <tr><td colspan="6" class="empty">暂无待审核供需</td></tr>
       {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% elif tab == 'feedback' %}
+<section class="panel">
+  <h2>活动反馈</h2>
+  <p>查看已提交的活动反馈及其关联活动；历史活动缺失时保留归档提示。</p>
+  <table>
+    <thead><tr><th>反馈编号</th><th>活动</th><th>满意度</th><th>合作意向</th><th>状态</th><th>提交时间</th></tr></thead>
+    <tbody>
+      {% for item in feedback_rows %}
+      <tr><td>{{ item.feedback_no }}</td><td><a href="/club/events/{{ item.club_event_id }}">{{ item.event_name }}</a></td><td>{{ item.satisfaction_score or "未评分" }}</td><td>{{ item.cooperation_intent or "暂无" }}</td><td>{{ item.status }}</td><td>{{ item.created_at }}</td></tr>
+      {% else %}<tr><td colspan="6" class="empty">暂无活动反馈。</td></tr>{% endfor %}
     </tbody>
   </table>
 </section>

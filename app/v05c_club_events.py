@@ -81,9 +81,12 @@ def _next_event_id(conn: sqlite3.Connection) -> int:
 def _event_detail(conn: sqlite3.Connection, club_event_id: int) -> dict[str, Any]:
     row = conn.execute(
         """
-        SELECT p.*, e.external_id, e.name, e.event_date, e.fact_summary, e.source_url
+        SELECT p.*, e.external_id,
+               COALESCE(e.name, p.event_no || '（原关联活动已删除或不可用）') AS name,
+               e.event_date, e.fact_summary, e.source_url,
+               CASE WHEN e.id IS NULL THEN 1 ELSE 0 END AS event_missing
         FROM v05c_club_event_profiles p
-        JOIN events e ON e.id=p.event_id
+        LEFT JOIN events e ON e.id=p.event_id
         WHERE p.id=?
         """,
         (club_event_id,),
@@ -201,10 +204,11 @@ def events_page(request: Request, status: str = "", tab: str = "list"):
         with db_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT r.*, e.name AS event_name, e.event_date
+                SELECT r.*, COALESCE(e.name, p.event_no || '（原活动已不可用）') AS event_name,
+                       e.event_date, CASE WHEN e.id IS NULL THEN 1 ELSE 0 END AS event_missing
                 FROM v05c_club_event_registrations r
                 JOIN v05c_club_event_profiles p ON p.id=r.club_event_id
-                JOIN events e ON e.id=p.event_id
+                LEFT JOIN events e ON e.id=p.event_id
                 WHERE r.user_id=?
                 ORDER BY r.registered_at DESC
                 LIMIT 50
@@ -228,9 +232,10 @@ def events_page(request: Request, status: str = "", tab: str = "list"):
     with db_connection() as conn:
         rows = conn.execute(
             f"""
-            SELECT p.*, e.name, e.event_date
+            SELECT p.*, COALESCE(e.name, p.event_no || '（原关联活动已删除或不可用）') AS name,
+                   e.event_date, CASE WHEN e.id IS NULL THEN 1 ELSE 0 END AS event_missing
             FROM v05c_club_event_profiles p
-            JOIN events e ON e.id=p.event_id
+            LEFT JOIN events e ON e.id=p.event_id
             WHERE {where}
             ORDER BY COALESCE(e.event_date,p.updated_at) DESC, p.id DESC
             LIMIT 100
@@ -455,10 +460,11 @@ def registrations_all(request: Request):
     with db_connection() as conn:
         rows = [dict(row) for row in conn.execute(
             """
-            SELECT r.*, p.event_no, e.name AS event_name
+            SELECT r.*, p.event_no, COALESCE(e.name, p.event_no || '（原活动已不可用）') AS event_name,
+                   e.event_date, CASE WHEN e.id IS NULL THEN 1 ELSE 0 END AS event_missing
             FROM v05c_club_event_registrations r
             JOIN v05c_club_event_profiles p ON p.id=r.club_event_id
-            JOIN events e ON e.id=p.event_id
+            LEFT JOIN events e ON e.id=p.event_id
             ORDER BY r.registered_at DESC LIMIT 200
             """
         ).fetchall()]

@@ -26,9 +26,10 @@
   {% for event in events %}
   <div class="event-card">
     <h3><a href="/club/events/{{ event.id }}">{{ event.name }}</a></h3>
+    {% if event.event_missing %}<div class="warning-box">原关联活动已删除或不可用；以下内容来自保留的俱乐部活动档案。</div>{% endif %}
     <p>{{ event.event_date or "时间待定" }} · {{ event.venue or "地点待定" }}</p>
     <p>{{ {"draft":"草稿","pending_review":"待审核","published":"已发布","registration_open":"报名开放","registration_closed":"报名关闭","ongoing":"进行中","completed":"已完成","cancelled":"已取消"}.get(event.status, event.status) }}</p>
-    {% if event.registration_status == 'open' %}
+    {% if event.registration_status == 'open' and not event.event_missing %}
     <a href="/club/events/{{ event.id }}/register" class="btn btn-sm">立即报名</a>
     {% endif %}
   </div>
@@ -45,7 +46,7 @@
     <tbody>
       {% for reg in my_registrations %}
       <tr>
-        <td><a href="/club/events/{{ reg.club_event_id }}">{{ reg.event_name }}</a></td>
+        <td><a href="/club/events/{{ reg.club_event_id }}">{{ reg.event_name }}</a>{% if reg.event_missing %}<div class="warning-box">原关联活动已删除或不可用</div>{% endif %}</td>
         <td>{{ reg.event_date or "时间待定" }}</td>
         <td>{{ {"submitted":"已提交","approved":"已通过","waitlisted":"候补","rejected":"已拒绝","cancelled":"已取消"}.get(reg.status, reg.status) }}</td>
         <td>{{ {"registered":"未签到","checked_in":"已签到","no_show":"未到场"}.get(reg.attendance_status, "未签到") }}</td>

@@ -371,17 +371,15 @@ def club_home(request: Request):
     }
     with db_connection() as conn:
         today_str = date.today().isoformat()
-        try:
-            upcoming = conn.execute(
-                "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status IN ('registration_open','ongoing') OR (event_date >= ? AND status='published')",
-                (today_str,),
-            ).fetchone()
-            stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
-        except sqlite3.Error:
-            upcoming = conn.execute(
-                "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status IN ('registration_open','ongoing')",
-            ).fetchone()
-            stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
+        upcoming = conn.execute(
+            """SELECT COUNT(*)
+               FROM v05c_club_event_profiles p
+               JOIN events e ON e.id=p.event_id
+               WHERE p.status IN ('registration_open','ongoing')
+                  OR (e.event_date >= ? AND p.status='published')""",
+            (today_str,),
+        ).fetchone()
+        stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
         open_events = conn.execute(
             "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE registration_status='open'",
         ).fetchone()
@@ -404,15 +402,14 @@ def club_home(request: Request):
             stats["lead_candidates"] = int(leads[0]) if leads else 0
         except sqlite3.Error:
             stats["lead_candidates"] = 0
-        try:
-            upcoming_events = [dict(row) for row in conn.execute(
-                "SELECT id, event_no, event_date, venue, status, registration_status FROM v05c_club_event_profiles WHERE event_date >= ? ORDER BY event_date LIMIT 5",
-                (today_str,),
-            ).fetchall()]
-        except sqlite3.Error:
-            upcoming_events = [dict(row) for row in conn.execute(
-                "SELECT id, event_no, '' as event_date, venue, status, registration_status FROM v05c_club_event_profiles WHERE status='published' LIMIT 5",
-            ).fetchall()]
+        upcoming_events = [dict(row) for row in conn.execute(
+            """SELECT p.id, p.event_no, e.event_date, p.venue, p.status, p.registration_status
+               FROM v05c_club_event_profiles p
+               JOIN events e ON e.id=p.event_id
+               WHERE e.event_date >= ?
+               ORDER BY e.event_date LIMIT 5""",
+            (today_str,),
+        ).fetchall()]
     my_membership = None
     user_id = request.scope.get("user", {}).get("id")
     if user_id:
@@ -432,6 +429,10 @@ def club_operations(request: Request, tab: str = "dashboard"):
     if not can(request, "manage_club"):
         raise HTTPException(403, "需要俱乐部管理权限")
     ensure_schema()
+    if tab == "members":
+        return RedirectResponse("/club/members?tab=applications", status_code=303)
+    if tab == "activities":
+        return RedirectResponse("/club/events?tab=manage", status_code=303)
     if tab == "dashboard":
         dashboard = ClubOperationsDashboardService().summary()
         return templates.TemplateResponse(
@@ -443,7 +444,11 @@ def club_operations(request: Request, tab: str = "dashboard"):
         pending_applications = conn.execute("SELECT COUNT(*) FROM v04f_club_applications WHERE status='under_review'").fetchone()[0]
         pending_registrations = conn.execute("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE status='submitted'").fetchone()[0]
         today_events = conn.execute(
-            "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status='ongoing' OR (event_date=? AND status IN ('registration_open','published'))",
+            """SELECT COUNT(*)
+               FROM v05c_club_event_profiles p
+               JOIN events e ON e.id=p.event_id
+               WHERE p.status='ongoing'
+                  OR (e.event_date=? AND p.status IN ('registration_open','published'))""",
             (today_str,),
         ).fetchone()[0]
         pending_resources = conn.execute("SELECT COUNT(*) FROM v06_market_resources WHERE status='pending_review'").fetchone()[0]
@@ -470,10 +475,10 @@ def club_operations(request: Request, tab: str = "dashboard"):
         }
         if tab == "registrations":
             reg_rows = conn.execute(
-                """SELECT r.*, e.name AS event_name
+                """SELECT r.*, COALESCE(e.name, p.event_no || '（原活动已不可用）') AS event_name
                    FROM v05c_club_event_registrations r
                    JOIN v05c_club_event_profiles p ON p.id=r.club_event_id
-                   JOIN events e ON e.id=p.event_id
+                   LEFT JOIN events e ON e.id=p.event_id
                    WHERE r.status='submitted'
                    ORDER BY r.registered_at DESC LIMIT 50""",
             ).fetchall()
@@ -493,6 +498,16 @@ def club_operations(request: Request, tab: str = "dashboard"):
                 """SELECT * FROM v06_market_resources WHERE status='pending_review' ORDER BY id DESC LIMIT 50""",
             ).fetchall()
             return templates.TemplateResponse(request, "club_operations.html", {"tab": "resources", "pending_resources": [dict(r) for r in resource_rows], "stats": stats})
+        elif tab == "feedback":
+            feedback_rows = conn.execute(
+                """SELECT f.*, p.event_no,
+                          COALESCE(e.name, p.event_no || '（原活动已不可用）') AS event_name
+                   FROM p4_event_feedback f
+                   JOIN v05c_club_event_profiles p ON p.id=f.club_event_id
+                   LEFT JOIN events e ON e.id=p.event_id
+                   ORDER BY f.created_at DESC LIMIT 100""",
+            ).fetchall()
+            return templates.TemplateResponse(request, "club_operations.html", {"tab": "feedback", "feedback_rows": [dict(r) for r in feedback_rows], "stats": stats})
         elif tab == "followups":
             try:
                 candidate_rows = conn.execute(
