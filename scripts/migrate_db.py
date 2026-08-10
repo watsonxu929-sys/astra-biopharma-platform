@@ -53,6 +53,9 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration("006", "entity_relationship_network", "scripts.migrations.006_entity_relationship_network"),
     Migration("007", "club_operations_mvp", "scripts.migrations.007_club_operations_mvp"),
     Migration("008", "business_collaboration_mvp", "scripts.migrations.008_business_collaboration_mvp"),
+    Migration("009", "intelligence_production_loop", "scripts.migrations.009_intelligence_production_loop"),
+    Migration("010", "intelligence_opportunity_loop", "scripts.migrations.010_intelligence_opportunity_loop"),
+    Migration("011", "feedback_outcome_loop", "scripts.migrations.011_feedback_outcome_loop"),
 )
 
 
@@ -343,12 +346,15 @@ def _history_value(row: sqlite3.Row, name: str) -> object | None:
     return row[name] if name in row.keys() else None
 
 
-def build_plan(conn: sqlite3.Connection, target: str = "008") -> dict[str, object]:
+def build_plan(conn: sqlite3.Connection, target: str = "011", start: str = "000") -> dict[str, object]:
     target_index = _target_index(target)
+    start_index = _target_index(start)
+    if start_index > target_index:
+        raise ValueError(f"start_after_target:{start}>{target}")
     conn.row_factory = sqlite3.Row
     history = _success_history(conn)
     steps: list[dict[str, object]] = []
-    for migration in MIGRATIONS[:target_index + 1]:
+    for migration in MIGRATIONS[start_index:target_index + 1]:
         structure = _structure_state(conn, migration)
         recorded = history.get(migration.migration_id)
         stored_checksum = str(_history_value(recorded, "checksum") or "") if recorded else ""
@@ -374,7 +380,7 @@ def build_plan(conn: sqlite3.Connection, target: str = "008") -> dict[str, objec
             "reason": reason,
             "structure": structure,
         })
-    recorded_ids = [migration.migration_id for migration in MIGRATIONS[:target_index + 1] if migration.migration_id in history]
+    recorded_ids = [migration.migration_id for migration in MIGRATIONS[start_index:target_index + 1] if migration.migration_id in history]
     structural = [step["number"] for step in steps if step["structure"]["state"] == "complete"]
     return {
         "target": MIGRATIONS[target_index].migration_id,
@@ -404,6 +410,13 @@ def _backup_database(path: Path, target: str) -> tuple[Path, str]:
             raise RuntimeError("backup_integrity_check_failed")
     return destination, hashlib.sha256(destination.read_bytes()).hexdigest()
 
+
+def _restore_database(backup_path: Path, database: Path) -> None:
+    with _connect_readonly(backup_path) as source, sqlite3.connect(database) as destination:
+        source.backup(destination)
+    with _connect_readonly(database) as check:
+        if check.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise RuntimeError("automatic_restore_integrity_check_failed")
 
 def _foreign_key_failures(conn: sqlite3.Connection) -> set[tuple[object, ...]]:
     return {tuple(row) for row in conn.execute("PRAGMA foreign_key_check")}
@@ -465,7 +478,8 @@ def _record_failure(conn: sqlite3.Connection, migration: Migration, started_at: 
 def run_upgrade(
     database: Path,
     *,
-    target: str = "008",
+    target: str = "011",
+    start: str = "000",
     confirm_formal: bool = False,
     failure_hook: Callable[[Migration, sqlite3.Connection], None] | None = None,
 ) -> dict[str, object]:
@@ -475,12 +489,12 @@ def run_upgrade(
         raise RuntimeError("formal_database_requires_--confirm-formal")
     if database.exists():
         with _connect_readonly(database) as read_conn:
-            initial_plan = build_plan(read_conn, target)
+            initial_plan = build_plan(read_conn, target, start)
     else:
         memory = sqlite3.connect(":memory:")
         memory.row_factory = sqlite3.Row
         try:
-            initial_plan = build_plan(memory, target)
+            initial_plan = build_plan(memory, target, start)
         finally:
             memory.close()
     if initial_plan["has_drift"]:
@@ -499,7 +513,7 @@ def run_upgrade(
     results: list[dict[str, object]] = []
     try:
         _ensure_history_schema(conn)
-        plan = build_plan(conn, target)
+        plan = build_plan(conn, target, start)
         if plan["has_drift"]:
             raise RuntimeError("schema_drift_detected_after_history_bootstrap")
         for item in plan["steps"]:
@@ -552,7 +566,7 @@ def run_upgrade(
                 elapsed = (time.perf_counter() - started) * 1000
                 _record_failure(conn, migration, started_at, f"{type(exc).__name__}:{exc}", elapsed)
                 raise
-        final_plan = build_plan(conn, target)
+        final_plan = build_plan(conn, target, start)
         if final_plan["has_drift"] or any(step["action"] != "skip" for step in final_plan["steps"]):
             raise RuntimeError("final_migration_state_not_clean")
         checkpoint = tuple(conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone())
@@ -566,14 +580,19 @@ def run_upgrade(
             "foreign_key_failure_count": len(_foreign_key_failures(conn)),
             "wal_checkpoint": checkpoint,
         }
+    except Exception:
+        conn.close()
+        if backup_path is not None:
+            _restore_database(backup_path, database)
+        raise
     finally:
         conn.close()
 
 
-def inspect_database(database: Path, target: str) -> dict[str, object]:
+def inspect_database(database: Path, target: str, start: str = "000") -> dict[str, object]:
     if database.exists():
         with _connect_readonly(database) as conn:
-            plan = build_plan(conn, target)
+            plan = build_plan(conn, target, start)
             history_rows = 0
             if "platform_migration_runs" in _table_names(conn):
                 history_rows = int(conn.execute("SELECT COUNT(*) FROM platform_migration_runs").fetchone()[0])
@@ -584,21 +603,23 @@ def inspect_database(database: Path, target: str) -> dict[str, object]:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     try:
-        return {"database": str(database), "database_exists": False, "history_rows": 0, "plan": build_plan(conn, target)}
+        return {"database": str(database), "database_exists": False, "history_rows": 0, "plan": build_plan(conn, target, start)}
     finally:
         conn.close()
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Explicit-only 000-008 SQLite migration runner")
+    parser = argparse.ArgumentParser(description="Explicit-only 000-011 SQLite migration runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in ("status", "plan"):
         child = subparsers.add_parser(command)
         child.add_argument("--database", required=True)
-        child.add_argument("--target", default="008")
+        child.add_argument("--target", default="011")
+        child.add_argument("--start", default="000")
     upgrade = subparsers.add_parser("upgrade")
     upgrade.add_argument("--database", required=True)
-    upgrade.add_argument("--target", default="008")
+    upgrade.add_argument("--target", default="011")
+    upgrade.add_argument("--start", default="000")
     upgrade.add_argument("--confirm-formal", action="store_true")
     return parser
 
@@ -608,7 +629,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     try:
         database = _resolve_database(args.database)
         if args.command in {"status", "plan"}:
-            result = inspect_database(database, args.target)
+            result = inspect_database(database, args.target, args.start)
             if args.command == "status":
                 result = {
                     "database": result["database"],
@@ -622,7 +643,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 }
         else:
             result = run_upgrade(
-                database, target=args.target, confirm_formal=bool(args.confirm_formal),
+                database, target=args.target, start=args.start, confirm_formal=bool(args.confirm_formal),
             )
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0

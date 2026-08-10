@@ -373,7 +373,7 @@ def club_home(request: Request):
         today_str = date.today().isoformat()
         try:
             upcoming = conn.execute(
-                "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status IN ('registration_open','ongoing') OR (event_date >= ? AND status='published')",
+                "SELECT COUNT(*) FROM v05c_club_event_profiles p LEFT JOIN events e ON e.id=p.event_id WHERE p.status IN ('registration_open','ongoing') OR (e.event_date >= ? AND p.status='published')",
                 (today_str,),
             ).fetchone()
             stats["upcoming_events"] = int(upcoming[0]) if upcoming else 0
@@ -438,7 +438,7 @@ def club_operations(request: Request, tab: str = "dashboard"):
         pending_applications = conn.execute("SELECT COUNT(*) FROM v04f_club_applications WHERE status='under_review'").fetchone()[0]
         pending_registrations = conn.execute("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE status='submitted'").fetchone()[0]
         today_events = conn.execute(
-            "SELECT COUNT(*) FROM v05c_club_event_profiles WHERE status='ongoing' OR (event_date=? AND status IN ('registration_open','published'))",
+            "SELECT COUNT(*) FROM v05c_club_event_profiles p LEFT JOIN events e ON e.id=p.event_id WHERE p.status='ongoing' OR (e.event_date=? AND p.status IN ('registration_open','published'))",
             (today_str,),
         ).fetchone()[0]
         pending_resources = conn.execute("SELECT COUNT(*) FROM v06_market_resources WHERE status='pending_review'").fetchone()[0]

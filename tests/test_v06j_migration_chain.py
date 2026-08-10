@@ -29,16 +29,15 @@ def _row_counts(conn: sqlite3.Connection, tables: set[str]) -> dict[str, int]:
     return {table: int(conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]) for table in sorted(tables)}
 
 
-def test_migration_registry_discovers_unique_ordered_000_through_008() -> None:
+def test_migration_registry_discovers_unique_ordered_000_through_011() -> None:
     numbers = [migration.number for migration in MIGRATIONS]
     ids = [migration.migration_id for migration in MIGRATIONS]
-    assert numbers == [f"{number:03d}" for number in range(9)]
+    assert numbers == [f"{number:03d}" for number in range(12)]
     assert len(ids) == len(set(ids))
-    assert ids[-4:] == [
-        "005_research_fusion_engine",
-        "006_entity_relationship_network",
-        "007_club_operations_mvp",
-        "008_business_collaboration_mvp",
+    assert ids[-3:] == [
+        "009_intelligence_production_loop",
+        "010_intelligence_opportunity_loop",
+        "011_feedback_outcome_loop",
     ]
     assert all(migration.path.exists() for migration in MIGRATIONS)
 
@@ -69,7 +68,7 @@ def test_empty_database_upgrades_to_008_without_business_seed_and_is_idempotent(
         assert conn.execute("SELECT COUNT(*) FROM p3_relationship_type_registry").fetchone()[0] > 0
         assert conn.execute(
             "SELECT COUNT(*) FROM platform_migration_runs WHERE status='success'"
-        ).fetchone()[0] == len(MIGRATIONS)
+        ).fetchone()[0] == len([item for item in MIGRATIONS if item.number <= "008"])
     before = _hash(database)
     second = run_upgrade(database, target="008")
     assert second["status"] == "up_to_date"
@@ -116,7 +115,7 @@ def test_formal_database_copy_upgrades_without_changing_old_rows(tmp_path: Path)
         assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert conn.execute(
             "SELECT COUNT(*) FROM platform_migration_runs WHERE status='success'"
-        ).fetchone()[0] == len(MIGRATIONS)
+        ).fetchone()[0] == len([item for item in MIGRATIONS if item.number <= "008"])
     settings = Settings(app_env="testing", database_url=sqlite_url_from_path(database))
     preflight = run_schema_preflight(settings)
     for capability in ("research_fusion", "industry_relationships", "club_operations", "business_collaboration"):

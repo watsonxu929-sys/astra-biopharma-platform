@@ -26,10 +26,11 @@ from app.v05kl_operations import router as v05kl_operations_router
 from app.api.v1.router import router as api_v1_router
 from app.identity import router as identity_router
 from app.routes_platform import router as platform_router
+from app.routes_golden_loop import router as golden_loop_router
 from app.security import SecurityMiddleware
 from datetime import datetime
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import bindparam, desc, func, or_, select, text
@@ -129,10 +130,16 @@ app.include_router(p5_collaboration_router)
 app.include_router(v05kl_operations_router)
 app.include_router(identity_router)
 app.include_router(platform_router)
+app.include_router(golden_loop_router)
 app.include_router(api_v1_router)
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    return Response(status_code=204)
 
 
 @app.middleware("http")

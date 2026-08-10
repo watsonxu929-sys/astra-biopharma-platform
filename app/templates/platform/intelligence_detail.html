@@ -1,38 +1,49 @@
 {% extends "platform/base.html" %}
+{% set active_nav = "intelligence" %}
 {% block platform_title %}{{ item.title }}{% endblock %}
 {% block platform_content %}
 {% set sec = request.scope.get('security_context', {}) %}
 {% set perms = sec.get('permissions', []) %}
-{% if product_context|default(false) %}
-  {% set workflow_step = '8 / 8' %}
-  {% set workflow_stage = '正式产品详情' %}
-  {% set workflow_status = '已发布' %}
-  {% set workflow_is_pilot = item.is_pilot %}
-  {% set workflow_pilot_batch = item.pilot_batch_id %}
-  {% set workflow_previous_url = '/processing/review-queue' %}
-  {% set workflow_previous_label = '情报审核' %}
-  {% set workflow_next_url = '' %}
-  {% set workflow_next_label = '' %}
-  {% set workflow_list_url = '/reports' %}
-  {% set workflow_action_requires_review = false %}
-  {% include "partials/p2_workflow_nav.html" %}
-{% else %}
-  <a href="/intelligence" class="text-sm">返回情报中心</a>
-{% endif %}
-<h1 class="page-title mt-16">{{ item.title }} {% if item.is_pilot %}<span class="badge">P2.1 试点</span>{% endif %}</h1>
-<div class="opp-meta">
-  <span class="badge badge-info">{{ item.intel_type }}</span>
-  <span>可信度：{{ item.credibility }}/5</span>
-  <span>重要度：{{ item.importance }}/5</span>
-  <span>来源：{{ item.source_name or 'manual' }}</span>
-  <span>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '' }}</span>
+<div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
+  <a href="/intelligence">← 返回情报中心</a>
+  <div class="flex-between mt-16">
+    <div>
+      <h1 class="page-title">{{ item.title }}</h1>
+      <div class="opp-meta">
+        <span class="badge badge-info">{{ item.intel_type }}</span>
+        <span>可信度 {{ item.credibility }}/5</span>
+        <span>重要度 {{ item.importance }}/5</span>
+        <span>来源 {{ item.source_name or '手工录入' }}</span>
+        <span>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '' }}</span>
+      </div>
+    </div>
+    {% if trace is defined %}<a class="btn btn-primary" href="/platform/golden-loop?intelligence_id={{ item.id }}">进入黄金业务闭环</a>{% endif %}
+  </div>
+
+  <section class="platform-card">
+    <h2>来源与摘要</h2>
+    {% if item.source_url %}<p><a href="{{ item.source_url }}" target="_blank" rel="noopener">打开公开来源</a></p>{% endif %}
+    <p>{{ item.summary or item.content or '暂无摘要' }}</p>
+  </section>
+  {% if item.content %}<section class="platform-card"><h2>详细内容</h2><p style="white-space:pre-wrap;">{{ item.content }}</p></section>{% endif %}
+
+  {% if trace is defined %}<section class="platform-card">
+    <h2>闭环追溯</h2>
+    <p>关联主体 {{ trace.subjects|length }} · 供需 {{ trace.resources|length }} · 匹配 {{ trace.matches|length }} · 机会 {{ trace.opportunities|length }} · 跟进 {{ trace.follow_ups|length }} · 正式关系 {{ trace.relationships|length }}</p>
+    {% for subject in trace.subjects %}<span class="badge">{{ subject.subject_label }}</span>{% else %}<p class="text-muted">尚未关联正式主体。</p>{% endfor %}
+    <p><a href="/platform/golden-loop?intelligence_id={{ item.id }}">查看并推进完整链路</a></p>
+  </section>{% endif %}
+
+  {% if evidence %}<section class="platform-card"><h2>证据</h2>
+    {% for ev in evidence %}<article><p><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or ev.url }}</a></p><p>{{ ev.evidence_excerpt }}</p><p class="text-sm">Snapshot #{{ ev.snapshot_id }} · SHA256 {{ ev.snapshot_hash }}</p></article>{% endfor %}
+  </section>{% endif %}
+
+  <section class="platform-card flex-between">
+    <form method="post" action="/api/v1/favorites/toggle">
+      <input type="hidden" name="target_type" value="intelligence"><input type="hidden" name="target_id" value="{{ item.id }}">
+      <button class="btn btn-sm" type="submit">{{ '取消收藏' if is_favorited else '收藏' }}</button>
+    </form>
+    {% if sec.get('can_manage_users') or 'review_data' in perms or 'manage_monitoring' in perms %}<a class="btn btn-outline" href="/admin/intelligence/{{ item.id }}">管理此情报</a>{% endif %}
+  </section>
 </div>
-{% if sec.get('can_manage_users') or 'review_data' in perms or 'manage_monitoring' in perms %}
-<div class="platform-card"><a class="btn btn-primary" href="/admin/intelligence/{{ item.id }}">管理此情报</a></div>
-{% endif %}
-<section class="platform-card"><h2>摘要</h2><p>{{ item.summary or item.content or '暂无内容' }}</p></section>
-{% if item.content %}<section class="platform-card"><h2>详细内容</h2><p style="white-space:pre-wrap;">{{ item.content }}</p></section>{% endif %}
-{% if item.companies %}<section class="platform-card"><h2>涉及企业</h2><p>{{ item.companies }}</p></section>{% endif %}
-{% if item.industry_directions %}<section class="platform-card"><h2>产业方向</h2><p>{{ item.industry_directions }}</p></section>{% endif %}
-{% if evidence %}<section class="platform-card"><h2>证据链</h2>{% for ev in evidence %}<article><p><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or ev.url }}</a> · 抓取于 {{ ev.captured_at }}</p><p>{{ ev.evidence_excerpt }}</p><p class="text-sm">Snapshot #{{ ev.snapshot_id }} · SHA256 {{ ev.snapshot_hash }}{% if ev.page_number %} · 第 {{ ev.page_number }} 页{% endif %}{% if ev.table_number %} · 表 {{ ev.table_number }}{% endif %}</p></article>{% endfor %}</section>{% endif %}<section class="platform-card"><form method="post" action="/api/v1/favorites/toggle"><input type="hidden" name="target_type" value="intelligence"><input type="hidden" name="target_id" value="{{ item.id }}"><button class="btn btn-sm">{{ '取消收藏' if is_favorited else '收藏' }}</button></form></section>
 {% endblock %}

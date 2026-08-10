@@ -181,6 +181,13 @@
     有效期：{{ relationship.valid_from or '未知' }} 至 {{ relationship.valid_to or '当前' }}；
     证据状态：{{ EVIDENCE_STATUS_LABELS.get(relationship.evidence_status, relationship.evidence_status) }}；
     来源数：{{ relationship.source_count }}</p>
+  {% if relationship.source_intelligence_id or relationship.source_match_id or relationship.source_opportunity_id %}
+  <p><strong>业务来源：</strong>
+    {% if relationship.source_intelligence_id %}<a href="/intelligence/{{ relationship.source_intelligence_id }}">来源情报</a>{% endif %}
+    {% if relationship.source_match_id %} · <a href="/matches/{{ relationship.source_match_id }}">来源匹配</a>{% endif %}
+    {% if relationship.source_opportunity_id %} · <a href="/opportunities/{{ relationship.source_opportunity_id }}">来源机会</a>{% endif %}
+  </p>
+  {% endif %}
 </section>
 <section class="dashboard-card">
   <h2>证据链</h2>

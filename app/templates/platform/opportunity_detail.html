@@ -1,35 +1,47 @@
 {% extends "platform/base.html" %}
 {% set active_nav = "collaboration" %}
-{% set active_subnav = "collaboration.opportunities" %}
-{% block platform_title %}{{ opp.title }} - ????{% endblock %}
+{% block platform_title %}{{ opp.title }}{% endblock %}
 {% block platform_content %}
-<div class="platform-content" style="max-width:900px;margin:0 auto;padding:24px 32px;">
-<a href="/opportunities" class="text-sm" style="color:var(--color-accent);">&larr; 返回合作列表</a>
-<h1 class="page-title mt-16">{{ opp.title }}</h1>
-<div class="opp-meta"><span class="tag tag-blue">{{ opp.opp_type }}</span><span>阶段：</span>
-<form method="post" action="/opportunities/{{ opp.id }}/stage" style="display:inline"><select name="stage">
-{% for s in ['lead','contacted','qualified','negotiating','proposal','due_diligence','agreement','won','lost','closed'] %}
-<option value="{{ s }}" {% if opp.stage == s %}selected{% endif %}>{{ s|status_label }}</option>{% endfor %}
-</select><button type="submit" class="btn btn-sm">更新阶段</button></form></div>
-<div class="platform-card"><h3>合作说明</h3><p>{{ opp.description or '' }}</p></div>
-{% if opp.expected_outcome %}<div class="platform-card"><h3>预期目标</h3><p>{{ opp.expected_outcome }}</p></div>{% endif %}
-
-<!-- Timeline -->
-<div class="platform-card"><h3>商务时间线</h3>
-{% if timeline %}<div class="timeline">{% for t in timeline %}<div class="timeline-item"><div class="time">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</div><div class="desc">{{ t.description }}</div></div>{% endfor %}</div>
-{% else %}<p class="text-muted text-sm">暂无记录</p>{% endif %}</div>
-
-<!-- Follow-ups -->
-<div class="platform-card"><h3>跟进记录 ({{ follow_ups|length }})</h3>
-{% for fu in follow_ups %}<div style="padding:8px 0;border-bottom:1px solid var(--color-border);"><span class="badge badge-info">{{ fu.follow_type }}</span><span class="text-sm text-muted"> {{ fu.followed_at.strftime('%Y-%m-%d %H:%M') if fu.followed_at else '' }}</span><p class="text-sm">{{ fu.content[:200] }}</p></div>{% endfor %}
-{% if authenticated %}<form method="post" action="/opportunities/{{ opp.id }}/follow-up" class="mt-16"><textarea name="content" placeholder="跟进内容..." style="width:100%;min-height:60px;margin-bottom:8px;"></textarea>
-<div><select name="follow_type"><option value="note">备注</option><option value="call">电话</option><option value="meeting">会议</option><option value="email">邮件</option><option value="visit">拜访</option></select>
-<button type="submit" class="btn btn-primary btn-sm">添加跟进</button></div></form>{% endif %}</div>
-
-<!-- Tasks -->
-<div class="platform-card"><h3>协作任务 ({{ tasks|length }})</h3>
-{% for t in tasks %}<div style="padding:8px 0;border-bottom:1px solid var(--color-border);"><span class="badge badge-{% if t.status == 'completed' %}success{% elif t.status == 'in_progress' %}warning{% else %}neutral{% endif %}">{{ t.status|status_label }}</span>
-<span>{{ t.title }}</span><span class="text-sm text-muted"> 优先级：{{ t.priority }}</span></div>{% endfor %}
-{% if authenticated %}<form method="post" action="/opportunities/{{ opp.id }}/task" class="mt-16"><input name="title" placeholder="任务标题" style="width:200px;"><select name="priority"><option value="P2">P2</option><option value="P1">P1</option><option value="P0">P0</option></select><button type="submit" class="btn btn-primary btn-sm">添加任务</button></form>{% endif %}</div>
+<div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
+  <a href="/opportunities">← 返回合作机会</a>
+  {% if message %}<div class="platform-card" style="border-left:4px solid var(--color-accent);">{{ message }}</div>{% endif %}
+  <div class="flex-between mt-16">
+    <div><h1 class="page-title">{{ opp.title }}</h1><div class="opp-meta"><span class="badge">{{ opp.opp_type }}</span><span>阶段：{{ golden.stage|status_label }}</span><span>结果：{{ {'won':'合作达成','lost':'未成交','paused':'暂停'}.get(golden.outcome_status, '推进中') }}</span></div></div>
+    {% if golden.source_intelligence_id %}<a class="btn btn-outline" href="/platform/golden-loop?intelligence_id={{ golden.source_intelligence_id }}">查看完整闭环</a>{% endif %}
+  </div>
+  <section class="platform-card"><h2>链路来源</h2><p>
+    {% if golden.source_intelligence_id %}<a href="/intelligence/{{ golden.source_intelligence_id }}">来源情报 #{{ golden.source_intelligence_id }}</a>{% else %}无来源情报{% endif %}
+    → {% if golden.source_demand_resource_id %}<a href="/resources/{{ golden.source_demand_resource_id }}">需求 #{{ golden.source_demand_resource_id }}</a>{% else %}无需求{% endif %}
+    → {% if golden.source_supply_resource_id %}<a href="/resources/{{ golden.source_supply_resource_id }}">供给 #{{ golden.source_supply_resource_id }}</a>{% else %}无供给{% endif %}
+    → {% if golden.source_match_id %}<a href="/matches/{{ golden.source_match_id }}">匹配 #{{ golden.source_match_id }}</a>{% else %}无匹配{% endif %}
+  </p><p>{{ opp.description or '' }}</p></section>
+  <section class="platform-card"><h2>商务时间线</h2>{% for item in timeline %}<p><span class="text-muted">{{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '' }}</span> {{ item.description }}</p>{% else %}<p class="text-muted">暂无记录。</p>{% endfor %}</section>
+  <section class="platform-card"><h2>跟进记录（{{ follow_ups|length }}）</h2>
+    {% for item in follow_ups %}<article style="border-bottom:1px solid var(--color-border);padding:8px 0;"><strong>{{ item.follow_type }}</strong> <span class="text-muted">{{ item.followed_at.strftime('%Y-%m-%d %H:%M') if item.followed_at else '' }}</span><p>{{ item.content }}</p></article>{% else %}<p class="text-muted">尚未登记跟进。</p>{% endfor %}
+    {% if can_write %}<form method="post" action="/golden-loop/opportunities/{{ opp.id }}/follow-ups">
+      <label>跟进内容<textarea name="content" required placeholder="记录真实沟通事实"></textarea></label>
+      <label>联系结果<input name="contact_result" placeholder="已沟通、待回复、安排会议等"></label>
+      <label>下一步<input name="next_action" placeholder="明确下一动作"></label>
+      <label>下次跟进时间<input name="next_follow_at" type="datetime-local"></label>
+      <label>推进阶段<select name="stage_after"><option value="">保持当前阶段</option><option value="contacted">已联系</option><option value="qualified">已确认</option><option value="negotiating">洽谈中</option><option value="proposal">方案阶段</option></select></label>
+      <button class="btn btn-primary" type="submit">登记跟进</button>
+    </form>{% else %}<p class="text-muted">当前账号为只读角色。</p>{% endif %}
+  </section>
+  <section class="platform-card"><h2>协作任务（{{ tasks|length }}）</h2>
+    {% for item in tasks %}<p>{{ item.title }} · {{ item.status|status_label }} · {{ item.priority }}{% if item.due_date %} · {{ item.due_date }}{% endif %}</p>{% else %}<p class="text-muted">暂无协作任务。</p>{% endfor %}
+    {% if can_write %}<form method="post" action="/golden-loop/opportunities/{{ opp.id }}/tasks"><label>任务标题<input name="title" required></label><label>截止日期<input name="due_date" type="date"></label><label>优先级<select name="priority"><option value="P2">普通</option><option value="P1">高</option><option value="P0">紧急</option><option value="P3">低</option></select></label><button class="btn btn-primary" type="submit">创建任务</button></form>{% endif %}
+  </section>
+  <section class="platform-card"><h2>商务结果</h2>
+    {% if golden.result_relationship_id %}<p><strong>正式合作关系：</strong><a href="/network/relationships/{{ golden.result_relationship_id }}">关系 #{{ golden.result_relationship_id }}</a></p>{% endif %}
+    <p>当前结果：{{ golden.final_result or '尚未关闭' }}{% if golden.closed_reason %} · {{ golden.closed_reason }}{% endif %}</p>
+    {% if can_write and golden.outcome_status != 'won' %}<form method="post" action="/golden-loop/opportunities/{{ opp.id }}/outcome">
+      <label>处理结果<select name="outcome" required><option value="won">合作达成</option><option value="lost">未成交</option><option value="paused">暂停</option></select></label>
+      <label>结构化原因<input name="reason" placeholder="达成依据、未成交原因或暂停原因"></label>
+      <label>结果说明<textarea name="result_note" placeholder="简要记录最终结果"></textarea></label>
+      <label>合作规模<input name="cooperation_scale" placeholder="合同额、项目范围或其他可核验规模"></label>
+      <label>合作证据<textarea name="evidence_text" placeholder="只有填写可核验合作证据且双方机构明确时，才形成正式合作关系"></textarea></label>
+      <button class="btn btn-primary" type="submit">保存商务结果</button>
+    </form>{% endif %}
+  </section>
 </div>
 {% endblock %}

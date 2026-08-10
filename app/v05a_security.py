@@ -95,6 +95,11 @@ def setup_admin_submit(
     return response
 
 
+@router.get("/login")
+def login_alias() -> RedirectResponse:
+    return RedirectResponse("/account/login", status_code=303)
+
+
 @router.get("/account/login", response_class=HTMLResponse)
 def login_page(request: Request, next: str = Query("/"), message: str = Query("")):
     if current_user(request):

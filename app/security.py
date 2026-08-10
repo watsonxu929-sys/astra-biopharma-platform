@@ -133,6 +133,7 @@ SESSION_COOKIE = "biopharma_session"
 SESSION_MAX_AGE = 12 * 60 * 60
 PBKDF2_ITERATIONS = 310_000
 _PUBLIC_EXACT = {
+    "/login",
     "/account/login",
     "/account/logout",
     "/account/forbidden",

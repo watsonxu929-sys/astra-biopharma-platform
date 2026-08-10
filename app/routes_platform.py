@@ -18,6 +18,7 @@ from app.services.unified_intelligence_service import UnifiedIntelligenceService
 from app.services.intelligence_product_service import IntelligenceProductService
 from app.services.unified_resource_service import UnifiedResourceService
 from app.services.unified_opportunity_service import UnifiedOpportunityService
+from app.services.golden_loop_service import GoldenLoopService
 from app.services.platform_service import (
     get_user_person, get_person_full_profile, upsert_person_profile, set_person_tags,
     list_tags, seed_default_tags,
@@ -201,11 +202,12 @@ def platform_home(request: Request, db: Session = Depends(get_db)):
     workspace = get_workspace_for_role(request, db, user_id)
     tasks = list_user_tasks(db, user_id) if user_id else []
 
+    home_metrics = GoldenLoopService(db).workbench()["home_metrics"]
     return render(request, "platform/home.html",
         rec_people=rec_people, recent_people=recent_people,
         feed=feed, supplies=supplies, demands=demands,
         opps=opps, user_id=user_id,
-        workspace=workspace, tasks=tasks,
+        workspace=workspace, tasks=tasks, home_metrics=home_metrics,
     )
 
 
@@ -451,7 +453,8 @@ def intelligence_detail(item_id: int, request: Request, db: Session = Depends(ge
     evidence = IntelligenceProductService().trace(item_id)["evidence"]
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "intelligence", item_id) if user_id is not None else False
-    return render(request, "platform/intelligence_detail.html", item=item, evidence=evidence, is_favorited=fav, user_id=user_id)
+    trace = GoldenLoopService(db).trace(item_id)
+    return render(request, "platform/intelligence_detail.html", item=item, evidence=evidence, is_favorited=fav, user_id=user_id, trace=trace)
 
 
 @router.get("/intelligence/subscriptions", response_class=HTMLResponse)
@@ -512,11 +515,12 @@ def resource_market(
 @router.get("/resources/{resource_id:int}", response_class=HTMLResponse)
 def resource_detail(resource_id: int, request: Request, db: Session = Depends(get_db)):
     resource = UnifiedResourceService(db).detail(resource_id)
+    golden_resource = GoldenLoopService(db)._resource(resource_id)
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "resource", resource_id) if user_id is not None else False
     matches = match_resources(db, resource_id, limit=6)
     return render(request, "platform/resource_detail.html",
-        resource=resource, is_favorited=fav, matches=matches, user_id=user_id)
+        resource=resource, golden_resource=golden_resource, is_favorited=fav, matches=matches, user_id=user_id)
 
 
 @router.get("/resources/new", response_class=HTMLResponse)
@@ -574,15 +578,19 @@ def opportunities(request: Request,
 
 
 @router.get("/opportunities/{opp_id}", response_class=HTMLResponse)
-def opportunity_detail(opp_id: int, request: Request, db: Session = Depends(get_db)):
+def opportunity_detail(opp_id: int, request: Request, message: str = Query(""), db: Session = Depends(get_db)):
     user_id = get_current_user_id(request)
     svc = UnifiedOpportunityService(db)
     opp = svc.detail(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
     timeline = svc.timeline(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
     follow_ups = svc.follow_ups(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
     tasks = svc.tasks(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
+    golden_service = GoldenLoopService(db)
+    golden = golden_service._opportunity(opp_id)
+    role = get_user_role(request)
+    can_write = role in {"operator", "reviewer", "admin"} and user_id is not None and golden_service.can_manage_opportunity(golden, int(user_id), role)
     return render(request, "platform/opportunity_detail.html",
-        opp=opp, timeline=timeline, follow_ups=follow_ups, tasks=tasks, user_id=user_id)
+        opp=opp, golden=golden, timeline=timeline, follow_ups=follow_ups, tasks=tasks, user_id=user_id, can_write=can_write, message=message)
 
 
 @router.post("/opportunities/create")

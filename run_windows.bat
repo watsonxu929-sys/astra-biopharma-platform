@@ -1,8 +1,12 @@
 @echo off
+setlocal
+cd /d "%~dp0"
 echo ============================================
-echo 生物医药产业情报系统 - 正式本地环境
+echo Biopharma Intelligence MVP-RC1 - Web only
 echo ============================================
-echo 数据库: data/app.db
-echo 调度器: 已启用
-echo ============================================
-call "%~dp0start_windows.bat"
+call start_web_windows.bat
+if errorlevel 1 exit /b 1
+call status_windows.bat
+echo.
+echo Scheduler and Worker are disabled for the Web process.
+echo Use start_scheduler_windows.bat or start_worker_windows.bat explicitly when required.
