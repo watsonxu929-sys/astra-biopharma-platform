@@ -62,3 +62,12 @@ run_monitoring_once_windows.bat
 ## 项目级 Skills
 
 项目级 Skill 位于 `.skills/`。`AGENTS.md` 记录长期仓库规则；`.skills/*/SKILL.md` 记录可组合、可执行的工作流。需要特定流程时，显式调用对应 Skill，并在执行前重新核对仓库真实文件和命令。
+
+## Canonical project directory
+
+- This repository is the sole formal project directory; its absolute path is recorded in `PROJECT_DIRECTORY_INVENTORY.md`.
+- Normal development must use Git branches in this repository, not copied project directories.
+- High-risk worktrees may exist only under the parent `.worktrees` directory and must be cleaned after the task.
+- `C:\tmp` must never be used as a formal worktree or formal project directory.
+- Old project, rescue, recovery, and reference directories must not become runtime dependencies; disposition requires the inventory and user approval.
+- The sole formal database location and isolated-test rules are defined in `DATA_LOCATION.md`.
