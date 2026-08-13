@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, select, func
+from sqlalchemy import desc, select, func, text
 
 from app.database import get_db
 from app.models import Organization, Person
@@ -37,14 +37,18 @@ STATUS_LABELS = {
     # 合作机会阶段
     "lead": "线索", "contacted": "已联系", "qualified": "已确认",
     "negotiating": "洽谈中", "proposal": "方案阶段", "due_diligence": "尽职调查",
-    "agreement": "协议阶段", "won": "已达成", "lost": "已失效", "closed": "已关闭",
+    "agreement": "协议阶段", "won": "已达成", "lost": "未成交", "closed": "已关闭",
     # 联系意向状态
-    "identified": "已识别", "evaluating": "评估中", "active": "进行中", "paused": "已暂停",
-    "pending": "待处理", "accepted": "已接受", "declined": "已拒绝", "ignored": "已忽略",
+    "identified": "已识别", "evaluating": "评估中", "active": "跟进中", "paused": "已暂停",
+    "pending": "待处理", "pending_processing": "待判断", "pending_review": "待审核",
+    "reviewed": "稍后处理", "accepted": "已确认", "confirmed": "已确认",
+    "declined": "已拒绝", "ignored": "已忽略", "interested": "感兴趣",
+    "not_interested": "不感兴趣", "later": "稍后处理",
     # 任务状态
     "completed": "已完成", "in_progress": "进行中", "todo": "待办", "cancelled": "已取消",
     # 资源/情报状态
-    "published": "已发布", "draft": "草稿", "archived": "已归档",
+    "published": "有效", "draft": "草稿", "archived": "已归档", "matched": "已匹配",
+    "expired": "已过期", "supply": "供给", "demand": "需求",
     # 会员等级
     "standard": "标准", "premium": "高级", "exited": "已退出",
     # 审核状态
@@ -52,7 +56,12 @@ STATUS_LABELS = {
 }
 def status_label(value: str) -> str:
     """Map English status/stage to Chinese label."""
-    return STATUS_LABELS.get(str(value).lower(), str(value))
+    raw = str(value or "").strip()
+    if not raw:
+        return "未设置"
+    if any("\u4e00" <= char <= "\u9fff" for char in raw):
+        return raw
+    return STATUS_LABELS.get(raw.lower(), "待确认")
 
 
 router = APIRouter()
@@ -427,6 +436,9 @@ def intelligence_center(
     intel_type: str = Query(""),
     industry_direction: str = Query(""),
     q: str = Query(""),
+    source: str = Query(""),
+    time_range: str = Query(""),
+    workflow: str = Query(""),
     page: int = Query(1),
     db: Session = Depends(get_db),
 ):
@@ -434,7 +446,7 @@ def intelligence_center(
     result = list_intelligence(db, user_id=user_id,
         intel_type=intel_type or None,
         industry_direction=industry_direction or None,
-        q=q or None, page=page)
+        q=q or None, source=source, time_range=time_range, workflow=workflow, page=page)
     feed = personalized_feed(db, user_id, limit=6) if user_id is not None else []
     intel_type_options = [v for v in db.scalars(select(IntelligenceItem.intel_type).where(IntelligenceItem.status == "published", IntelligenceItem.intel_type.is_not(None), IntelligenceItem.intel_type != "").distinct().order_by(IntelligenceItem.intel_type)).all() if v]
     industry_direction_options = [v for v in db.scalars(select(IntelligenceItem.industry_directions).where(IntelligenceItem.status == "published", IntelligenceItem.industry_directions.is_not(None), IntelligenceItem.industry_directions != "").distinct().order_by(IntelligenceItem.industry_directions)).all() if v]
@@ -444,6 +456,7 @@ def intelligence_center(
         q=q, user_id=user_id,
         intel_type_options=intel_type_options,
         industry_direction_options=industry_direction_options,
+        source=source, time_range=time_range, workflow=workflow,
     )
 
 
@@ -498,14 +511,16 @@ def resource_market(
     region: str = Query(""),
     page: int = Query(1),
     db: Session = Depends(get_db),
+    status: str = Query("published"),
 ):
     result = list_market_resources(db,
         direction=direction or None, resource_type=resource_type or None,
         q=q or None,
-        industry_direction=industry_direction or None, region=region or None, page=page)
+        industry_direction=industry_direction or None, region=region or None, status=status, page=page)
     resource_type_options = [v for v in db.scalars(select(MarketResource.resource_type).where(MarketResource.status == "published", MarketResource.resource_type.is_not(None), MarketResource.resource_type != "").distinct().order_by(MarketResource.resource_type)).all() if v]
     return render(request, "platform/resources.html",
         items=result["items"], total=result["total"], page=result["page"],
+        status=status or "published",
         direction=direction, resource_type=resource_type, q=q,
         industry_direction=industry_direction, region=region,
         resource_type_options=resource_type_options,
@@ -515,12 +530,13 @@ def resource_market(
 @router.get("/resources/{resource_id:int}", response_class=HTMLResponse)
 def resource_detail(resource_id: int, request: Request, db: Session = Depends(get_db)):
     resource = UnifiedResourceService(db).detail(resource_id)
-    golden_resource = GoldenLoopService(db)._resource(resource_id)
+    trace = GoldenLoopService(db).resource_trace(resource_id)
+    golden_resource = trace["resource"]
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "resource", resource_id) if user_id is not None else False
     matches = match_resources(db, resource_id, limit=6)
     return render(request, "platform/resource_detail.html",
-        resource=resource, golden_resource=golden_resource, is_favorited=fav, matches=matches, user_id=user_id)
+        resource=resource, golden_resource=golden_resource, trace=trace, is_favorited=fav, matches=matches, user_id=user_id)
 
 
 @router.get("/resources/new", response_class=HTMLResponse)
@@ -566,15 +582,24 @@ def opportunities(request: Request,
     status: str = Query(""),
     stage: str = Query(""),
     q: str = Query(""),
+    outcome: str = Query(""),
+    owner_id: int | None = Query(None),
+    updated_period: str = Query(""),
+    follow_scope: str = Query(""),
+    closed_period: str = Query(""),
     page: int = Query(1),
     db: Session = Depends(get_db)):
     user_id = get_current_user_id(request)
     result = UnifiedOpportunityService(db).list(
         user_id=user_id, is_admin=is_platform_admin(request),
-        status=status or "active", stage=stage, q=q, page=page, page_size=20)
+        status=status or "active", stage=stage, q=q, outcome=outcome, owner_id=owner_id,
+        updated_period=updated_period, follow_scope=follow_scope, closed_period=closed_period, page=page, page_size=20)
+    owners = db.execute(text("SELECT id,username FROM v05a_users WHERE status='active' ORDER BY username")).mappings().all()
+    owner_names = {int(item["id"]): item["username"] for item in owners}
     return render(request, "platform/opportunities.html",
         opps=result["items"], total=result["total"],
-        page=result["page"], status=status or "active", stage=stage, q=q, user_id=user_id)
+        page=result["page"], status=status or "active", stage=stage, q=q, outcome=outcome, owner_id=owner_id,
+        updated_period=updated_period, follow_scope=follow_scope, closed_period=closed_period, owners=owners, owner_names=owner_names, user_id=user_id)
 
 
 @router.get("/opportunities/{opp_id}", response_class=HTMLResponse)
@@ -587,10 +612,11 @@ def opportunity_detail(opp_id: int, request: Request, message: str = Query(""), 
     tasks = svc.tasks(opp_id, user_id=user_id, is_admin=is_platform_admin(request))
     golden_service = GoldenLoopService(db)
     golden = golden_service._opportunity(opp_id)
+    trace = golden_service.opportunity_trace(opp_id)
     role = get_user_role(request)
     can_write = role in {"operator", "reviewer", "admin"} and user_id is not None and golden_service.can_manage_opportunity(golden, int(user_id), role)
     return render(request, "platform/opportunity_detail.html",
-        opp=opp, golden=golden, timeline=timeline, follow_ups=follow_ups, tasks=tasks, user_id=user_id, can_write=can_write, message=message)
+        opp=opp, golden=golden, trace=trace, timeline=timeline, follow_ups=follow_ups, tasks=tasks, user_id=user_id, can_write=can_write, message=message)
 
 
 @router.post("/opportunities/create")

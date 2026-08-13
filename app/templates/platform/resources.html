@@ -3,7 +3,7 @@
 <nav class="breadcrumb">
   <a href="/platform">工作台</a>
   <span class="sep">/</span>
-  <span>业务协同</span>
+  <span>资源市场</span>
 </nav>
 {% endblock %}
 {% block platform_title %}资源市场{% endblock %}
@@ -36,8 +36,14 @@
       <option value="{{ option }}" {% if resource_type == option %}selected{% endif %}>{{ option }}</option>
       {% endfor %}
     </select>
+    <select name="status" class="filter-select">
+      <option value="published" {% if status == 'published' %}selected{% endif %}>有效资源</option>
+      <option value="matched" {% if status == 'matched' %}selected{% endif %}>已匹配</option>
+      <option value="expired" {% if status == 'expired' %}selected{% endif %}>已过期</option>
+      <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
+    </select>
     <button class="btn btn-sm" type="submit">筛选</button>
-    {% if q or direction or resource_type %}
+    {% if q or direction or resource_type or status != 'published' %}
     <a class="btn btn-sm btn-outline" href="/resources">清除</a>
     {% endif %}
   </form>
@@ -67,7 +73,7 @@
   <div class="empty-state">
     <div class="empty-icon">🔗</div>
     <h3>暂无资源</h3>
-    <p>可发布供给或需求，等待匹配。</p>
+    <p>当前筛选下没有资源，可清除条件或发布新的供给与需求。</p>
     <a class="btn btn-sm" href="/resources/new">发布资源</a>
   </div>
   {% endif %}

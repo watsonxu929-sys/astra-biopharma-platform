@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
@@ -46,15 +46,37 @@ class UnifiedOpportunityService:
         uid = int(user_id)
         return uid in {opp.initiator_id, opp.owner_id} or uid in _csv_ids(opp.participants)
 
-    def list(self, *, user_id: int | None, is_admin: bool = False, status: str = "active", stage: str = "", q: str = "", page: int = 1, page_size: int = 20) -> dict[str, Any]:
+    def list(self, *, user_id: int | None, is_admin: bool = False, status: str = "active", stage: str = "", q: str = "", outcome: str = "", owner_id: int | None = None, updated_period: str = "", follow_scope: str = "", closed_period: str = "", page: int = 1, page_size: int = 20) -> dict[str, Any]:
         page = max(1, int(page or 1)); page_size = max(1, min(int(page_size or 20), 100))
         stmt = select(CooperationOpportunity).order_by(desc(CooperationOpportunity.updated_at))
-        if status:
+        if status and status != "all":
             stmt = stmt.where(CooperationOpportunity.status == status)
         if stage:
             stmt = stmt.where(CooperationOpportunity.stage == stage)
         if q:
             stmt = stmt.where(or_(CooperationOpportunity.title.contains(q), CooperationOpportunity.description.contains(q)))
+        if outcome:
+            stmt = stmt.where(CooperationOpportunity.outcome_status == outcome)
+        if owner_id:
+            stmt = stmt.where(CooperationOpportunity.owner_id == int(owner_id))
+        today = datetime.now().date()
+        if updated_period == "today":
+            stmt = stmt.where(CooperationOpportunity.updated_at >= datetime.combine(today, datetime.min.time()))
+        elif updated_period == "7days":
+            stmt = stmt.where(CooperationOpportunity.updated_at >= datetime.now() - timedelta(days=7))
+        elif updated_period == "30days":
+            stmt = stmt.where(CooperationOpportunity.updated_at >= datetime.now() - timedelta(days=30))
+        if follow_scope == "today":
+            start = datetime.combine(today, datetime.min.time())
+            stmt = stmt.where(CooperationOpportunity.next_follow_at >= start, CooperationOpportunity.next_follow_at < start + timedelta(days=1))
+        elif follow_scope == "overdue":
+            stmt = stmt.where(CooperationOpportunity.next_follow_at < datetime.combine(today, datetime.min.time()))
+        elif follow_scope == "future":
+            stmt = stmt.where(CooperationOpportunity.next_follow_at >= datetime.combine(today + timedelta(days=1), datetime.min.time()))
+        if closed_period == "this_month":
+            month_start = datetime(today.year, today.month, 1)
+            next_month = datetime(today.year + (1 if today.month == 12 else 0), 1 if today.month == 12 else today.month + 1, 1)
+            stmt = stmt.where(CooperationOpportunity.closed_at >= month_start, CooperationOpportunity.closed_at < next_month)
         rows = list(self.db.scalars(stmt.limit(500)).all())
         visible = [row for row in rows if self.can_access(row, user_id, is_admin=is_admin)]
         start = (page - 1) * page_size

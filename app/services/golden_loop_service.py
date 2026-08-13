@@ -107,7 +107,16 @@ class GoldenLoopService:
 
     def _resource(self, resource_id: int) -> dict[str, Any]:
         row = self._one(
-            "SELECT * FROM v06_market_resources WHERE id=:id",
+            """
+            SELECT r.*,i.title AS intelligence_title,o.standard_name AS organization_name,
+                   p.name AS owner_person_name,pr.name AS project_name
+            FROM v06_market_resources r
+            LEFT JOIN v06_intelligence_items i ON i.id=r.source_intelligence_id
+            LEFT JOIN organizations o ON o.id=r.organization_id
+            LEFT JOIN people p ON p.id=r.owner_person_id
+            LEFT JOIN projects pr ON pr.id=r.project_id
+            WHERE r.id=:id
+            """,
             {"id": int(resource_id)},
         )
         if not row:
@@ -125,7 +134,20 @@ class GoldenLoopService:
 
     def _opportunity(self, opportunity_id: int) -> dict[str, Any]:
         row = self._one(
-            "SELECT * FROM v06_opportunities WHERE id=:id",
+            """
+            SELECT o.*,i.title AS intelligence_title,d.title AS demand_title,
+                   s.title AS supply_title,m.match_no,
+                   od.standard_name AS demand_organization_name,
+                   os.standard_name AS supply_organization_name
+            FROM v06_opportunities o
+            LEFT JOIN v06_intelligence_items i ON i.id=o.source_intelligence_id
+            LEFT JOIN v06_market_resources d ON d.id=o.source_demand_resource_id
+            LEFT JOIN v06_market_resources s ON s.id=o.source_supply_resource_id
+            LEFT JOIN p4_resource_match_candidates m ON m.id=o.source_match_id
+            LEFT JOIN organizations od ON od.id=o.demand_organization_id
+            LEFT JOIN organizations os ON os.id=o.supply_organization_id
+            WHERE o.id=:id
+            """,
             {"id": int(opportunity_id)},
         )
         if not row:
@@ -211,10 +233,16 @@ class GoldenLoopService:
         for row in rows:
             table, label_column = SUBJECT_TABLES[row["subject_type"]]
             subject = self._one(
-                f'SELECT "{label_column}" AS label FROM "{table}" WHERE id=:id',
+                f'SELECT id,external_id,"{label_column}" AS label FROM "{table}" WHERE id=:id',
                 {"id": int(row["subject_id"])},
             )
             row["subject_label"] = subject["label"] if subject else "主体已归档"
+            if subject:
+                row["subject_url"] = (
+                    f"/network/people/{subject['id']}"
+                    if row["subject_type"] == "person"
+                    else f"/network/entities/{row['subject_type']}/{subject['external_id']}"
+                )
         return rows
 
     def create_resource_from_intelligence(
@@ -470,7 +498,74 @@ class GoldenLoopService:
                 match[key.removesuffix("_json")] = json.loads(match.get(key) or "[]" if key != "evidence_json" else match.get(key) or "{}")
             except (TypeError, json.JSONDecodeError):
                 match[key.removesuffix("_json")] = [] if key != "evidence_json" else {}
+        if match.get("opportunity"):
+            guidance = {"current_state": "已进入业务协同", "next_action": "登记跟进并明确下一时间"}
+        elif match.get("status") == "accepted":
+            guidance = {"current_state": "匹配已确认", "next_action": "转为合作机会"}
+        elif match.get("status") in {"pending", "reviewed"}:
+            guidance = {"current_state": "有候选匹配", "next_action": "确认、拒绝或暂缓匹配"}
+        else:
+            guidance = {"current_state": "匹配已处理", "next_action": "查看处理原因并保留记录"}
+        match["guidance"] = guidance
+        source_ids = {
+            int(value)
+            for value in (
+                match["demand"].get("source_intelligence_id"),
+                match["supply"].get("source_intelligence_id"),
+            )
+            if value
+        }
+        match["source_intelligence"] = [
+            self._published_intelligence(item_id) for item_id in sorted(source_ids)
+        ]
         return match
+
+    def resource_trace(self, resource_id: int) -> dict[str, Any]:
+        resource = self._resource(resource_id)
+        matches = self._many(
+            """
+            SELECT m.*,d.title AS demand_title,s.title AS supply_title
+            FROM p4_resource_match_candidates m
+            JOIN v06_market_resources d ON d.id=m.demand_resource_id
+            JOIN v06_market_resources s ON s.id=m.supply_resource_id
+            WHERE m.demand_resource_id=:id OR m.supply_resource_id=:id
+            ORDER BY m.id DESC
+            """,
+            {"id": int(resource_id)},
+        )
+        opportunities = self._many(
+            """
+            SELECT * FROM v06_opportunities
+            WHERE source_demand_resource_id=:id OR source_supply_resource_id=:id
+            ORDER BY id DESC
+            """,
+            {"id": int(resource_id)},
+        )
+        if opportunities:
+            guidance = {"current_state": "已进入业务协同", "next_action": "查看机会并登记跟进"}
+        elif any(item["status"] == "accepted" for item in matches):
+            guidance = {"current_state": "匹配已确认", "next_action": "将匹配转为合作机会"}
+        elif matches:
+            guidance = {"current_state": "已有候选匹配", "next_action": "人工判断匹配意向"}
+        else:
+            guidance = {"current_state": "等待匹配", "next_action": "查找可合作的需求或供给"}
+        return {"resource": resource, "matches": matches, "opportunities": opportunities, "guidance": guidance}
+
+    def opportunity_trace(self, opportunity_id: int) -> dict[str, Any]:
+        opportunity = self._opportunity(opportunity_id)
+        if opportunity.get("outcome_status") == "won" and opportunity.get("result_relationship_id"):
+            guidance = {"current_state": "已达成并形成正式关系", "next_action": "查看合作关系与证据"}
+        elif opportunity.get("outcome_status") == "won":
+            guidance = {"current_state": "已达成，待补合作证据", "next_action": "补充证据并形成正式关系"}
+        elif opportunity.get("outcome_status") == "lost":
+            guidance = {"current_state": "未成交", "next_action": "查看原因并保留历史记录"}
+        elif opportunity.get("outcome_status") == "paused":
+            guidance = {"current_state": "已暂停", "next_action": "条件明确后恢复推进"}
+        elif opportunity.get("next_follow_at") and str(opportunity["next_follow_at"])[:10] <= datetime.now().date().isoformat():
+            guidance = {"current_state": "已到跟进时间", "next_action": "完成本次跟进并设置下一时间"}
+        else:
+            guidance = {"current_state": "跟进中", "next_action": "登记跟进并明确下一动作"}
+        return {"opportunity": opportunity, "guidance": guidance}
 
     def convert_match_to_opportunity(self, match_id: int, *, actor_user_id: int) -> dict[str, Any]:
         match = self.match_detail(match_id)
@@ -710,21 +805,33 @@ class GoldenLoopService:
         supply_org = opportunity.get("supply_organization_id")
         if not evidence_text.strip() or not demand_org or not supply_org or int(demand_org) == int(supply_org):
             return None
+        demand = self._one(
+            "SELECT external_id FROM organizations WHERE id=:id", {"id": int(demand_org)}
+        )
+        supply = self._one(
+            "SELECT external_id FROM organizations WHERE id=:id", {"id": int(supply_org)}
+        )
+        if not demand or not supply:
+            return None
+        demand_ref = str(demand["external_id"])
+        supply_ref = str(supply["external_id"])
         existing = self._one(
             """
             SELECT * FROM p3_canonical_relationships
             WHERE relationship_type='cooperates_with' AND review_status='approved'
               AND is_current=1
-              AND ((subject_type='organization' AND subject_id=:demand_org
-                    AND object_type='organization' AND object_id=:supply_org)
-                OR (subject_type='organization' AND subject_id=:supply_org
-                    AND object_type='organization' AND object_id=:demand_org))
+              AND ((subject_type='organization' AND subject_id IN (:demand_ref,:demand_legacy)
+                    AND object_type='organization' AND object_id IN (:supply_ref,:supply_legacy))
+                OR (subject_type='organization' AND subject_id IN (:supply_ref,:supply_legacy)
+                    AND object_type='organization' AND object_id IN (:demand_ref,:demand_legacy)))
             ORDER BY CASE WHEN source_opportunity_id=:opportunity_id THEN 0 ELSE 1 END,id
             LIMIT 1
             """,
             {
-                "demand_org": str(demand_org),
-                "supply_org": str(supply_org),
+                "demand_ref": demand_ref,
+                "supply_ref": supply_ref,
+                "demand_legacy": str(demand_org),
+                "supply_legacy": str(supply_org),
                 "opportunity_id": int(opportunity["id"]),
             },
         )
@@ -774,8 +881,8 @@ class GoldenLoopService:
                 ),
                 {
                     "relationship_no": f"RC1-REL-{uuid.uuid4().hex[:12].upper()}",
-                    "demand_org": str(demand_org),
-                    "supply_org": str(supply_org),
+                    "demand_org": demand_ref,
+                    "supply_org": supply_ref,
                     "actor": str(actor_user_id),
                     "now": now,
                     "opportunity_id": int(opportunity["id"]),
@@ -924,6 +1031,7 @@ class GoldenLoopService:
             """,
             {"item_id": int(intelligence_id)},
         )
+        resources = [self._resource(int(row["id"])) for row in resources]
         resource_ids = [int(row["id"]) for row in resources]
         if resource_ids:
             marks = ",".join(str(value) for value in resource_ids)
@@ -945,6 +1053,7 @@ class GoldenLoopService:
             """,
             {"item_id": int(intelligence_id)},
         )
+        opportunities = [self._opportunity(int(row["id"])) for row in opportunities]
         opportunity_ids = [int(row["id"]) for row in opportunities]
         if opportunity_ids:
             marks = ",".join(str(value) for value in opportunity_ids)
@@ -970,15 +1079,25 @@ class GoldenLoopService:
                 """,
                 {"item_id": int(intelligence_id)},
             )
+        subjects = self.subjects(intelligence_id)
+        if not subjects:
+            guidance = {"current_state": "待关联主体", "next_action": "关联企业、人物或项目"}
+        elif not resources:
+            guidance = {"current_state": "待判断是否形成资源", "next_action": "判断并登记需求或供给"}
+        elif not matches:
+            guidance = {"current_state": "已形成资源", "next_action": "查找并确认供需匹配"}
+        else:
+            guidance = {"current_state": "闭环推进中", "next_action": "查看匹配或合作机会"}
         return {
             "intelligence": item,
-            "subjects": self.subjects(intelligence_id),
+            "subjects": subjects,
             "resources": resources,
             "matches": matches,
             "match_ids": match_ids,
             "opportunities": opportunities,
             "follow_ups": follow_ups,
             "relationships": relationships,
+            "guidance": guidance,
         }
 
     def workbench(self) -> dict[str, Any]:
@@ -987,12 +1106,16 @@ class GoldenLoopService:
 
         return {
             "home_metrics": {
-                "today_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items WHERE status='published' AND date(created_at)=date('now')"),
+                "today_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items WHERE status='published' AND date(COALESCE(published_at,created_at))=date('now','localtime')"),
                 "pending_subjects": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND NOT EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=i.id)"),
+                "pending_judgement": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=i.id) AND NOT EXISTS (SELECT 1 FROM v06_market_resources r WHERE r.source_intelligence_id=i.id AND r.status<>'archived')"),
                 "active_resources": count("SELECT COUNT(*) FROM v06_market_resources WHERE status='published'"),
+                "active_demands": count("SELECT COUNT(*) FROM v06_market_resources WHERE status='published' AND direction='demand' AND (valid_until IS NULL OR date(valid_until)>=date('now','localtime'))"),
+                "active_supplies": count("SELECT COUNT(*) FROM v06_market_resources WHERE status='published' AND direction='supply' AND (valid_until IS NULL OR date(valid_until)>=date('now','localtime'))"),
                 "pending_matches": count("SELECT COUNT(*) FROM p4_resource_match_candidates WHERE status IN ('pending','reviewed')"),
                 "active_opportunities": count("SELECT COUNT(*) FROM v06_opportunities WHERE status='active'"),
-                "due_followups": count("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND next_follow_at IS NOT NULL AND date(next_follow_at)<=date('now','+7 days')"),
+                "today_followups": count("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND next_follow_at IS NOT NULL AND date(next_follow_at)=date('now','localtime')"),
+                "overdue_followups": count("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND next_follow_at IS NOT NULL AND date(next_follow_at)<date('now','localtime')"),
                 "won_this_month": count("SELECT COUNT(*) FROM v06_opportunities WHERE outcome_status='won' AND strftime('%Y-%m',closed_at)=strftime('%Y-%m','now')"),
                 "recent_relationships": count("SELECT COUNT(*) FROM p3_canonical_relationships WHERE review_status='approved' AND date(created_at)>=date('now','-30 days')"),
             },

@@ -80,7 +80,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("collaboration.tasks", "任务与跟进", "任务", "协作任务和商务跟进记录", "collaboration", "collaboration", "/collaboration/tasks", "/api/v1/opportunities", "list-checks", order=54),
     cap("collaboration.meetings", "会议与材料", "会议", "会议安排和材料管理", "collaboration", "collaboration", "/collaboration/meetings", "/api/v1/opportunities", "clock", order=55),
 
-    cap("club", "Q-BAY俱乐部", "俱乐部", "Q-BAY俱乐部、会员和活动", "club", None, "/club", "/api/v1/me/club-context", "landmark", order=60),
+    cap("club", "Q-BAY", "Q-BAY", "产业情报系统中的产业社区运营场景", "club", None, "/club", "/api/v1/me/club-context", "landmark", order=60),
     cap("club.home", "俱乐部首页", "首页", "俱乐部工作台和任务队列", "club", "club", "/club", "/api/v1/me/club-context", "home", order=61),
     cap("club.members", "会员", "会员", "会员目录、申请和我的资料", "club", "club", "/club/members", "/api/v1/me/membership-context", "users", "membership.view_self", "membership", order=62),
     cap("club.events", "活动", "活动", "活动列表、报名和签到", "club", "club", "/club/events", "/api/v1/events", "calendar", order=63),

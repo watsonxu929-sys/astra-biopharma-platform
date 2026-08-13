@@ -13,14 +13,17 @@
 {% block platform_content %}
 <section class="stats-bar stats-bar-4" aria-label="Canonical业务统计">
   {% for label, value, url in [
-    ('今日新增情报', home_metrics.today_intelligence, '/intelligence'),
-    ('待关联主体', home_metrics.pending_subjects, '/platform/golden-loop'),
-    ('有效资源', home_metrics.active_resources, '/resources'),
-    ('待确认匹配', home_metrics.pending_matches, '/platform/golden-loop'),
-    ('进行中机会', home_metrics.active_opportunities, '/opportunities'),
-    ('七天内待跟进', home_metrics.due_followups, '/opportunities'),
-    ('本月达成', home_metrics.won_this_month, '/opportunities?status=closed'),
-    ('最近形成关系', home_metrics.recent_relationships, '/network')
+    ('今日新增', home_metrics.today_intelligence, '/intelligence?time_range=today'),
+    ('待判断', home_metrics.pending_judgement, '/intelligence?workflow=pending_resource'),
+    ('待关联主体', home_metrics.pending_subjects, '/intelligence?workflow=pending_subject'),
+    ('有效需求', home_metrics.active_demands, '/resources?direction=demand&status=published'),
+    ('有效供给', home_metrics.active_supplies, '/resources?direction=supply&status=published'),
+    ('待确认匹配', home_metrics.pending_matches, '/platform/golden-loop?match_status=pending'),
+    ('进行中机会', home_metrics.active_opportunities, '/opportunities?status=active'),
+    ('今日跟进', home_metrics.today_followups, '/opportunities?follow_scope=today'),
+    ('逾期跟进', home_metrics.overdue_followups, '/opportunities?follow_scope=overdue'),
+    ('本月达成', home_metrics.won_this_month, '/opportunities?status=all&outcome=won&closed_period=this_month'),
+    ('近期合作关系', home_metrics.recent_relationships, '/network?relationship_type=cooperates_with')
   ] %}
   <a class="stat-card" href="{{ url }}"><span class="stat-value">{{ value }}</span><span class="stat-label">{{ label }}</span></a>
   {% endfor %}
@@ -38,7 +41,6 @@
   <section class="platform-card">
     <div class="platform-card-header"><h2>资源市场</h2><a class="btn btn-sm" href="/resources">查看全部资源</a></div>
     <p>当前展示供给 {{ supplies|default([])|length }} 条、需求 {{ demands|default([])|length }} 条。</p>
-    <p class="text-muted">正式数据统一写入资源表，历史内容仅作为兼容读取来源。</p>
   </section>
   <section class="platform-card">
     <div class="platform-card-header"><h2>我的待办</h2><a class="btn btn-sm" href="/workspace?tab=todos">查看全部待办</a></div>

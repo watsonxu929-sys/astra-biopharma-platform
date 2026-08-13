@@ -19,7 +19,7 @@ class UnifiedIntelligenceService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self, *, user_id: int | None = None, intel_type: str = "", industry_direction: str = "", q: str = "", page: int = 1, page_size: int = 20) -> dict[str, Any]:
+    def list(self, *, user_id: int | None = None, intel_type: str = "", industry_direction: str = "", q: str = "", source: str = "", time_range: str = "", workflow: str = "", page: int = 1, page_size: int = 20) -> dict[str, Any]:
         page = max(1, int(page or 1))
         page_size = max(1, min(int(page_size or 20), 100))
         stmt = select(IntelligenceItem).where(
@@ -32,6 +32,20 @@ class UnifiedIntelligenceService:
             stmt = stmt.where(IntelligenceItem.industry_directions.contains(industry_direction))
         if q:
             stmt = stmt.where(or_(IntelligenceItem.title.contains(q), IntelligenceItem.summary.contains(q), IntelligenceItem.content.contains(q)))
+        if source:
+            stmt = stmt.where(IntelligenceItem.source_name.contains(source))
+        if time_range == "today":
+            stmt = stmt.where(func.date(func.coalesce(IntelligenceItem.published_at, IntelligenceItem.created_at)) == func.date("now"))
+        elif time_range == "7days":
+            stmt = stmt.where(func.date(func.coalesce(IntelligenceItem.published_at, IntelligenceItem.created_at)) >= func.date("now", "-7 days"))
+        elif time_range == "30days":
+            stmt = stmt.where(func.date(func.coalesce(IntelligenceItem.published_at, IntelligenceItem.created_at)) >= func.date("now", "-30 days"))
+        if workflow == "pending_subject":
+            stmt = stmt.where(text("NOT EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=v06_intelligence_items.id)"))
+        elif workflow == "pending_resource":
+            stmt = stmt.where(text("EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=v06_intelligence_items.id) AND NOT EXISTS (SELECT 1 FROM v06_market_resources r WHERE r.source_intelligence_id=v06_intelligence_items.id AND r.status<>'archived')"))
+        elif workflow == "with_resource":
+            stmt = stmt.where(text("EXISTS (SELECT 1 FROM v06_market_resources r WHERE r.source_intelligence_id=v06_intelligence_items.id AND r.status<>'archived')"))
         total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = list(self.db.scalars(stmt.order_by(desc(IntelligenceItem.published_at), desc(IntelligenceItem.created_at)).offset((page - 1) * page_size).limit(page_size)).all())
         return {"items": rows, "total": int(total), "page": page, "page_size": page_size}

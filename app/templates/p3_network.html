@@ -115,9 +115,17 @@
 {% elif mode == 'entity' %}
 <section class="dashboard-card">
   <h2>{{ entity.canonical_label }}{% if entity.is_pilot %} <span class="status-badge">试点</span>{% endif %}</h2>
-  <p>类型：{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}；ID：{{ entity.resolved_id }}{% if entity.redirected %}；已从 {{ entity.requested_id }} 重定向{% endif %}</p>
+  <p>类型：{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}{% if entity.redirected %}；已从历史主体重定向{% endif %}</p>
   <p>别名：{% for alias in entity.aliases %}{{ alias.alias }}{% if not loop.last %}、{% endif %}{% else %}暂无{% endfor %}</p>
   <p>公开标识：{% for identifier in entity.external_identifiers %}{{ identifier.identifier_type }}={{ identifier.identifier_value }}{% if not loop.last %}；{% endif %}{% else %}暂无{% endfor %}</p>
+</section>
+<section class="dashboard-card"><h2>业务追溯</h2>
+  {% for item in business_trace.intelligence %}<p><a href="/intelligence/{{ item.id }}">情报：{{ item.title }}</a></p>{% endfor %}
+  {% for item in business_trace.resources %}<p><a href="/resources/{{ item.id }}">{{ '需求' if item.direction == 'demand' else '供给' }}：{{ item.title }}</a></p>{% endfor %}
+  {% for item in business_trace.opportunities %}<p><a href="/opportunities/{{ item.id }}">合作机会：{{ item.title }}</a></p>{% endfor %}
+  {% if not business_trace.intelligence and not business_trace.resources and not business_trace.opportunities %}
+  <p class="text-muted">该主体尚无关联的情报、资源或合作机会。</p>
+  {% endif %}
 </section>
 <section class="dashboard-card">
   <h2>{{ '全部历史关系' if history else '当前关系' }}</h2>
@@ -169,14 +177,15 @@
 
 {% elif mode == 'relationship' %}
 <section class="dashboard-card">
-  <h2>关系 {{ relationship.relationship_no }}</h2>
+  <h2>{{ RELATION_TYPE_LABELS.get(relationship.relationship_type, '正式关系') }}</h2>
   <p>{{ ENTITY_TYPE_LABELS.get(relationship.subject_type, relationship.subject_type) }} 
-    <a href="/network/entities/{{ relationship.subject_type }}/{{ relationship.subject_id }}">{{ relationship.subject_id }}</a>
+    <a href="/network/entities/{{ relationship.subject_type }}/{{ relationship.subject_id }}">{{ subject.canonical_label if subject else '主体已归档' }}</a>
     — <strong>{{ RELATION_TYPE_LABELS.get(relationship.relationship_type, relationship.relationship_type) }}</strong> → 
     {{ ENTITY_TYPE_LABELS.get(relationship.object_type, relationship.object_type) }} 
-    <a href="/network/entities/{{ relationship.object_type }}/{{ relationship.object_id }}">{{ relationship.object_id }}</a>
+    <a href="/network/entities/{{ relationship.object_type }}/{{ relationship.object_id }}">{{ object_entity.canonical_label if object_entity else '主体已归档' }}</a>
   </p>
   <p>状态：{{ {'approved':'已审核','archived':'已归档','pending':'待审核'}.get(relationship.review_status,relationship.review_status) }}；
+  <p><strong>下一步：</strong>查看业务来源和合作证据，必要时回到合作机会继续跟进。</p>
     {{ '当前关系' if relationship.is_current else '历史关系' }}；
     有效期：{{ relationship.valid_from or '未知' }} 至 {{ relationship.valid_to or '当前' }}；
     证据状态：{{ EVIDENCE_STATUS_LABELS.get(relationship.evidence_status, relationship.evidence_status) }}；

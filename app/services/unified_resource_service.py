@@ -19,13 +19,19 @@ class UnifiedResourceService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _base_stmt(self):
-        return select(MarketResource).where(MarketResource.status == "published").where(or_(MarketResource.valid_until.is_(None), MarketResource.valid_until >= datetime.now()))
+    def _base_stmt(self, status: str = "published"):
+        stmt = select(MarketResource)
+        if status != "all":
+            stmt = stmt.where(MarketResource.status == (status or "published"))
+        if (status or "published") == "published":
+            stmt = stmt.where(or_(MarketResource.valid_until.is_(None), MarketResource.valid_until >= datetime.now()))
+        return stmt
 
-    def list(self, *, direction: str = "", resource_type: str = "", q: str = "", industry_direction: str = "", region: str = "", page: int = 1, page_size: int = 20, include_legacy: bool = True) -> dict[str, Any]:
+    def list(self, *, direction: str = "", resource_type: str = "", q: str = "", industry_direction: str = "", region: str = "", status: str = "published", page: int = 1, page_size: int = 20, include_legacy: bool = False) -> dict[str, Any]:
         page = max(1, int(page or 1))
         page_size = max(1, min(int(page_size or 20), 100))
-        stmt = self._base_stmt()
+        status = status if status in RESOURCE_STATUSES or status == "all" else "published"
+        stmt = self._base_stmt(status)
         if direction:
             stmt = stmt.where(MarketResource.direction == direction)
         if resource_type:
@@ -39,7 +45,7 @@ class UnifiedResourceService:
         total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = list(self.db.scalars(stmt.order_by(desc(MarketResource.created_at)).offset((page - 1) * page_size).limit(page_size)).all())
         items: list[Any] = rows
-        legacy = self.legacy_resources(direction=direction, q=q, limit=max(0, page_size - len(rows))) if include_legacy and page == 1 else []
+        legacy = self.legacy_resources(direction=direction, q=q, limit=max(0, page_size - len(rows))) if include_legacy and page == 1 and status == "published" else []
         return {"items": items, "legacy_items": legacy, "total": int(total) + len(legacy), "page": page, "page_size": page_size}
 
     def detail(self, resource_id: int) -> MarketResource:
@@ -107,7 +113,7 @@ class UnifiedResourceService:
     def match(self, resource_id: int, limit: int = 10) -> list[dict[str, Any]]:
         resource = self.detail(resource_id)
         opposite = "demand" if resource.direction == "supply" else "supply"
-        candidates = list(self.db.scalars(self._base_stmt().where(MarketResource.direction == opposite, MarketResource.id != resource.id).limit(100)).all())
+        candidates = list(self.db.scalars(self._base_stmt("published").where(MarketResource.direction == opposite, MarketResource.id != resource.id).limit(100)).all())
         matches = []
         for candidate in candidates:
             score = 0

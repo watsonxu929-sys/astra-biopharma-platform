@@ -21,6 +21,10 @@
   </div>
 
   <section class="platform-card">
+  {% if trace is defined %}<section class="platform-card"><h2>当前状态与下一步</h2>
+    <p><strong>{{ trace.guidance.current_state }}</strong></p>
+    <p>{{ trace.guidance.next_action }}</p>
+  </section>{% endif %}
     <h2>来源与摘要</h2>
     {% if item.source_url %}<p><a href="{{ item.source_url }}" target="_blank" rel="noopener">打开公开来源</a></p>{% endif %}
     <p>{{ item.summary or item.content or '暂无摘要' }}</p>
@@ -30,12 +34,16 @@
   {% if trace is defined %}<section class="platform-card">
     <h2>闭环追溯</h2>
     <p>关联主体 {{ trace.subjects|length }} · 供需 {{ trace.resources|length }} · 匹配 {{ trace.matches|length }} · 机会 {{ trace.opportunities|length }} · 跟进 {{ trace.follow_ups|length }} · 正式关系 {{ trace.relationships|length }}</p>
-    {% for subject in trace.subjects %}<span class="badge">{{ subject.subject_label }}</span>{% else %}<p class="text-muted">尚未关联正式主体。</p>{% endfor %}
+    {% for subject in trace.subjects %}<a class="badge" href="{{ subject.subject_url }}">{{ subject.subject_label }}</a>{% else %}<p class="text-muted">尚未关联正式主体。</p>{% endfor %}
+    {% for resource in trace.resources %}<p><a href="/resources/{{ resource.id }}">{{ '需求' if resource.direction == 'demand' else '供给' }}：{{ resource.title }}</a></p>{% endfor %}
+    {% for match in trace.matches %}<p><a href="/matches/{{ match.id }}">供需匹配：{{ match.match_no or '已确认匹配' }}</a></p>{% endfor %}
+    {% for opportunity in trace.opportunities %}<p><a href="/opportunities/{{ opportunity.id }}">合作机会：{{ opportunity.title }}</a></p>{% endfor %}
+    {% for relationship in trace.relationships %}<p><a href="/network/relationships/{{ relationship.id }}">正式合作关系</a></p>{% endfor %}
     <p><a href="/platform/golden-loop?intelligence_id={{ item.id }}">查看并推进完整链路</a></p>
   </section>{% endif %}
 
   {% if evidence %}<section class="platform-card"><h2>证据</h2>
-    {% for ev in evidence %}<article><p><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or ev.url }}</a></p><p>{{ ev.evidence_excerpt }}</p><p class="text-sm">Snapshot #{{ ev.snapshot_id }} · SHA256 {{ ev.snapshot_hash }}</p></article>{% endfor %}
+    {% for ev in evidence %}<article><p><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or '查看公开证据' }}</a></p><p>{{ ev.evidence_excerpt }}</p></article>{% endfor %}
   </section>{% endif %}
 
   <section class="platform-card flex-between">

@@ -40,6 +40,7 @@ def golden_loop_workbench(
     intelligence_id: int | None = Query(None),
     subject_q: str = Query(""),
     message: str = Query(""),
+    match_status: str = Query(""),
     db: Session = Depends(get_db),
 ):
     user_id, role = _identity(request)
@@ -48,6 +49,8 @@ def golden_loop_workbench(
     trace = service.trace(intelligence_id) if intelligence_id else None
     query = subject_q.strip()
     pattern = f"%{query}%"
+    if match_status == "pending":
+        data["matches"] = [item for item in data["matches"] if item["status"] in {"pending", "reviewed"}]
     people = db.execute(text("SELECT id,name FROM people WHERE COALESCE(is_active,1)=1 AND (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
     organizations = db.execute(text("SELECT id,standard_name FROM organizations WHERE COALESCE(is_active,1)=1 AND (:q='' OR standard_name LIKE :pattern) ORDER BY standard_name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
     projects = db.execute(text("SELECT id,name FROM projects WHERE (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
@@ -69,6 +72,7 @@ def golden_loop_workbench(
             "message": message,
             "user_id": user_id,
             "role": role,
+            "match_status": match_status,
             "can_write": role in {"operator", "reviewer", "admin"},
         },
     )
@@ -82,10 +86,17 @@ async def link_intelligence_subject(
 ):
     user_id, _ = _writer(request)
     form = await request.form()
+    subject_ref = str(form.get("subject_ref") or "")
+    try:
+        subject_type, subject_id_text = subject_ref.split(":", 1)
+        subject_id = int(subject_id_text)
+    except (TypeError, ValueError):
+        subject_type = str(form.get("subject_type") or "")
+        subject_id = int(form.get("subject_id") or 0)
     GoldenLoopService(db).link_subject(
         intelligence_id,
-        subject_type=str(form.get("subject_type") or ""),
-        subject_id=int(form.get("subject_id") or 0),
+        subject_type=subject_type,
+        subject_id=subject_id,
         actor_user_id=user_id,
     )
     return _redirect(f"/platform/golden-loop?intelligence_id={intelligence_id}", "主体关联已保存")

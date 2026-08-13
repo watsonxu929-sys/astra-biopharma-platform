@@ -757,9 +757,9 @@ def list_contact_intents(db: Session, user_id: int, direction: str = "sent") -> 
     return list(db.scalars(stmt).all())
 
 
-def list_intelligence(db: Session, user_id: int | None = None, intel_type: str = "", industry_direction: str = "", q: str = "", page: int = 1, page_size: int = 20) -> dict:
+def list_intelligence(db: Session, user_id: int | None = None, intel_type: str = "", industry_direction: str = "", q: str = "", source: str = "", time_range: str = "", workflow: str = "", page: int = 1, page_size: int = 20) -> dict:
     from app.services.unified_intelligence_service import UnifiedIntelligenceService
-    return UnifiedIntelligenceService(db).list(user_id=user_id, intel_type=intel_type, industry_direction=industry_direction, q=q, page=page, page_size=page_size)
+    return UnifiedIntelligenceService(db).list(user_id=user_id, intel_type=intel_type, industry_direction=industry_direction, q=q, source=source, time_range=time_range, workflow=workflow, page=page, page_size=page_size)
 
 
 def personalized_feed(db: Session, user_id: int | None, limit: int = 20) -> list[dict]:
@@ -768,9 +768,9 @@ def personalized_feed(db: Session, user_id: int | None, limit: int = 20) -> list
     return [{"item": item, "reason": "unified_feed"} for item in items]
 
 
-def list_market_resources(db: Session, direction: str = "", resource_type: str = "", q: str = "", industry_direction: str = "", region: str = "", page: int = 1, page_size: int = 20) -> dict:
+def list_market_resources(db: Session, direction: str = "", resource_type: str = "", q: str = "", industry_direction: str = "", region: str = "", status: str = "published", page: int = 1, page_size: int = 20) -> dict:
     from app.services.unified_resource_service import UnifiedResourceService
-    return UnifiedResourceService(db).list(direction=direction, resource_type=resource_type, q=q, industry_direction=industry_direction, region=region, page=page, page_size=page_size)
+    return UnifiedResourceService(db).list(direction=direction, resource_type=resource_type, q=q, industry_direction=industry_direction, region=region, status=status, page=page, page_size=page_size)
 
 
 def match_resources(db: Session, resource_id: int, limit: int = 10) -> list[dict]:

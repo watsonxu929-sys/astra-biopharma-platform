@@ -163,6 +163,10 @@ class MarketResource(Base):
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    source_intelligence_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    project_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_intelligence_title: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    cooperation_terms: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 # ── Cooperation opportunities ──
@@ -196,6 +200,26 @@ class CooperationOpportunity(Base):
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    demand_organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    supply_organization_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    priority: Mapped[str] = mapped_column(String(10), default="P2")
+    estimated_amount: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    next_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_follow_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    human_confirmed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    human_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    source_intelligence_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source_demand_resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_supply_resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_match_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    final_result: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    closed_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome_status: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    closed_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    final_result_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    final_cooperation_scale: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    result_relationship_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 # ── Follow-ups ──

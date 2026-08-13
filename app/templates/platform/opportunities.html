@@ -25,7 +25,7 @@
     <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索机会标题、描述" class="filter-input">
     <select name="stage" class="filter-select">
       <option value="">全部阶段</option>
-      {% for value, label in [('lead','线索'),('contacted','已联系'),('qualified','已确认'),('negotiating','洽谈中'),('proposal','方案阶段'),('due_diligence','尽职调查'),('agreement','协议阶段'),('won','已达成'),('lost','已失败')] %}
+      {% for value, label in [('lead','线索'),('contacted','已联系'),('qualified','已确认'),('negotiating','洽谈中'),('proposal','方案阶段'),('due_diligence','尽职调查'),('agreement','协议阶段'),('won','已达成'),('lost','未成交')] %}
       <option value="{{ value }}" {% if stage == value %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
@@ -33,9 +33,28 @@
       <option value="active" {% if status in ['', 'active'] %}selected{% endif %}>进行中</option>
       <option value="paused" {% if status == 'paused' %}selected{% endif %}>已暂停</option>
       <option value="closed" {% if status == 'closed' %}selected{% endif %}>已关闭</option>
+      <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
     </select>
+    <select name="outcome" class="filter-select">
+      <option value="">全部结果</option><option value="won" {% if outcome == 'won' %}selected{% endif %}>合作达成</option>
+      <option value="lost" {% if outcome == 'lost' %}selected{% endif %}>未成交</option><option value="paused" {% if outcome == 'paused' %}selected{% endif %}>暂停</option>
+    </select>
+    <select name="owner_id" class="filter-select"><option value="">全部负责人</option>
+      {% for owner in owners %}<option value="{{ owner.id }}" {% if owner_id == owner.id %}selected{% endif %}>{{ owner.username }}</option>{% endfor %}
+    </select>
+    <select name="updated_period" class="filter-select"><option value="">全部更新时间</option>
+      <option value="today" {% if updated_period == 'today' %}selected{% endif %}>今日更新</option>
+      <option value="7days" {% if updated_period == '7days' %}selected{% endif %}>近七天</option>
+      <option value="30days" {% if updated_period == '30days' %}selected{% endif %}>近三十天</option>
+    </select>
+    <select name="follow_scope" class="filter-select"><option value="">全部跟进</option>
+      <option value="today" {% if follow_scope == 'today' %}selected{% endif %}>今日跟进</option>
+      <option value="overdue" {% if follow_scope == 'overdue' %}selected{% endif %}>逾期跟进</option>
+      <option value="future" {% if follow_scope == 'future' %}selected{% endif %}>后续跟进</option>
+    </select>
+    {% if closed_period %}<input type="hidden" name="closed_period" value="{{ closed_period }}">{% endif %}
     <button class="btn btn-sm" type="submit">筛选</button>
-    {% if q or stage or (status and status != 'active') %}
+    {% if q or stage or outcome or owner_id or updated_period or follow_scope or (status and status != 'active') %}
     <a class="btn btn-sm btn-outline" href="/opportunities">清除</a>
     {% endif %}
   </form>
@@ -55,7 +74,7 @@
       </h3>
       <p class="opportunity-card-summary">{{ o.description|default('', true)|truncate(100, True) }}</p>
       <div class="opportunity-card-meta">
-        <span>负责人：{{ o.owner_id or '-' }}</span>
+        <span>负责人：{{ owner_names.get(o.owner_id, '未分配') }}</span>
         <span>{{ o.updated_at.strftime('%Y-%m-%d') if o.updated_at else '' }}</span>
       </div>
     </article>

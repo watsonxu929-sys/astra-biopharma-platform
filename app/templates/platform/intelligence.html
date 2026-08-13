@@ -39,7 +39,20 @@
       {% endfor %}
     </select>
     <button class="btn btn-sm" type="submit">筛选</button>
-    {% if q or intel_type or industry_direction %}
+    <select name="time_range" class="filter-select">
+      <option value="">全部时间</option>
+      <option value="today" {% if time_range == 'today' %}selected{% endif %}>今日新增</option>
+      <option value="7days" {% if time_range == '7days' %}selected{% endif %}>近七天</option>
+      <option value="30days" {% if time_range == '30days' %}selected{% endif %}>近三十天</option>
+    </select>
+    <select name="workflow" class="filter-select">
+      <option value="">全部处理状态</option>
+      <option value="pending_subject" {% if workflow == 'pending_subject' %}selected{% endif %}>待关联主体</option>
+      <option value="pending_resource" {% if workflow == 'pending_resource' %}selected{% endif %}>待判断供需</option>
+      <option value="with_resource" {% if workflow == 'with_resource' %}selected{% endif %}>已形成资源</option>
+    </select>
+    <input type="text" name="source" value="{{ source or '' }}" placeholder="来源" class="filter-input">
+    {% if q or intel_type or industry_direction or source or time_range or workflow %}
     <a class="btn btn-sm btn-outline" href="/intelligence">清除</a>
     {% endif %}
   </form>

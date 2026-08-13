@@ -38,6 +38,7 @@ RELATION_TYPE_LABELS = {
     "board_membership": "董事/监事",
     "investment": "投资关系",
     "cooperation": "合作关系",
+    "cooperates_with": "合作关系",
     "licensing": "授权许可",
     "partnership": "战略伙伴",
     "supply": "供应关系",
@@ -85,6 +86,39 @@ def governance_page(request: Request, status: str = ""):
     except sqlite3.OperationalError:
         candidates, merges = [], []
     return _render(request, "governance", candidates=candidates, merges=merges, status=status)
+def _business_trace(entity_type: str, internal_id: int) -> dict[str, list[dict]]:
+    service = CanonicalRelationshipService()
+    with sqlite3.connect(service.db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        intelligence = [dict(row) for row in conn.execute(
+            """SELECT DISTINCT i.id,i.title FROM core_intelligence_subject_links l
+               JOIN v06_intelligence_items i ON i.id=l.intelligence_item_id
+               WHERE l.subject_type=? AND l.subject_id=? ORDER BY i.id DESC LIMIT 20""",
+            (entity_type, int(internal_id)),
+        )]
+        resource_column = {"organization": "organization_id", "person": "owner_person_id", "project": "project_id"}.get(entity_type)
+        resources = [dict(row) for row in conn.execute(
+            f"SELECT id,title,direction FROM v06_market_resources WHERE {resource_column}=? ORDER BY id DESC LIMIT 20",
+            (int(internal_id),),
+        )] if resource_column else []
+        if entity_type == "organization":
+            opportunities = [dict(row) for row in conn.execute(
+                """SELECT DISTINCT id,title,status,outcome_status FROM v06_opportunities
+                   WHERE organization_id=? OR demand_organization_id=? OR supply_organization_id=?
+                      OR target_organization_id=? ORDER BY id DESC LIMIT 20""",
+                (int(internal_id),) * 4,
+            )]
+        elif entity_type == "person":
+            opportunities = [dict(row) for row in conn.execute(
+                """SELECT DISTINCT id,title,status,outcome_status FROM v06_opportunities
+                   WHERE target_person_id=? ORDER BY id DESC LIMIT 20""",
+                (int(internal_id),),
+            )]
+        else:
+            opportunities = []
+    return {"intelligence": intelligence, "resources": resources, "opportunities": opportunities}
+
+
 
 
 @router.get("/network/entities/{entity_type}/{entity_id}", response_class=HTMLResponse)
@@ -94,7 +128,8 @@ def entity_page(request: Request, entity_type: str, entity_id: str, history: boo
         raise HTTPException(status_code=404, detail="主体不存在")
     include_private = _can_access_governance(request)
     relationships = CanonicalRelationshipService().entity_relationships(entity_type, entity["resolved_id"], history=history, include_private=include_private)
-    return _render(request, "entity", entity_type=entity_type, entity=entity, relationships=relationships, history=history)
+    business_trace = _business_trace(entity_type, int(entity["id"]))
+    return _render(request, "entity", entity_type=entity_type, entity=entity, relationships=relationships, business_trace=business_trace, history=history)
 
 
 @router.get("/network/products/{product_id}", response_class=HTMLResponse)
@@ -180,7 +215,11 @@ def relationship_detail(request: Request, relationship_id: int):
     relationship = CanonicalRelationshipService().detail(relationship_id, include_private=include_private)
     if not relationship:
         raise HTTPException(status_code=404, detail="关系不存在")
-    return _render(request, "relationship", relationship=relationship)
+    registry = EntityRegistryService()
+    subject = registry.get(relationship["subject_type"], relationship["subject_id"])
+    object_entity = registry.get(relationship["object_type"], relationship["object_id"])
+    return _render(request, "relationship", relationship=relationship,
+                   subject=subject, object_entity=object_entity)
 
 
 @router.get("/network/paths", response_class=HTMLResponse)
