@@ -62,7 +62,7 @@
       <form method="post" action="/golden-loop/intelligence/{{ trace.intelligence.id }}/subjects">
         <label>选择正式主体<select name="subject_ref" required><option value="">按名称选择</option>
           {% for x in organizations %}<option value="organization:{{ x.id }}">机构 · {{ x.standard_name }}</option>{% endfor %}
-          {% for x in people %}<option value="person:{{ x.id }}">人物 · {{ x.name }}</option>{% endfor %}
+          {% for x in people %}<option value="person:{{ x.id }}">人物 · {{ x.name if '�' not in x.name else '姓名待核验' }}</option>{% endfor %}
           {% for x in projects %}<option value="project:{{ x.id }}">项目 · {{ x.name }}</option>{% endfor %}
         </select></label>
         <button class="btn btn-primary" type="submit">保存关联</button>

@@ -207,7 +207,7 @@
       {% if evidence.source_url %} · <a href="{{ evidence.source_url }}" rel="noopener">原文链接</a>{% endif %}
       {% if evidence.source_date %} · {{ evidence.source_date }}{% endif %}
       {% if evidence.page_number %} · 第 {{ evidence.page_number }} 页{% endif %}
-      {% if evidence.evidence_strength %} · 强度：{{ {'supporting':'支持','weak':'较弱','contradicting':'矛盾'}.get(evidence.evidence_strength,evidence.evidence_strength) }}{% endif %}
+      {% if evidence.evidence_strength %} · 强度：{{ {'authoritative':'权威证据','supporting':'支持证据','weak':'较弱证据','contradicting':'矛盾证据'}.get(evidence.evidence_strength,'待核验证据') }}{% endif %}
     </li>{% endfor %}
   </ol>
   {% else %}

@@ -5,9 +5,9 @@
 <div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
   <a href="/opportunities">← 返回合作机会</a>
   {% if message %}<div class="platform-card" style="border-left:4px solid var(--color-accent);">{{ message }}</div>{% endif %}
-  <div class="flex-between mt-16">
-    <div><h1 class="page-title">{{ opp.title }}</h1><div class="opp-meta"><span class="badge">{{ opp.opp_type }}</span><span>阶段：{{ golden.stage|status_label }}</span><span>结果：{{ {'won':'合作达成','lost':'未成交','paused':'暂停'}.get(golden.outcome_status, '推进中') }}</span></div></div>
-    {% if golden.source_intelligence_id %}<a class="btn btn-outline" href="/platform/golden-loop?intelligence_id={{ golden.source_intelligence_id }}">查看完整闭环</a>{% endif %}
+  <div class="flex-between mt-16" style="align-items:flex-start;gap:16px;">
+    <div style="min-width:0;flex:1 1 auto;"><h1 class="page-title" style="overflow-wrap:anywhere;">{{ opp.title }}</h1><div class="opp-meta"><span class="badge">{{ {'resource_match':'供需匹配机会'}.get(opp.opp_type, '合作机会') }}</span><span>阶段：{{ golden.stage|status_label }}</span><span>结果：{{ {'won':'合作达成','lost':'未成交','paused':'暂停'}.get(golden.outcome_status, '推进中') }}</span></div></div>
+    {% if golden.source_intelligence_id %}<a class="btn btn-outline" style="flex:0 0 auto;white-space:nowrap;" href="/platform/golden-loop?intelligence_id={{ golden.source_intelligence_id }}">查看完整闭环</a>{% endif %}
   </div>
   <section class="platform-card"><h2>当前状态与下一步</h2><p><strong>{{ trace.guidance.current_state }}</strong></p><p>{{ trace.guidance.next_action }}</p></section>
   <section class="platform-card"><h2>链路来源</h2><p>
@@ -29,7 +29,7 @@
     </form>{% else %}<p class="text-muted">当前账号为只读角色。</p>{% endif %}
   </section>
   <section class="platform-card"><h2>协作任务（{{ tasks|length }}）</h2>
-    {% for item in tasks %}<p>{{ item.title }} · {{ item.status|status_label }} · {{ item.priority }}{% if item.due_date %} · {{ item.due_date }}{% endif %}</p>{% else %}<p class="text-muted">暂无协作任务。</p>{% endfor %}
+    {% for item in tasks %}<p>{{ item.title }} · {{ item.status|status_label }} · {{ {'P0':'紧急','P1':'高','P2':'普通','P3':'低'}.get(item.priority, '普通') }}{% if item.due_date %} · {{ item.due_date }}{% endif %}</p>{% else %}<p class="text-muted">暂无协作任务。</p>{% endfor %}
     {% if can_write %}<form method="post" action="/golden-loop/opportunities/{{ opp.id }}/tasks"><label>任务标题<input name="title" required></label><label>截止日期<input name="due_date" type="date"></label><label>优先级<select name="priority"><option value="P2">普通</option><option value="P1">高</option><option value="P0">紧急</option><option value="P3">低</option></select></label><button class="btn btn-primary" type="submit">创建任务</button></form>{% endif %}
   </section>
   <section class="platform-card"><h2>商务结果</h2>
