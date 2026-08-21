@@ -37,7 +37,7 @@ CLUB_WORK_ENTRY_KEYS = {
     "club.matching",
     "club.operations",
 }
-PRIMARY_ORDER = ["workspace", "network", "intelligence", "resources", "collaboration", "club"]
+PRIMARY_ORDER = ["workspace", "intelligence", "network", "resources", "collaboration"]
 CLIENTS = {"web", "app", "miniprogram", "admin"}
 
 
@@ -88,7 +88,7 @@ def get_primary_navigation(context: dict[str, Any] | None, path: str = "/", *, c
         cap = by_key.get(key)
         if cap:
             result.append(_nav_item(cap, path))
-    return result[:6]
+    return result[:5]
 
 
 def get_secondary_navigation(context: dict[str, Any] | None, active_category: str | None = None, path: str = "/", *, client: str = "web") -> list[dict[str, Any]]:

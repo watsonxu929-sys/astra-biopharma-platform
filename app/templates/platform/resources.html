@@ -3,15 +3,15 @@
 <nav class="breadcrumb">
   <a href="/platform">工作台</a>
   <span class="sep">/</span>
-  <span>资源市场</span>
+  <span>资源</span>
 </nav>
 {% endblock %}
-{% block platform_title %}资源市场{% endblock %}
+{% block platform_title %}资源{% endblock %}
 {% block platform_page_header %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1 class="page-title">资源市场</h1>
-    <p class="page-desc">供给、需求、匹配和合作机会统一入口。</p>
+    <h1 class="page-title">资源</h1>
+    <p class="page-desc">统一查看和管理需求与供给。</p>
   </div>
   <div class="page-header-right">
     <a class="btn btn-sm" href="/resources?direction=supply">资源供给</a>
@@ -21,6 +21,7 @@
 </div>
 {% endblock %}
 {% block platform_content %}
+{% if message == 'matching_pending' %}<div class="warning-box">匹配能力尚未进入正式运营，请先管理需求与供给。</div>{% endif %}
 
 <section class="filter-bar">
   <form method="get" action="/resources" class="filter-form">

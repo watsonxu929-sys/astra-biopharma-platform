@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import sqlite3
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from app.settings import resolved_db_path
+from scripts.migrate_db import run_upgrade
+
+
+FORMAL_DATABASE = (Path(__file__).resolve().parents[1] / "data" / "app.db").resolve()
+ROOT = Path(__file__).resolve().parents[1]
+TEST_DATABASE_TEMPLATE = ROOT / "data" / "t1_test.db"
+TEST_SCHEMA_MIGRATIONS = ("006_entity_relationship_network.py", "007_club_operations_mvp.py", "008_business_collaboration_mvp.py")
+
 
 
 @pytest.fixture
@@ -19,14 +28,32 @@ def temp_db_conn(temp_database: Path) -> sqlite3.Connection:
 
 @pytest.fixture
 def temp_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Create a consistent SQLite copy outside data/ and seed one deterministic P2 source."""
-    live_db = resolved_db_path().resolve()
-    if not live_db.exists():
-        pytest.fail("formal database is required as the schema baseline")
+    """Copy the dedicated test template to an OS temp path and seed deterministic test data."""
+    formal_db = FORMAL_DATABASE
+    template_db = TEST_DATABASE_TEMPLATE.resolve()
+    if template_db == formal_db:
+        pytest.fail("formal database is forbidden as an automated-test template")
+    if not template_db.exists():
+        pytest.fail(f"dedicated test database template is missing: {template_db}")
     target = tmp_path / "app_test.db"
-    with sqlite3.connect(f"file:{live_db.as_posix()}?mode=ro", uri=True) as source:
+    if target.resolve() == formal_db:
+        pytest.fail("formal database is forbidden as an automated-test write target")
+    with sqlite3.connect(f"file:{template_db.as_posix()}?mode=ro", uri=True) as source:
         with sqlite3.connect(target) as destination:
             source.backup(destination)
+
+    for migration_name in TEST_SCHEMA_MIGRATIONS:
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "migrations" / migration_name), "--apply", "--db", str(target)],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+    migration = run_upgrade(target, start="009", target="011")
+    if migration["status"] not in {"success", "up_to_date"}:
+        pytest.fail(f"test database migration failed: {migration}")
 
     monkeypatch.setenv("APP_DB_PATH", str(target))
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{target.as_posix()}")

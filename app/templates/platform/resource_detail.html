@@ -9,7 +9,7 @@
     <div style="min-width:0;flex:1 1 auto;"><h1 class="page-title" style="overflow-wrap:anywhere;">{{ resource.title }}</h1>
       <div class="opp-meta"><span class="badge">{{ '供给' if resource.direction == 'supply' else '需求' }}</span><span>{{ resource.resource_type }}</span><span>{{ resource.region or '' }}</span><span>状态：{{ resource.status|status_label }}</span></div>
     </div>
-    {% if record.source_intelligence_id %}<a class="btn btn-primary" style="flex:0 0 auto;white-space:nowrap;" href="/platform/golden-loop?intelligence_id={{ record.source_intelligence_id }}">查看完整闭环</a>{% endif %}
+    {% if record.source_intelligence_id %}<a class="btn btn-primary" style="flex:0 0 auto;white-space:nowrap;" href="/platform/golden-loop?intelligence_id={{ record.source_intelligence_id }}">查看来源与进展</a>{% endif %}
   </div>
   {% if record.source_intelligence_id %}<section class="platform-card"><strong>来源情报</strong><p><a href="/intelligence/{{ record.source_intelligence_id }}">{{ record.intelligence_title or record.source_intelligence_title or '查看来源情报' }}</a></p></section>{% endif %}
   <section class="platform-card"><h2>当前状态与下一步</h2>
@@ -22,7 +22,7 @@
   </div>
   <section class="platform-card"><h2>候选匹配</h2>
     {% set reason_names = {'resource_type':'资源类型一致','industry_direction':'产业方向一致','region':'区域条件一致','tags':'业务标签相关'} %}
-    {% for item in matches[:5] %}<p><a href="/resources/{{ item.resource.id }}">{{ item.resource.title }}</a> · 得分 {{ item.score }} · {% for reason in item.reasons %}{{ reason_names.get(reason, '业务条件匹配') }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% else %}<p class="text-muted">暂无规则候选。可在黄金业务闭环中由运营人员人工确认匹配。</p>{% endfor %}
+    {% for item in matches[:5] %}<p><a href="/resources/{{ item.resource.id }}">{{ item.resource.title }}</a> · 得分 {{ item.score }} · {% for reason in item.reasons %}{{ reason_names.get(reason, '业务条件匹配') }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% else %}<p class="text-muted">暂无可确认的匹配候选。</p>{% endfor %}
     <p><a href="/platform/golden-loop{% if record.source_intelligence_id %}?intelligence_id={{ record.source_intelligence_id }}{% endif %}">进入人工确认匹配</a></p>
   </section>
   <section class="platform-card"><h2>业务追溯</h2>

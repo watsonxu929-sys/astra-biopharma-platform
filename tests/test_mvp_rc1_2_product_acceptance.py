@@ -103,7 +103,7 @@ def test_user_visible_statuses_and_templates_are_product_facing() -> None:
     assert "来源情报 #" not in opportunity
 
 
-def test_six_formal_navigation_labels_are_exact() -> None:
-    categories = {"workspace", "network", "intelligence", "resources", "collaboration", "club"}
+def test_five_formal_navigation_labels_are_exact() -> None:
+    categories = {"workspace", "network", "intelligence", "resources", "collaboration"}
     top_level = [item.name for item in CAPABILITIES if item.parent_key is None and item.category in categories]
-    assert top_level == ["工作台", "产业关系", "情报中心", "资源市场", "业务协同", "Q-BAY"]
+    assert top_level == ["工作台", "关系", "情报", "资源", "协作"]

@@ -525,6 +525,7 @@ async def submit_membership_link_request(request: Request):
 
 @router.get("/member", response_class=HTMLResponse)
 def member_home(request: Request):
+    return RedirectResponse("/club", status_code=303)
     ctx = _member_context(request)
     mid = int(ctx["member"]["id"])
     with db_connection() as conn:

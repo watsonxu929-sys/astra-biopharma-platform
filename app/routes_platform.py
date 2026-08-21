@@ -501,6 +501,21 @@ async def save_subscription(request: Request, db: Session = Depends(get_db)):
 
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  RESOURCES  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
 
+@router.get("/resources/demand", include_in_schema=False)
+def legacy_resource_demand():
+    return RedirectResponse("/resources?direction=demand", status_code=303)
+
+
+@router.get("/resources/supply", include_in_schema=False)
+def legacy_resource_supply():
+    return RedirectResponse("/resources?direction=supply", status_code=303)
+
+
+@router.get("/resources/matching", include_in_schema=False)
+def legacy_resource_matching():
+    return RedirectResponse("/resources?message=matching_pending", status_code=303)
+
+
 @router.get("/resources", response_class=HTMLResponse)
 def resource_market(
     request: Request,
@@ -512,6 +527,7 @@ def resource_market(
     page: int = Query(1),
     db: Session = Depends(get_db),
     status: str = Query("published"),
+    message: str = Query(""),
 ):
     result = list_market_resources(db,
         direction=direction or None, resource_type=resource_type or None,
@@ -524,6 +540,7 @@ def resource_market(
         direction=direction, resource_type=resource_type, q=q,
         industry_direction=industry_direction, region=region,
         resource_type_options=resource_type_options,
+        message=message,
     )
 
 

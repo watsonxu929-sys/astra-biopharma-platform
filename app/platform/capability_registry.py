@@ -5,6 +5,18 @@ from typing import Any
 
 VALID_CATEGORIES = {"workspace", "network", "intelligence", "resources", "collaboration", "club", "admin", "account", "experimental"}
 VALID_CLIENTS = {"web", "app", "miniprogram", "admin"}
+
+# MVP-R1 formal product surface. Non-admin users only see these proven,
+# business-facing capabilities; historical entries remain for administration.
+MVP_PRODUCT_KEYS = {
+    "workspace", "workspace.todos", "workspace.recent_followups",
+    "network", "network.people",
+    "intelligence", "intelligence.feed",
+    "resources", "resources.demand", "resources.supply",
+    "collaboration", "collaboration.tasks",
+    "club", "club.members", "club.events",
+}
+
 VALID_STATUS = {"active", "beta", "planned", "disabled"}
 
 
@@ -38,20 +50,20 @@ def cap(key: str, name: str, short: str, desc: str, category: str, parent: str |
 
 
 CAPABILITIES: tuple[Capability, ...] = (
-    cap("workspace", "工作台", "工作台", "业务概览、待办、跟进、收藏和最近访问", "workspace", None, "/platform", "/api/v1/client/bootstrap", "layout-dashboard", order=10, legacy=("/workspace",)),
+    cap("workspace", "工作台", "工作台", "今天值得处理的情报、机会和任务", "workspace", None, "/platform", "/api/v1/client/bootstrap", "layout-dashboard", order=10, legacy=("/workspace",)),
     cap("workspace.overview", "业务概览", "概览", "平台业务摘要", "workspace", "workspace", "/platform", "/api/v1/client/bootstrap", "activity", order=11),
     cap("workspace.todos", "我的待办", "待办", "当前用户协作任务", "workspace", "workspace", "/workspace?tab=todos", "/api/v1/opportunities", "list-checks", order=12),
     cap("workspace.recent_followups", "最近跟进", "跟进", "最近商务跟进", "workspace", "workspace", "/workspace?tab=followups", "/api/v1/opportunities", "message-square", order=13),
     cap("workspace.favorites", "我的收藏", "收藏", "收藏和关注", "workspace", "workspace", "/workspace?tab=favorites", "/api/v1/collection", "bookmark", order=14),
     cap("workspace.recent", "最近访问", "访问", "最近访问记录", "workspace", "workspace", "/workspace?tab=recent", "/api/v1/client/bootstrap", "history", order=15),
 
-    cap("network", "产业关系", "关系", "人物、机构、身份和产业关系", "network", None, "/network", "/api/v1/network", "network", order=20),
+    cap("network", "关系", "关系", "人物、企业和已确认产业关系", "network", None, "/network", "/api/v1/network", "network", order=20),
     cap("network.people", "人物与机构", "人物", "产业人物和机构发现", "network", "network", "/network/people", "/api/v1/network/people", "users", order=21, legacy=("/people",)),
     cap("network.graph", "关系网络", "图谱", "主体关系图谱、路径查询和时间线", "network", "network", "/network/graph", "/api/v1/relationships", "share-2", order=22),
     cap("network.governance", "主体治理", "治理", "主体消歧、重复合并和关系审核", "network", "network", "/network/governance", "/api/v1/subjects/people", "users-round", "edit_data", clients=("web", "admin"), order=23),
     cap("network.recommendations", "人脉推荐", "推荐", "推荐人脉和连接理由", "network", "network", "/network/recommendations", "/api/v1/network/recommendations/people", "sparkles", "use_recommendations", order=24),
 
-    cap("intelligence", "情报中心", "情报", "情报动态、订阅、研究和运营", "intelligence", None, "/intelligence", "/api/v1/intelligence", "newspaper", order=30),
+    cap("intelligence", "情报", "情报", "已发布情报和业务判断", "intelligence", None, "/intelligence", "/api/v1/intelligence", "newspaper", order=30),
     cap("intelligence.feed", "情报首页", "首页", "已发布情报流和订阅", "intelligence", "intelligence", "/intelligence", "/api/v1/intelligence", "rss", order=31),
     cap("intelligence.collection", "采集与数据源", "采集", "情报采集、数据源管理和采集任务", "intelligence", "intelligence", "/collection", "/api/v1/collection", "download", "manage_monitoring", clients=("web", "admin"), order=32),
     cap("intelligence.processing", "情报加工", "加工", "数据处理、实体识别和候选匹配", "intelligence", "intelligence", "/processing/jobs", "/api/v1/processing", "workflow", clients=("web", "admin"), order=33),
@@ -67,20 +79,20 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("intelligence.sources", "数据源管理", "来源", "监测和采集来源", "intelligence", "intelligence", "/collection/sources", "/api/v1/collection/sources", "database", "manage_monitoring", clients=("web", "admin"), order=43),
     cap("intelligence.operations", "情报运营总览", "运营", "情报采集、加工、审核和发布总览", "intelligence", "intelligence", "/intelligence/operations", "/api/v1/collection", "activity", "manage_monitoring", clients=("web", "admin"), order=44),
 
-    cap("resources", "资源市场", "资源", "需求、供给和匹配", "resources", None, "/resources", "/api/v1/resources", "package", order=40),
+    cap("resources", "资源", "资源", "统一管理需求与供给", "resources", None, "/resources", "/api/v1/resources", "package", order=40),
     cap("resources.home", "资源首页", "首页", "资源需求、供给和匹配", "resources", "resources", "/resources", "/api/v1/resources", "layout-dashboard", order=41),
-    cap("resources.demand", "需求发布", "需求", "发布和查看资源需求", "resources", "resources", "/resources/demand", "/api/v1/resources", "message-circle", order=42),
-    cap("resources.supply", "供给发布", "供给", "发布和查看资源供给", "resources", "resources", "/resources/supply", "/api/v1/resources", "package-check", order=43),
+    cap("resources.demand", "需求", "需求", "筛选资源需求", "resources", "resources", "/resources?direction=demand", "/api/v1/resources", "message-circle", order=42),
+    cap("resources.supply", "供给", "供给", "筛选资源供给", "resources", "resources", "/resources?direction=supply", "/api/v1/resources", "package-check", order=43),
     cap("resources.matching", "匹配推荐", "匹配", "供需匹配推荐", "resources", "resources", "/resources/matching", "/api/v1/resources", "shuffle", order=44),
 
-    cap("collaboration", "业务协同", "协同", "线索、合作机会、跟进和任务", "collaboration", None, "/collaboration", "/api/v1/opportunities", "handshake", order=50),
+    cap("collaboration", "协作", "协作", "合作机会、跟进和任务", "collaboration", None, "/opportunities", "/api/v1/opportunities", "handshake", order=50, legacy=("/collaboration",)),
     cap("collaboration.home", "协同首页", "首页", "业务协同工作台和任务队列", "collaboration", "collaboration", "/collaboration", "/api/v1/opportunities", "layout-dashboard", order=51),
     cap("collaboration.leads", "线索", "线索", "业务线索和线索审核", "collaboration", "collaboration", "/collaboration/leads", "/api/v1/opportunities", "target", order=52),
     cap("collaboration.opportunities", "合作机会", "机会", "合作机会管理和阶段推进", "collaboration", "collaboration", "/collaboration/opportunities", "/api/v1/opportunities", "handshake", order=53),
     cap("collaboration.tasks", "任务与跟进", "任务", "协作任务和商务跟进记录", "collaboration", "collaboration", "/collaboration/tasks", "/api/v1/opportunities", "list-checks", order=54),
     cap("collaboration.meetings", "会议与材料", "会议", "会议安排和材料管理", "collaboration", "collaboration", "/collaboration/meetings", "/api/v1/opportunities", "clock", order=55),
 
-    cap("club", "Q-BAY", "Q-BAY", "产业情报系统中的产业社区运营场景", "club", None, "/club", "/api/v1/me/club-context", "landmark", order=60),
+    cap("club", "运营场景：Q-BAY", "Q-BAY", "产业情报系统中的产业社区运营场景", "club", None, "/club", "/api/v1/me/club-context", "landmark", order=60),
     cap("club.home", "俱乐部首页", "首页", "俱乐部工作台和任务队列", "club", "club", "/club", "/api/v1/me/club-context", "home", order=61),
     cap("club.members", "会员", "会员", "会员目录、申请和我的资料", "club", "club", "/club/members", "/api/v1/me/membership-context", "users", "membership.view_self", "membership", order=62),
     cap("club.events", "活动", "活动", "活动列表、报名和签到", "club", "club", "/club/events", "/api/v1/events", "calendar", order=63),
@@ -152,6 +164,8 @@ def filter_capabilities(permissions: set[str], *, client: str = "web", auth_disa
     client = client if client in VALID_CLIENTS else "web"
     result: list[dict[str, Any]] = []
     for capability in sorted(CAPABILITIES, key=lambda item: item.order):
+        if "manage_users" not in permissions and capability.capability_key not in MVP_PRODUCT_KEYS:
+            continue
         if capability.status == "disabled":
             continue
         if client not in capability.client_support and not (client == "web" and "admin" in capability.client_support):

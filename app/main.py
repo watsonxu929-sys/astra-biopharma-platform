@@ -375,6 +375,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     return render(request, "dashboard.html", counts=counts, latest_actions=latest_actions, latest_events=latest_events)
 
 
+@app.get("/dashboard", include_in_schema=False)
+def legacy_dashboard_alias():
+    return RedirectResponse("/platform", status_code=303)
+
+
 @app.get("/search", response_class=HTMLResponse)
 def global_search(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
     result = search_all(q, per_type_limit=30)

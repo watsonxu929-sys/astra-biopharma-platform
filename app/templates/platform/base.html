@@ -2,8 +2,8 @@
 {% block title %}{% block platform_title %}生物医药产业连接与情报平台{% endblock %}{% endblock %}
 {% block content %}
 <div class="platform-content">
-  {% block breadcrumb %}{% endblock %}
-  {% block page_header %}{% endblock %}
+  {% block breadcrumb %}{% block platform_breadcrumb %}{% endblock %}{% endblock %}
+  {% block page_header %}{% block platform_page_header %}{% endblock %}{% endblock %}
   <div class="platform-main">
     {% block platform_content %}{% endblock %}
   </div>

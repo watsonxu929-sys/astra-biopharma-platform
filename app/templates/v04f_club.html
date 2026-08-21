@@ -31,17 +31,17 @@
 {% if mode == "home" %}
 <section class="page-head action-head">
   <div>
-    <p class="eyebrow">业务经营</p>
-    <h1>Q-BAY俱乐部运营工作台</h1>
-    <p>集中处理会员、活动、报名、签到、供需、匹配、会后候选和待办任务。</p>
-    <p class="next-step">当前重点：优先处理待审核申请和候选资源匹配，确认后再进入业务行动。</p>
+    <p class="eyebrow">运营场景</p>
+    <h1>运营场景：Q-BAY</h1>
+    <p>在产业情报平台内查看Q-BAY会员与活动。</p>
+    <p class="next-step">从会员或活动开始，进入对应业务页面。</p>
   </div>
   <div class="actions">
-    <a class="button secondary" href="/recommendations?category=club_match&status=open">查看供需推荐</a>
     <a class="button primary" href="/club/apply">公开申请页</a>
   </div>
 </section>
 
+{% if sec.get('can_manage_users') %}
 <section class="subject-stats">
   {% for k, v in counts.items() %}
   <div class="panel mini-stat">
@@ -69,6 +69,12 @@
   <a class="panel" href="/club/announcements"><h2>会员公告</h2><p>发布站内通知，不自动外发邮件、短信或微信。</p></a>
 </section>
 
+{% else %}
+<section class="profile-sections">
+  <a class="panel" href="/club/members"><h2>会员</h2><p>查看Q-BAY会员目录与主体档案。</p></a>
+  <a class="panel" href="/club/events"><h2>活动</h2><p>查看Q-BAY活动、时间与报名信息。</p></a>
+</section>
+{% endif %}
 {% elif mode == "applications" %}
 <section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>会员申请审核</h1><p>集中处理会员申请，确认人物和企业/机构匹配后再批准入会。</p></div><a class="button secondary" href="/club">返回俱乐部</a></section>
 <section class="panel"><table><thead><tr><th>编号</th><th>姓名</th><th>企业/机构</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead><tbody>{% for a in applications %}<tr><td>{{ a.application_no }}</td><td>{{ a.applicant_name }}</td><td>{{ a.organization_name or "暂无" }}</td><td>{{ status_badge(status_names.get(a.status, a.status)) }}</td><td>{{ a.submitted_at }}</td><td><a class="button secondary compact" href="/club/admin/applications/{{ a.id }}">审核</a></td></tr>{% else %}<tr><td colspan="6" class="empty">暂无会员申请</td></tr>{% endfor %}</tbody></table></section>
@@ -79,7 +85,7 @@
 <section class="panel"><h2>审核操作</h2><form method="post" action="/club/admin/applications/{{ application.id }}/review" class="grid-2"><label>决定<select name="decision"><option value="under_review">待审核</option><option value="need_more_info">需补充</option><option value="held">暂缓</option><option value="approved">通过</option><option value="rejected">拒绝</option></select></label><div class="form-readonly"><span>审核人</span><strong>{{ sec.get("user", {}).get("display_name", "当前用户") }}</strong></div><label>人物ID<input name="person_id" type="number" value="{{ application.matched_person_id or 0 }}"></label><label>企业/机构ID<input name="organization_id" type="number" value="{{ application.matched_organization_id or 0 }}"></label><label>登录账号ID<input name="user_id" type="number" value="{{ application.user_id or 0 }}"></label><label class="grid-span">审核意见<textarea name="note">{{ application.review_note or "" }}</textarea></label><button class="button primary" type="submit">保存审核</button></form></section>
 
 {% elif mode == "members" %}
-<section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>会员管理</h1><p>查看会员档案、供需内容和活动参与记录。</p></div><div class="actions"><a class="button primary" href="/club/import">智能导入</a><a class="button secondary" href="/club/members.csv">导出 CSV</a></div></section>
+<section class="page-head action-head"><div><p class="eyebrow">运营场景：Q-BAY</p><h1>会员</h1><p>查看会员目录与主体档案。</p></div>{% if sec.get('can_manage_users') %}<div class="actions"><a class="button primary" href="/club/import">智能导入</a><a class="button secondary" href="/club/members.csv">导出 CSV</a></div>{% endif %}</section>
 <form class="search-bar" method="get"><input name="q" value="{{ filters.q }}" placeholder="会员编号、姓名、企业/机构"><select name="status"><option value="">全部状态</option><option value="active" {% if filters.status == "active" %}selected{% endif %}>正常</option><option value="inactive" {% if filters.status == "inactive" %}selected{% endif %}>停用</option><option value="suspended" {% if filters.status == "suspended" %}selected{% endif %}>暂停</option></select><input name="level" value="{{ filters.level }}" placeholder="等级"><button class="button secondary" type="submit">筛选</button></form>
 <section class="panel"><table><thead><tr><th>编号</th><th>姓名</th><th>企业/机构</th><th>职务</th><th>等级</th><th>状态</th><th>标签/需求</th><th>入口</th></tr></thead><tbody>{% for m in members %}<tr><td>{{ m.member_no }}</td><td>{{ m.person_name }}</td><td>{{ m.organization_name or "暂无" }}</td><td>{{ m.public_role or "暂无" }}</td><td>{{ m.member_level }}</td><td>{{ status_badge(status_names.get(m.status, m.status)) }}</td><td class="clip-text">{{ m.expertise_tags or m.cooperation_preferences or "暂无" }}</td><td><a href="/club/members/{{ m.id }}">会员档案</a>{% if m.person_external_id %} · <a href="/subjects/person/{{ m.person_external_id }}">人物档案</a>{% endif %}</td></tr>{% else %}<tr><td colspan="8" class="empty">暂无会员记录</td></tr>{% endfor %}</tbody></table></section>
 

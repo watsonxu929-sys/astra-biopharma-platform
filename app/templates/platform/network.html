@@ -3,19 +3,19 @@
 <nav class="breadcrumb">
   <a href="/platform">工作台</a>
   <span class="sep">/</span>
-  <span>产业关系</span>
+  <span>关系</span>
 </nav>
 {% endblock %}
-{% block platform_title %}产业关系{% endblock %}
+{% block platform_title %}关系{% endblock %}
 {% block platform_page_header %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1 class="page-title">产业关系</h1>
+    <h1 class="page-title">关系</h1>
     <p class="page-desc">发现人物、机构和可信连接关系。</p>
   </div>
   <div class="page-header-right">
     <a class="btn btn-primary" href="/network/people">人物发现</a>
-    <a class="btn btn-outline" href="/network/graph">关系网络</a>
+    {% if stats.relation_count %}<a class="btn btn-outline" href="/network/graph">关系网络</a>{% endif %}
   </div>
 </div>
 {% endblock %}
@@ -26,7 +26,6 @@
     <div class="card-stats">
       <div class="stat-item"><span class="stat-value">{{ stats.people_count or 0 }}</span><span class="stat-label">人物数量</span></div>
       <div class="stat-item"><span class="stat-value">{{ stats.org_count or 0 }}</span><span class="stat-label">机构数量</span></div>
-      <div class="stat-item"><span class="stat-value">{{ stats.project_count or 0 }}</span><span class="stat-label">产品与项目</span></div>
       <div class="stat-item"><span class="stat-value">{{ stats.relation_count or 0 }}</span><span class="stat-label">当前关系</span></div>
     </div>
   </section>
@@ -40,39 +39,21 @@
         <span class="quick-link-desc">浏览产业人物和机构档案</span>
       </a>
       <a href="/network/graph" class="quick-link-item">
+      {% if stats.relation_count %}
         <span class="quick-link-icon">🔗</span>
         <span class="quick-link-text">关系网络</span>
         <span class="quick-link-desc">查看主体关系图谱和路径</span>
       </a>
-      {% if can_access_governance %}
+      {% if request.scope.get('security_context', {}).get('can_manage_users') %}
+      {% endif %}
       <a href="/network/governance" class="quick-link-item">
         <span class="quick-link-icon">🛡️</span>
         <span class="quick-link-text">主体治理</span>
         <span class="quick-link-desc">主体消歧、合并和关系审核</span>
       </a>
       {% endif %}
-      <a href="/network/recommendations" class="quick-link-item">
-        <span class="quick-link-icon">✨</span>
-        <span class="quick-link-text">人脉推荐</span>
-        <span class="quick-link-desc">发现值得认识的产业人物</span>
-      </a>
     </div>
   </section>
 
-  {% if rec %}
-  <section class="dashboard-card">
-    <h3 class="card-title">推荐人脉</h3>
-    <div class="recommendation-list">
-      {% for item in rec %}
-      <div class="recommendation-item">
-        <a href="/network/people/{{ item.id }}">{{ item.name }}</a>
-        <span class="recommendation-role">{{ item.public_role or '' }}</span>
-        <span class="recommendation-org">{{ item.organization_network or '' }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    <a href="/network/recommendations" class="btn btn-sm">查看更多推荐</a>
-  </section>
-  {% endif %}
 </div>
 {% endblock %}

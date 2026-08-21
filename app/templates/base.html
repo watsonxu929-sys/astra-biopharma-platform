@@ -37,7 +37,6 @@
       <div class="user-menu">
         <div class="user-menu-head"><strong>{{ sec.get('user', {}).get('display_name', '用户') }}</strong><span>{{ sec.get('role_label', '') }}</span></div>
         {% for item in nav.account %}<a href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}
-        <a href="/help">帮助与反馈</a>
         <form method="post" action="/account/logout"><button type="submit" class="link-button">退出登录</button></form>
       </div>
     </details>
