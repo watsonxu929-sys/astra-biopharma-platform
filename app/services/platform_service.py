@@ -539,76 +539,6 @@ def match_resources(db: Session, resource_id: int, limit: int = 10) -> list[dict
 #  Opportunities
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 
-def create_opportunity(db: Session, **fields) -> CooperationOpportunity:
-    opp = CooperationOpportunity(**fields)
-    db.add(opp)
-    db.commit()
-    db.refresh(opp)
-    # Add timeline entry
-    db.add(TimelineEntry(
-        opportunity_id=opp.id,
-        event_type="created",
-        description=f"Opportunity {opp.title} created",
-        actor_id=fields.get("initiator_id"),
-    ))
-    db.commit()
-    return opp
-
-
-def update_opportunity_stage(db: Session, opp_id: int, stage: str, actor_id: int) -> CooperationOpportunity | None:
-    opp = db.get(CooperationOpportunity, opp_id)
-    if not opp:
-        return None
-    old_stage = opp.stage
-    opp.stage = stage
-    db.add(TimelineEntry(
-        opportunity_id=opp_id,
-        event_type="stage_change",
-        description=f"Stage changed from {old_stage} to {stage}",
-        actor_id=actor_id,
-    ))
-    db.commit()
-    return opp
-
-
-def get_opportunity_timeline(db: Session, opp_id: int) -> list[TimelineEntry]:
-    return list(db.scalars(
-        select(TimelineEntry).where(TimelineEntry.opportunity_id == opp_id).order_by(desc(TimelineEntry.created_at))
-    ).all())
-
-
-def create_follow_up(db: Session, **fields) -> FollowUp:
-    fu = FollowUp(**fields)
-    db.add(fu)
-    db.commit()
-    db.refresh(fu)
-    # Add timeline entry
-    db.add(TimelineEntry(
-        opportunity_id=fields["opportunity_id"],
-        event_type="follow_up",
-        description=("Follow-up: " + str(fields.get("content", ""))[:100]),
-        actor_id=fields.get("created_by"),
-    ))
-    db.commit()
-    return fu
-
-
-def create_collab_task(db: Session, **fields) -> CollabTask:
-    task = CollabTask(**fields)
-    db.add(task)
-    db.commit()
-    db.refresh(task)
-    if task.opportunity_id:
-        db.add(TimelineEntry(
-            opportunity_id=task.opportunity_id,
-            event_type="task",
-            description=f"Task created: {task.title}",
-            actor_id=fields.get("created_by"),
-        ))
-        db.commit()
-    return task
-
-
 def list_user_tasks(db: Session, user_id: int, status: str = "") -> list[CollabTask]:
     stmt = select(CollabTask).where(
         or_(CollabTask.owner_id == user_id, CollabTask.participants.contains(str(user_id)))
@@ -781,7 +711,7 @@ def match_resources(db: Session, resource_id: int, limit: int = 10) -> list[dict
 def create_opportunity(db: Session, **fields) -> CooperationOpportunity:
     from app.services.unified_opportunity_service import UnifiedOpportunityService
     actor = int(fields.pop("initiator_id"))
-    return UnifiedOpportunityService(db).create(actor_user_id=actor, fields=fields)
+    return UnifiedOpportunityService(db).create(actor_user_id=actor, fields={**fields, "human_confirmed": True})
 
 
 def update_opportunity_stage(db: Session, opp_id: int, stage: str, actor_id: int) -> CooperationOpportunity | None:
@@ -803,7 +733,7 @@ def create_follow_up(db: Session, **fields) -> FollowUp:
 
 def create_collab_task(db: Session, **fields) -> CollabTask:
     from app.services.unified_opportunity_service import UnifiedOpportunityService
-    opp_id = int(fields.pop("opportunity_id")) if fields.get("opportunity_id") else 0
+    opp_id = int(fields.pop("opportunity_id")) if fields.get("opportunity_id") else None
     actor = int(fields.pop("created_by"))
     owner = int(fields.pop("owner_id"))
     return UnifiedOpportunityService(db).create_task(opp_id=opp_id, actor_user_id=actor, owner_id=owner, fields=fields)

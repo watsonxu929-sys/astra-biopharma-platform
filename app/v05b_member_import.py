@@ -736,54 +736,6 @@ def _save_new_membership(
     membership_id = int(cur.lastrowid)
     _upsert_contact(conn, membership_id, draft, int(job["id"]))
 
-    if person_external_id and organization_external_id:
-        relation = conn.execute(
-            """
-            SELECT id FROM relations WHERE source_external_id=? AND target_external_id=?
-              AND relation_type IN ('任职','任职于','employment') AND is_active=1 LIMIT 1
-            """,
-            (person_external_id, organization_external_id),
-        ).fetchone()
-        if not relation:
-            conn.execute(
-                """
-                INSERT INTO relations(
-                  external_id,source_external_id,relation_type,target_external_id,evidence_source,
-                  visibility,verification_status,source_type,source_title,source_text,captured_at,
-                  analyzed_at,model_version,manually_confirmed,is_active,subject_manually_confirmed,created_at
-                ) VALUES (?,?, '任职', ?,?,'内部','待核验','Q-BAY会员导入',?,?,?,?, 'v0.5B',1,1,1,?)
-                """,
-                (
-                    _next_subject_id(conn, "relations", "REL"),
-                    person_external_id,
-                    organization_external_id,
-                    job["job_no"],
-                    job["original_filename"] or "会员智能导入",
-                    draft["source_text"],
-                    ts,
-                    ts,
-                    ts,
-                ),
-            )
-
-    if draft["cooperation_needs"]:
-        conn.execute(
-            """
-            INSERT INTO v04f_club_needs(
-              need_no,membership_id,title,description,need_type,industry_tags,region,urgency,status,created_at,updated_at
-            ) VALUES (?,?,'会员导入需求',?,?,?,?,'normal','active',?,?)
-            """,
-            (_next_no(conn, "QBN"), membership_id, draft["cooperation_needs"], "会员需求", draft["industry_tags"], draft["city"], ts, ts),
-        )
-    if draft["offered_resources"]:
-        conn.execute(
-            """
-            INSERT INTO v04f_club_offerings(
-              offering_no,membership_id,title,description,offering_type,industry_tags,region,availability,status,created_at,updated_at
-            ) VALUES (?,?,'会员可提供资源',?,?,?,?,'available','active',?,?)
-            """,
-            (_next_no(conn, "QBO"), membership_id, draft["offered_resources"], "会员资源", draft["industry_tags"], draft["city"], ts, ts),
-        )
     return person_id, organization_id, membership_id
 
 

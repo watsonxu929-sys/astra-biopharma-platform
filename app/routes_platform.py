@@ -832,6 +832,7 @@ def admin_data_integrity_status(request: Request, issue_id: int, status: str = F
 
 # v0.6E product recovery routes
 from app.services.product_recovery_service import pipeline_counts as _v06e_pipeline_counts, latest_pipeline_records as _v06e_pipeline_records, publish_collection_item as _v06e_publish_collection_item
+from app.services.intelligence_product_service import IntelligenceProductService
 
 
 def _v06e_permissions(request: Request) -> set[str]:
@@ -1025,27 +1026,16 @@ async def admin_create_intelligence(request: Request, db: Session = Depends(get_
     if not _can_manage_intelligence(request):
         raise HTTPException(403, "intelligence admin permission required")
     form = await request.form()
-    status = str(form.get("status", "draft"))
-    item = IntelligenceItem(
-        title=str(form.get("title", "")).strip(),
-        summary=str(form.get("summary", "")).strip() or None,
-        content=str(form.get("content", "")).strip() or None,
-        intel_type=str(form.get("intel_type", "manual")).strip() or "manual",
-        companies=str(form.get("companies", "")).strip() or None,
-        industry_directions=str(form.get("industry_directions", "")).strip() or None,
-        tags=str(form.get("tags", "")).strip() or None,
-        source_name="manual",
-        source_url=str(form.get("source_url", "")).strip() or None,
-        status=status,
-        visibility=str(form.get("visibility", "public")).strip() or "public",
-        credibility=int(form.get("credibility", 3) or 3),
-        importance=int(form.get("importance", 2) or 2),
-        published_at=datetime.now() if status == "published" else None,
-        created_by=get_current_user_id(request),
-    )
-    db.add(item)
-    db.commit()
-    return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
+    actor = request.scope.get("security_context", {}).get("user", {}).get("username", "admin")
+    item = IntelligenceProductService(db.get_bind().url.database).create_manual_draft({
+        "title": str(form.get("title", "")).strip(), "summary": str(form.get("summary", "")).strip() or None,
+        "content": str(form.get("content", "")).strip() or None, "intel_type": str(form.get("intel_type", "manual")).strip() or "manual",
+        "companies": str(form.get("companies", "")).strip() or None, "industry_directions": str(form.get("industry_directions", "")).strip() or None,
+        "tags": str(form.get("tags", "")).strip() or None, "source_url": str(form.get("source_url", "")).strip() or None,
+        "visibility": str(form.get("visibility", "public")).strip() or "public", "credibility": int(form.get("credibility", 3) or 3),
+        "importance": int(form.get("importance", 2) or 2), "created_by": get_current_user_id(request),
+    }, actor=actor)
+    return RedirectResponse(f"/admin/intelligence/{item['id']}", 303)
 
 
 @router.get("/admin/intelligence/{item_id:int}", response_class=HTMLResponse)
@@ -1063,43 +1053,26 @@ def admin_intelligence_detail(item_id: int, request: Request, db: Session = Depe
 async def admin_update_intelligence(item_id: int, request: Request, db: Session = Depends(get_db)):
     if not _can_manage_intelligence(request):
         raise HTTPException(403, "intelligence admin permission required")
-    item = db.get(IntelligenceItem, int(item_id))
-    if not item:
-        raise HTTPException(404, "intelligence not found")
     form = await request.form()
-    item.title = str(form.get("title", item.title)).strip() or item.title
-    item.summary = str(form.get("summary", "")).strip() or None
-    item.content = str(form.get("content", "")).strip() or None
-    item.intel_type = str(form.get("intel_type", item.intel_type)).strip() or item.intel_type
-    item.companies = str(form.get("companies", "")).strip() or None
-    item.industry_directions = str(form.get("industry_directions", "")).strip() or None
-    item.tags = str(form.get("tags", "")).strip() or None
-    item.source_url = str(form.get("source_url", "")).strip() or None
-    item.visibility = str(form.get("visibility", item.visibility)).strip() or item.visibility
-    item.credibility = int(form.get("credibility", item.credibility) or item.credibility)
-    item.importance = int(form.get("importance", item.importance) or item.importance)
-    old_status = item.status
-    item.status = str(form.get("status", item.status)).strip() or item.status
-    if item.status == "published" and old_status != "published":
-        item.published_at = datetime.now()
-    item.updated_at = datetime.now()
-    db.commit()
-    return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
+    actor = request.scope.get("security_context", {}).get("user", {}).get("username", "admin")
+    try:
+        item = IntelligenceProductService(db.get_bind().url.database).update_product(item_id, dict(form), actor=actor)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return RedirectResponse(f"/admin/intelligence/{item['id']}", 303)
 
 
 @router.post("/admin/intelligence/{item_id:int}/publish")
 def admin_publish_intelligence(item_id: int, request: Request, db: Session = Depends(get_db)):
     if not _can_manage_intelligence(request):
         raise HTTPException(403, "intelligence admin permission required")
-    item = db.get(IntelligenceItem, int(item_id))
-    if not item:
-        raise HTTPException(404, "intelligence not found")
-    item.status = "published"
-    item.visibility = item.visibility or "public"
-    item.published_at = item.published_at or datetime.now()
-    item.updated_at = datetime.now()
-    db.commit()
-    return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
+    actor = request.scope.get("security_context", {}).get("user", {}).get("username", "admin")
+    try:
+        item = IntelligenceProductService(db.get_bind().url.database).publish_existing(
+            item_id, actor=actor, permissions=_v06e_permissions(request))
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return RedirectResponse(f"/admin/intelligence/{item['id']}", 303)
 
 
 @router.post("/admin/intelligence/collection/{collection_item_id:int}/publish")

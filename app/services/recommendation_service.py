@@ -821,65 +821,7 @@ def create_action_from_recommendation(
     deadline: str = "",
     db_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    ensure_schema(db_path)
-    with db_connection(db_path) as conn:
-        row = conn.execute("SELECT * FROM v04h_recommendations WHERE id=?", (recommendation_id,)).fetchone()
-        if not row:
-            raise ValueError("推荐记录不存在")
-        if row["action_id"]:
-            return {"action_id": int(row["action_id"]), "created": False}
-        if not table_exists(conn, "actions"):
-            raise ValueError("行动任务表不存在")
-        item = hydrate_recommendation(row)
-        action_no = _next_action_no(conn)
-        target_org_id = None
-        if row["subject_type"] == "organization" and row["subject_id"]:
-            org = conn.execute("SELECT id FROM organizations WHERE external_id=?", (row["subject_id"],)).fetchone()
-            target_org_id = org["id"] if org else None
-        completion = "\n".join([
-            item.get("summary") or "",
-            "推荐依据：" + "；".join(item.get("reasons") or []),
-            "风险提示：" + "；".join(item.get("risks") or []) if item.get("risks") else "",
-        ]).strip()
-        due = deadline or (date.today() + timedelta(days=3 if row["score"] >= 70 else 7)).isoformat()
-        priority = "P1" if row["score"] >= 70 else "P2"
-        cur = conn.execute(
-            """
-            INSERT INTO actions(
-              external_id, task, target_external_id, target_organization_id,
-              completion_standard, owner, priority, status, suggested_deadline,
-              source_type, source_title, source_text, manually_confirmed, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, '未开始', ?, 'v0.4H智能推荐', ?, ?, 1, ?)
-            """,
-            (
-                action_no,
-                row["title"],
-                row["subject_id"],
-                target_org_id,
-                completion,
-                owner or "项目负责人",
-                priority,
-                due,
-                row["recommendation_no"],
-                item.get("primary_reason"),
-                now(),
-            ),
-        )
-        action_id = int(cur.lastrowid)
-        ts = now()
-        conn.execute(
-            """
-            UPDATE v04h_recommendations
-            SET status='converted', action_id=?, decided_at=?, updated_at=?
-            WHERE id=?
-            """,
-            (action_id, ts, ts, recommendation_id),
-        )
-        conn.execute(
-            "INSERT INTO v04h_feedback_events(recommendation_id,old_status,new_status,actor,reason,created_at) VALUES (?,?,?,?,?,?)",
-            (recommendation_id, row["status"], "converted", owner or "manual", "人工确认并创建行动任务", ts),
-        )
-        return {"action_id": action_id, "action_no": action_no, "created": True}
+    return {"created": False, "reason": "legacy_action_writer_frozen", "canonical_entry": "/collaboration"}
 
 
 def subject_recommendations(

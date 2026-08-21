@@ -328,21 +328,13 @@ class BusinessCollaborationService:
             "next_follow_at": _as_datetime(fields.get("next_follow_at")),
             "owner_id": fields.get("owner_id") or lead.get("owner_user_id") or actor_user_id,
             "visibility": fields.get("visibility") or "organization",
+            "stage": "draft", "opportunity_no": _number("P5O"), "currency": fields.get("currency"),
+            "success_probability": fields.get("success_probability"), "target_complete_at": fields.get("target_complete_at"),
+            "risk_summary": fields.get("risk_summary"), "last_stage_changed_at": now_iso(),
+            "pilot_batch_id": lead.get("pilot_batch_id"),
             "human_confirmed": True,
         }, commit=False)
-        opportunity.stage = "draft"
         self.db.flush()
-        opportunity_no = _number("P5O")
-        self.db.execute(text("""
-            UPDATE v06_opportunities SET opportunity_no=:no,currency=:currency,
-              success_probability=:probability,target_complete_at=:target,risk_summary=:risk,
-              last_stage_changed_at=:at,pilot_batch_id=:pilot,updated_at=:at WHERE id=:id
-        """), {
-            "no": opportunity_no, "currency": fields.get("currency"),
-            "probability": fields.get("success_probability"), "target": fields.get("target_complete_at"),
-            "risk": fields.get("risk_summary"), "at": ts, "pilot": lead.get("pilot_batch_id"),
-            "id": opportunity.id,
-        })
         self.db.execute(text("""
             INSERT INTO p5_opportunity_stage_history(
               opportunity_id,old_stage,new_stage,reason,actor_user_id,pilot_batch_id,created_at
@@ -404,11 +396,8 @@ class BusinessCollaborationService:
         """), {"opp": opportunity_id}).scalar() or 0)
         warnings = [f"仍有 {open_tasks} 个未完成任务"] if stage in {"won", "lost", "closed"} and open_tasks else []
         ts = now_iso()
-        self.db.execute(text("""
-            UPDATE v06_opportunities SET stage=:stage,
-              status=CASE WHEN :stage='closed' THEN 'closed' ELSE status END,
-              last_stage_changed_at=:at,updated_at=:at WHERE id=:id
-        """), {"stage": stage, "at": ts, "id": opportunity_id})
+        self.opportunities.update_stage(opportunity_id, actor_user_id=actor_user_id, stage=stage,
+                                        is_admin=is_admin, commit=False)
         self.db.execute(text("""
             INSERT INTO p5_opportunity_stage_history(
               opportunity_id,old_stage,new_stage,reason,actor_user_id,
@@ -464,29 +453,10 @@ class BusinessCollaborationService:
         if follow_type not in FOLLOW_TYPES:
             raise HTTPException(400, detail={"code": "INVALID_FOLLOW_UP_TYPE", "message": "无效跟进类型", "details": {}})
         opp = self._opportunity_row(opportunity_id)
-        ts = str(fields.get("followed_at") or now_iso())
-        result = self.db.execute(text("""
-            INSERT INTO v06_follow_ups(
-              opportunity_id,follow_type,content,created_by,followed_at,next_follow_at,visibility,
-              created_at,participants_json,result,next_action,shared_summary,internal_note,
-              artifact_ids_json,pilot_batch_id
-            ) VALUES (:opp,:type,:content,:actor,:followed,:next_follow,:visibility,:at,:participants,
-                      :result,:next_action,:shared,:internal,:artifacts,:pilot)
-        """), {
-            "opp": opportunity_id, "type": follow_type, "content": str(fields.get("content") or ""),
-            "actor": actor_user_id, "followed": ts, "next_follow": fields.get("next_follow_at"),
-            "visibility": fields.get("visibility") or "organization", "at": now_iso(),
-            "participants": _dump(fields.get("participants") or []), "result": fields.get("result"),
-            "next_action": fields.get("next_action"), "shared": fields.get("shared_summary"),
-            "internal": fields.get("internal_note"), "artifacts": _dump(fields.get("artifact_ids") or []),
-            "pilot": opp.get("pilot_batch_id"),
-        })
-        follow_id = int(result.lastrowid)
-        if fields.get("next_action") is not None or fields.get("next_follow_at") is not None:
-            self.db.execute(text("""
-                UPDATE v06_opportunities SET next_action=COALESCE(:action,next_action),
-                  next_follow_at=COALESCE(:follow,next_follow_at),updated_at=:at WHERE id=:id
-            """), {"action": fields.get("next_action"), "follow": fields.get("next_follow_at"), "at": now_iso(), "id": opportunity_id})
+        follow = self.opportunities.create_follow_up(opp_id=opportunity_id, actor_user_id=actor_user_id,
+            is_admin=is_admin, commit=False, fields={**fields, "follow_type": follow_type,
+            "pilot_batch_id": opp.get("pilot_batch_id")})
+        follow_id = int(follow.id)
         self._timeline(opportunity_id, "follow_up", str(fields.get("shared_summary") or fields.get("content") or ""), actor_user_id, opp.get("pilot_batch_id"))
         self._event("opportunity.followup_added", "opportunity", opportunity_id,
                     {"follow_up_id": follow_id, "follow_type": follow_type}, actor_user_id, opp.get("pilot_batch_id"))
@@ -512,23 +482,10 @@ class BusinessCollaborationService:
         if not self._can_access(opportunity_id, owner_id, is_admin=is_admin):
             raise HTTPException(403, detail={"code": "TASK_OWNER_FORBIDDEN", "message": "任务负责人无权访问该合作机会", "details": {}})
         opp = self._opportunity_row(opportunity_id)
-        result = self.db.execute(text("""
-            INSERT INTO v06_collab_tasks(
-              title,opportunity_id,owner_id,participants,due_date,priority,status,created_by,
-              is_demo,created_at,updated_at,task_type,completion_criteria,related_follow_up_id,
-              related_meeting_id,visibility,pilot_batch_id
-            ) VALUES (:title,:opp,:owner,:participants,:due,:priority,'todo',:actor,0,:at,:at,
-                      :type,:criteria,:follow,:meeting,:visibility,:pilot)
-        """), {
-            "title": str(fields.get("title") or "未命名协作任务"), "opp": opportunity_id,
-            "owner": owner_id, "participants": _dump(fields.get("participants") or []),
-            "due": fields.get("due_date"), "priority": fields.get("priority") or "P2",
-            "actor": actor_user_id, "at": now_iso(), "type": fields.get("task_type") or "other",
-            "criteria": fields.get("completion_criteria"), "follow": fields.get("related_follow_up_id"),
-            "meeting": fields.get("related_meeting_id"), "visibility": fields.get("visibility") or "organization",
-            "pilot": opp.get("pilot_batch_id"),
-        })
-        task_id = int(result.lastrowid)
+        task = self.opportunities.create_task(opp_id=opportunity_id, actor_user_id=actor_user_id,
+            owner_id=owner_id, is_admin=is_admin, commit=False, fields={**fields,
+            "pilot_batch_id": opp.get("pilot_batch_id")})
+        task_id = int(task.id)
         self._timeline(opportunity_id, "task", f"Task created: {fields.get('title')}", actor_user_id, opp.get("pilot_batch_id"))
         self._event("task.assigned", "collaboration_task", task_id,
                     {"opportunity_id": opportunity_id, "owner_id": owner_id}, actor_user_id, opp.get("pilot_batch_id"))
@@ -553,11 +510,8 @@ class BusinessCollaborationService:
             raise HTTPException(403, detail={"code": "TASK_UPDATE_FORBIDDEN", "message": "只有负责人或授权人员可更新任务", "details": {}})
         if status == "blocked" and not blocked_reason.strip():
             raise HTTPException(400, detail={"code": "BLOCKED_REASON_REQUIRED", "message": "阻塞任务必须填写原因", "details": {}})
-        self.db.execute(text("""
-            UPDATE v06_collab_tasks SET status=:status,blocked_reason=:reason,
-              completed_at=CASE WHEN :status='completed' THEN :at ELSE completed_at END,
-              updated_at=:at WHERE id=:id
-        """), {"status": status, "reason": blocked_reason or None, "at": now_iso(), "id": task_id})
+        self.opportunities.update_task(task_id, actor_user_id=actor_user_id, status=status,
+                                       blocked_reason=blocked_reason, is_admin=is_admin, commit=False)
         if status == "completed":
             self._event("task.completed", "collaboration_task", task_id,
                         {"opportunity_id": task["opportunity_id"]}, actor_user_id, opp.get("pilot_batch_id"))

@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.security import (
     current_username,
+    current_user,
     hash_password,
     record_audit,
     session_secret,
@@ -844,8 +845,6 @@ async def match_feedback(request: Request, match_id: int):
             """,
             (_next_no(conn, "QBMF"), match_id, mid, side, feedback, str(form.get("note") or "")[:500], status_after, now_iso()),
         )
-        if feedback == "interested":
-            conn.execute("UPDATE v04f_club_matches SET status='progressing',updated_at=? WHERE id=? AND status IN ('candidate','confirmed','contacted')", (now_iso(), match_id))
     return RedirectResponse("/member/matches", status_code=303)
 
 
@@ -1038,33 +1037,41 @@ def review_content(request: Request, request_id: int, decision: str = Form(...),
     actor = current_username(request)
     ts = now_iso()
     with db_connection() as conn:
-        item = conn.execute("SELECT * FROM v05d_member_content_requests WHERE id=?", (request_id,)).fetchone()
-        if not item or item["status"] not in {"submitted", "need_more_info"}:
-            return RedirectResponse("/club/member-content", status_code=303)
-        status = decision
-        official_id = item["official_record_id"]
+        source = conn.execute("""SELECT c.*,m.person_id,m.organization_id,m.user_id
+            FROM v05d_member_content_requests c JOIN v04f_club_memberships m ON m.id=c.membership_id
+            WHERE c.id=?""", (request_id,)).fetchone()
+        item = dict(source) if source else None
+    if not item or item["status"] not in {"submitted", "need_more_info"}:
+        return RedirectResponse("/club/member-content", status_code=303)
+    status, official_id = decision, item["official_record_id"]
+    if decision == "approved":
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from app.services.unified_resource_service import UnifiedResourceService
+        user = current_user(request) or {}
+        actor_user_id = int(user.get("id") or item.get("user_id") or 0)
+        if not actor_user_id:
+            raise HTTPException(403, "operator account required")
+        path = default_db_path()
+        engine = create_engine(f"sqlite:///{path.as_posix()}", connect_args={"check_same_thread": False})
+        try:
+            with Session(engine) as session:
+                resource = UnifiedResourceService(session).create(actor_user_id=actor_user_id, fields={
+                    "title": item["title"], "direction": "demand" if item["content_type"] == "need" else "supply",
+                    "resource_type": item["category"] or "Q-BAY会员供需", "category": item["category"],
+                    "description": item["description"], "owner_person_id": item.get("person_id"),
+                    "organization_id": item.get("organization_id"), "region": item["region"],
+                    "industry_direction": item["industry_tags"], "cooperation_terms": item["urgency_or_availability"],
+                    "legacy_source_type": "qbay_member_content_request", "legacy_source_id": str(request_id),
+                    "status": "published", "visibility": "organization",
+                })
+                official_id = resource.id
+        finally:
+            engine.dispose()
+        status = "published"
+    with db_connection() as conn:
         if decision == "approved":
-            if item["content_type"] == "need":
-                cur = conn.execute(
-                    """
-                    INSERT INTO v04f_club_needs(need_no,membership_id,title,description,need_type,industry_tags,region,urgency,status,created_at,updated_at)
-                    VALUES (?,?,?,?,?,?,?,?, 'active',?,?)
-                    """,
-                    (v04f_next_no(conn, "QBN"), item["membership_id"], item["title"], item["description"], item["category"], item["industry_tags"], item["region"], item["urgency_or_availability"] or "normal", ts, ts),
-                )
-                category = "need"
-            else:
-                cur = conn.execute(
-                    """
-                    INSERT INTO v04f_club_offerings(offering_no,membership_id,title,description,offering_type,industry_tags,region,availability,status,created_at,updated_at)
-                    VALUES (?,?,?,?,?,?,?,?, 'active',?,?)
-                    """,
-                    (v04f_next_no(conn, "QBO"), item["membership_id"], item["title"], item["description"], item["category"], item["industry_tags"], item["region"], item["urgency_or_availability"] or "available", ts, ts),
-                )
-                category = "offering"
-            official_id = cur.lastrowid
-            status = "published"
-            _notify(conn, int(item["membership_id"]), category, "供需内容已发布", f"{item['title']} 已审核通过。", category, str(official_id))
+            _notify(conn, int(item["membership_id"]), "resource", "供需内容已发布", f"{item['title']} 已审核通过。", "resource", str(official_id))
         elif decision == "rejected":
             _notify(conn, int(item["membership_id"]), item["content_type"], "供需内容未通过", review_note or "请修改后重新提交。", item["content_type"], item["request_no"])
         conn.execute("UPDATE v05d_member_content_requests SET status=?,official_record_id=?,reviewed_by=?,review_note=?,reviewed_at=?,updated_at=? WHERE id=?", (status, official_id, actor, review_note or None, ts, ts, request_id))

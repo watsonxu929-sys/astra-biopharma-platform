@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import desc, or_, select
+from sqlalchemy import desc, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models_platform import CollabTask, ContactIntent, CooperationOpportunity, FollowUp, TimelineEntry
@@ -19,12 +20,22 @@ def _csv_ids(value: str | None) -> set[int]:
     return ids
 
 
+def _as_datetime(value: Any) -> datetime | None:
+    if not value or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
 class UnifiedOpportunityService:
     canonical_model = "v06_opportunities"
     legacy_adapters = ("v04f_lead_records", "actions", "v04h_recommendations", "v06_contact_intents")
 
     def __init__(self, db: Session):
         self.db = db
+
+    def _supported(self, table: str, values: dict[str, Any]) -> dict[str, Any]:
+        columns = {str(row[1]) for row in self.db.execute(text(f"PRAGMA table_info({table})"))}
+        return {key: value for key, value in values.items() if value is not None and key in columns}
 
     def can_access(self, opp: CooperationOpportunity, user_id: int | None, *, is_admin: bool = False) -> bool:
         if is_admin:
@@ -116,16 +127,31 @@ class UnifiedOpportunityService:
             priority=fields.get("priority") or "P2",
             estimated_amount=fields.get("estimated_amount"),
             next_action=fields.get("next_action"),
-            next_follow_at=fields.get("next_follow_at"),
+            next_follow_at=_as_datetime(fields.get("next_follow_at")),
+            stage=fields.get("stage") or "lead",
             owner_id=fields.get("owner_id") or int(actor_user_id),
             participants=fields.get("participants"),
             status=fields.get("status") or "active",
             visibility=fields.get("visibility") or "organization",
             human_confirmed_by=int(actor_user_id),
             human_confirmed_at=datetime.now(),
+            source_intelligence_id=fields.get("source_intelligence_id"),
+            source_demand_resource_id=fields.get("source_demand_resource_id"),
+            source_supply_resource_id=fields.get("source_supply_resource_id"),
+            source_match_id=fields.get("source_match_id"),
         )
         self.db.add(opp)
         self.db.flush()
+        extra = {
+            "opportunity_no": fields.get("opportunity_no"), "currency": fields.get("currency"),
+            "success_probability": fields.get("success_probability"), "target_complete_at": fields.get("target_complete_at"),
+            "risk_summary": fields.get("risk_summary"), "last_stage_changed_at": fields.get("last_stage_changed_at"),
+            "pilot_batch_id": fields.get("pilot_batch_id"),
+        }
+        values = self._supported("v06_opportunities", extra)
+        if values:
+            assignments = ",".join(f"{key}=:{key}" for key in values)
+            self.db.execute(text(f"UPDATE v06_opportunities SET {assignments} WHERE id=:opp_id"), {**values, "opp_id": opp.id})
         self.db.add(TimelineEntry(opportunity_id=opp.id, event_type="created", description=f"Opportunity created: {opp.title}", actor_id=actor_user_id))
         if commit:
             self.db.commit()
@@ -134,7 +160,7 @@ class UnifiedOpportunityService:
             self.db.flush()
         return opp
 
-    def update_stage(self, opp_id: int, *, actor_user_id: int, stage: str, is_admin: bool = False) -> CooperationOpportunity:
+    def update_stage(self, opp_id: int, *, actor_user_id: int, stage: str, is_admin: bool = False, commit: bool = True) -> CooperationOpportunity:
         opp = self.detail(opp_id, user_id=actor_user_id, is_admin=is_admin)
         if not self.can_manage(opp, actor_user_id, is_admin=is_admin):
             raise HTTPException(status_code=403, detail={"code": "OPPORTUNITY_STAGE_FORBIDDEN", "message": "无权修改机会阶段", "details": {}})
@@ -142,7 +168,34 @@ class UnifiedOpportunityService:
         opp.stage = stage or opp.stage
         opp.updated_at = datetime.now()
         self.db.add(TimelineEntry(opportunity_id=opp.id, event_type="stage_change", description=f"Stage changed from {old} to {opp.stage}", actor_id=actor_user_id))
-        self.db.commit(); self.db.refresh(opp)
+        self.db.flush()
+        if commit:
+            self.db.commit(); self.db.refresh(opp)
+        return opp
+
+    def close_outcome(self, opp_id: int, *, actor_user_id: int, outcome: str, relationship_id: int | None,
+                      reason: str = "", result_note: str = "", cooperation_scale: str = "", commit: bool = True) -> CooperationOpportunity:
+        opp = self.detail(opp_id, user_id=actor_user_id, is_admin=True)
+        if outcome not in {"won", "lost", "paused"}:
+            raise HTTPException(status_code=400, detail="结果必须是达成、未成交或暂停")
+        now = datetime.now()
+        opp.stage = outcome
+        opp.status = "closed" if outcome in {"won", "lost"} else "active"
+        opp.outcome_status = outcome
+        opp.final_result = {"won": "合作达成", "lost": "未成交", "paused": "暂停"}[outcome]
+        opp.closed_reason = reason or None
+        opp.final_result_note = result_note or None
+        opp.final_cooperation_scale = cooperation_scale or None
+        opp.closed_by_user_id = actor_user_id
+        opp.closed_at = now if outcome in {"won", "lost"} else None
+        opp.result_relationship_id = relationship_id if outcome == "won" else None
+        opp.updated_at = now
+        self.db.add(TimelineEntry(opportunity_id=opp.id, event_type="outcome", description=opp.final_result,
+                                  actor_id=actor_user_id, metadata_json=json.dumps({"outcome": outcome, "reason": reason,
+                                  "relationship_id": relationship_id}, ensure_ascii=False)))
+        self.db.flush()
+        if commit:
+            self.db.commit(); self.db.refresh(opp)
         return opp
 
     def follow_ups(self, opp_id: int, *, user_id: int | None, is_admin: bool = False) -> list[FollowUp]:
@@ -157,26 +210,74 @@ class UnifiedOpportunityService:
         self.detail(opp_id, user_id=user_id, is_admin=is_admin)
         return list(self.db.scalars(select(TimelineEntry).where(TimelineEntry.opportunity_id == int(opp_id)).order_by(desc(TimelineEntry.created_at))).all())
 
-    def create_follow_up(self, *, opp_id: int, actor_user_id: int, fields: dict[str, Any], is_admin: bool = False) -> FollowUp:
+    def create_follow_up(self, *, opp_id: int, actor_user_id: int, fields: dict[str, Any], is_admin: bool = False, commit: bool = True) -> FollowUp:
         opp = self.detail(opp_id, user_id=actor_user_id, is_admin=is_admin)
         if not self.can_manage(opp, actor_user_id, is_admin=is_admin):
             raise HTTPException(status_code=403, detail={"code": "FOLLOW_UP_FORBIDDEN", "message": "无权新增跟进", "details": {}})
-        follow = FollowUp(opportunity_id=opp.id, follow_type=fields.get("follow_type") or "note", content=str(fields.get("content") or ""), created_by=actor_user_id, visibility=fields.get("visibility") or "organization")
+        follow = FollowUp(opportunity_id=opp.id, follow_type=fields.get("follow_type") or "note", content=str(fields.get("content") or ""), created_by=actor_user_id,
+                          followed_at=_as_datetime(fields.get("followed_at")) or datetime.now(), next_follow_at=_as_datetime(fields.get("next_follow_at")),
+                          visibility=fields.get("visibility") or "organization")
         self.db.add(follow); self.db.flush()
+        extra = {"participants_json": json.dumps(fields.get("participants") or [], ensure_ascii=False) if "participants" in fields else None, "result": fields.get("result"),
+                 "next_action": fields.get("next_action"), "shared_summary": fields.get("shared_summary"), "internal_note": fields.get("internal_note"),
+                 "artifact_ids_json": json.dumps(fields.get("artifact_ids") or [], ensure_ascii=False) if "artifact_ids" in fields else None, "pilot_batch_id": fields.get("pilot_batch_id"),
+                 "contact_result": fields.get("contact_result"), "stage_after": fields.get("stage_after")}
+        values = self._supported("v06_follow_ups", extra)
+        if values:
+            assignments = ",".join(f"{key}=:{key}" for key in values)
+            self.db.execute(text(f"UPDATE v06_follow_ups SET {assignments} WHERE id=:follow_id"), {**values, "follow_id": follow.id})
+        if fields.get("next_action") is not None: opp.next_action = fields.get("next_action")
+        if fields.get("next_follow_at") is not None: opp.next_follow_at = _as_datetime(fields.get("next_follow_at"))
+        if fields.get("stage_after"): opp.stage = fields.get("stage_after")
+        opp.updated_at = datetime.now()
         self.db.add(TimelineEntry(opportunity_id=opp.id, event_type="follow_up", description=follow.content[:120], actor_id=actor_user_id))
-        self.db.commit(); self.db.refresh(follow)
+        self.db.flush()
+        if commit:
+            self.db.commit(); self.db.refresh(follow)
         return follow
 
-    def create_task(self, *, opp_id: int, actor_user_id: int, owner_id: int, fields: dict[str, Any], is_admin: bool = False) -> CollabTask:
-        opp = self.detail(opp_id, user_id=actor_user_id, is_admin=is_admin)
-        if not self.can_manage(opp, actor_user_id, is_admin=is_admin):
+    def create_task(self, *, opp_id: int | None, actor_user_id: int, owner_id: int, fields: dict[str, Any], is_admin: bool = False, commit: bool = True) -> CollabTask:
+        opp = self.detail(opp_id, user_id=actor_user_id, is_admin=is_admin) if opp_id is not None else None
+        if opp and not self.can_manage(opp, actor_user_id, is_admin=is_admin):
             raise HTTPException(status_code=403, detail={"code": "TASK_FORBIDDEN", "message": "无权创建任务", "details": {}})
-        if owner_id != actor_user_id and owner_id not in _csv_ids(opp.participants) and owner_id not in {opp.owner_id, opp.initiator_id} and not is_admin:
+        if opp and owner_id != actor_user_id and owner_id not in _csv_ids(opp.participants) and owner_id not in {opp.owner_id, opp.initiator_id} and not is_admin:
             raise HTTPException(status_code=403, detail={"code": "TASK_OWNER_FORBIDDEN", "message": "不能分配给无权访问机会的用户", "details": {}})
-        task = CollabTask(title=str(fields.get("title") or "").strip() or "未命名任务", opportunity_id=opp.id, owner_id=owner_id, priority=fields.get("priority") or "P2", created_by=actor_user_id, participants=fields.get("participants"))
+        if not opp and owner_id != actor_user_id and not is_admin:
+            raise HTTPException(status_code=403, detail={"code": "TASK_OWNER_FORBIDDEN", "message": "独立任务只能分配给自己", "details": {}})
+        participants = fields.get("participants")
+        if isinstance(participants, (list, dict)): participants = json.dumps(participants, ensure_ascii=False)
+        task = CollabTask(title=str(fields.get("title") or "").strip() or "未命名任务", opportunity_id=opp.id if opp else None, owner_id=owner_id,
+                          due_date=_as_datetime(fields.get("due_date")), priority=fields.get("priority") or "P2", created_by=actor_user_id, participants=participants)
         self.db.add(task); self.db.flush()
-        self.db.add(TimelineEntry(opportunity_id=opp.id, event_type="task", description=f"Task created: {task.title}", actor_id=actor_user_id))
-        self.db.commit(); self.db.refresh(task)
+        extra = {"task_type": fields.get("task_type"), "completion_criteria": fields.get("completion_criteria"),
+                 "related_follow_up_id": fields.get("related_follow_up_id"), "related_meeting_id": fields.get("related_meeting_id"),
+                 "visibility": fields.get("visibility"), "pilot_batch_id": fields.get("pilot_batch_id")}
+        values = self._supported("v06_collab_tasks", extra)
+        if values:
+            assignments = ",".join(f"{key}=:{key}" for key in values)
+            self.db.execute(text(f"UPDATE v06_collab_tasks SET {assignments} WHERE id=:task_id"), {**values, "task_id": task.id})
+        if opp:
+            self.db.add(TimelineEntry(opportunity_id=opp.id, event_type="task", description=f"Task created: {task.title}", actor_id=actor_user_id))
+        self.db.flush()
+        if commit:
+            self.db.commit(); self.db.refresh(task)
+        return task
+
+    def update_task(self, task_id: int, *, actor_user_id: int, status: str, blocked_reason: str = "",
+                    is_admin: bool = False, commit: bool = True) -> CollabTask:
+        task = self.db.get(CollabTask, int(task_id))
+        if not task:
+            raise HTTPException(status_code=404, detail={"code": "TASK_NOT_FOUND", "message": "协作任务不存在", "details": {}})
+        opp = self.detail(int(task.opportunity_id), user_id=actor_user_id, is_admin=is_admin)
+        if actor_user_id != task.owner_id and not self.can_manage(opp, actor_user_id, is_admin=is_admin):
+            raise HTTPException(status_code=403, detail={"code": "TASK_UPDATE_FORBIDDEN", "message": "无权更新任务", "details": {}})
+        task.status = status
+        task.updated_at = datetime.now()
+        self.db.flush()
+        self.db.execute(text("UPDATE v06_collab_tasks SET blocked_reason=:reason,completed_at=CASE WHEN :status='completed' THEN :at ELSE completed_at END WHERE id=:id"),
+                        {"reason": blocked_reason or None, "status": status, "at": task.updated_at, "id": task.id})
+        if commit:
+            self.db.commit(); self.db.refresh(task)
         return task
 
     def convert_contact_intent(self, *, intent_id: int, actor_user_id: int, is_admin: bool = False) -> CooperationOpportunity:

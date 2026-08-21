@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models_platform import IntelligenceItem
@@ -16,6 +16,7 @@ from app.services.collection_service import (
     process_job as process_collection_job,
 )
 from app.services.intelligence_flow_service import create_processing_jobs_for_collection_run
+from app.services.intelligence_product_service import IntelligenceProductService
 from app.services.processing import process_job as process_processing_job
 from app.v04c_review import db_connection, default_db_path
 
@@ -68,41 +69,23 @@ def latest_pipeline_records(db_path: str | Path | None = None, limit: int = 8) -
 
 
 def publish_collection_item(db: Session, collection_item_id: int, *, actor_user_id: int | None = None, status: str = "published") -> IntelligenceItem:
-    item_row: dict[str, Any] | None = None
-    snapshot_row: dict[str, Any] | None = None
-    with db_connection(default_db_path()) as conn:
-        item = conn.execute("SELECT * FROM v05f_collection_items WHERE id=?", (int(collection_item_id),)).fetchone()
-        if item:
-            item_row = dict(item)
-            if item["snapshot_id"]:
-                snap = conn.execute("SELECT * FROM v04g_source_snapshots WHERE id=?", (int(item["snapshot_id"]),)).fetchone()
-                snapshot_row = dict(snap) if snap else None
-    if not item_row:
-        raise ValueError("collection_item_not_found")
-    source_url = item_row.get("normalized_url") or item_row.get("original_url") or ""
-    existing = db.scalar(select(IntelligenceItem).where(IntelligenceItem.source_name == "v05f_collection_items", IntelligenceItem.source_url == source_url))
-    if existing:
-        return existing
-    text = (snapshot_row or {}).get("cleaned_text") or (snapshot_row or {}).get("raw_content") or item_row.get("title") or ""
-    title = item_row.get("title") or (snapshot_row or {}).get("page_title") or f"Collection item #{collection_item_id}"
-    published_at = datetime.now() if status == "published" else None
-    record = IntelligenceItem(
-        title=title[:400],
-        summary=(text or title)[:300],
-        content=text,
-        intel_type=(item_row.get("page_structure") or "article")[:50],
-        source_name="v05f_collection_items",
-        source_url=source_url,
-        published_at=published_at,
-        visibility="public",
-        status=status,
-        credibility=3,
-        importance=2,
-        created_by=actor_user_id,
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+    if status != "published":
+        raise ValueError("only_reviewed_publication_supported")
+    candidate_id = db.execute(text("""
+        SELECT c.id FROM v05g_extraction_candidates c
+        WHERE c.collection_item_id=:collection_item_id AND c.pipeline_review_status='approved'
+          AND EXISTS (SELECT 1 FROM p2_fact_candidate_evidence e WHERE e.candidate_id=c.id)
+        ORDER BY c.id LIMIT 1
+    """), {"collection_item_id": int(collection_item_id)}).scalar()
+    if not candidate_id:
+        raise ValueError("approved_candidate_with_evidence_required")
+    database = db.get_bind().url.database
+    product = IntelligenceProductService(database).publish_candidate(
+        int(candidate_id), actor=str(actor_user_id or "system"), permissions={"review_data"})
+    db.expire_all()
+    record = db.get(IntelligenceItem, int(product["id"]))
+    if not record:
+        raise ValueError("published_product_not_found")
     return record
 
 

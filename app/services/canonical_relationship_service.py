@@ -10,6 +10,9 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
 from app.settings import resolved_db_path
 from app.v04c_review import db_connection
 from app.services.entity_governance_service import ENTITY_CONFIG, _active_redirect, _entity_row, _permissions, now_iso
@@ -62,6 +65,78 @@ def _audit(conn: sqlite3.Connection, action: str, actor: str, *, relationship_id
 class CanonicalRelationshipService:
     def __init__(self, db_path: str | Path | None = None):
         self.db_path = Path(db_path) if db_path else resolved_db_path()
+
+    def upsert_cooperation_outcome(self, db: Session, opportunity: dict[str, Any], *, actor_user_id: int,
+                                   evidence_text: str) -> int | None:
+        demand_org, supply_org = opportunity.get("demand_organization_id"), opportunity.get("supply_organization_id")
+        if not evidence_text.strip() or not demand_org or not supply_org or int(demand_org) == int(supply_org):
+            return None
+        endpoints = db.execute(text("SELECT id,external_id FROM organizations WHERE id IN (:demand,:supply)"),
+                               {"demand": int(demand_org), "supply": int(supply_org)}).mappings().all()
+        refs = {int(row["id"]): str(row["external_id"]) for row in endpoints}
+        if int(demand_org) not in refs or int(supply_org) not in refs:
+            return None
+        demand_ref, supply_ref = refs[int(demand_org)], refs[int(supply_org)]
+        registered = db.execute(text("SELECT 1 FROM p3_relationship_type_registry WHERE relationship_type='cooperates_with' AND active=1")).first()
+        relationship_type = "cooperates_with" if registered else "cooperated_by"
+        existing = db.execute(text("""
+            SELECT * FROM p3_canonical_relationships
+            WHERE relationship_type=:relationship_type AND review_status='approved' AND is_current=1
+              AND ((subject_type='organization' AND subject_id=:demand AND object_type='organization' AND object_id=:supply)
+                OR (subject_type='organization' AND subject_id=:supply AND object_type='organization' AND object_id=:demand))
+            ORDER BY CASE WHEN source_opportunity_id=:opportunity_id THEN 0 ELSE 1 END,id LIMIT 1
+        """), {"demand": demand_ref, "supply": supply_ref, "opportunity_id": int(opportunity["id"]),
+                 "relationship_type": relationship_type}).mappings().first()
+        ts = now_iso()
+        lineage = {"opportunity_id": int(opportunity["id"]), "source_match_id": opportunity.get("source_match_id"),
+                   "source_intelligence_id": opportunity.get("source_intelligence_id"), "now": ts}
+        if existing:
+            relationship_id = int(existing["id"])
+            db.execute(text("""UPDATE p3_canonical_relationships
+                SET source_opportunity_id=COALESCE(source_opportunity_id,:opportunity_id),source_match_id=COALESCE(source_match_id,:source_match_id),
+                    source_intelligence_id=COALESCE(source_intelligence_id,:source_intelligence_id),confidence=100,
+                    confidence_level='confirmed',evidence_status='evidence_backed',updated_at=:now WHERE id=:id"""),
+                       {**lineage, "id": relationship_id})
+        else:
+            result = db.execute(text("""INSERT INTO p3_canonical_relationships(
+                relationship_no,subject_type,subject_id,relationship_type,object_type,object_id,direction,is_current,
+                confidence,review_status,evidence_status,source_count,visibility,created_by,reviewed_by,reviewed_at,
+                review_note,created_at,updated_at,source_opportunity_id,source_match_id,source_intelligence_id,confidence_level)
+                VALUES (:no,'organization',:demand,:relationship_type,'organization',:supply,'symmetric',1,100,'approved',
+                'evidence_backed',1,'internal',:actor,:actor,:now,'商务结果人工确认',:now,:now,:opportunity_id,
+                :source_match_id,:source_intelligence_id,'confirmed')"""),
+                {**lineage, "no": f"REL-{uuid.uuid4().hex[:12].upper()}", "demand": demand_ref,
+                 "supply": supply_ref, "actor": str(actor_user_id), "relationship_type": relationship_type})
+            relationship_id = int(result.lastrowid)
+        source = db.execute(text("SELECT source_url FROM v06_intelligence_items WHERE id=:id"),
+                            {"id": opportunity.get("source_intelligence_id")}).mappings().first() if opportunity.get("source_intelligence_id") else None
+        evidence = {"evidence_text": evidence_text.strip(), "source_url": source.get("source_url") if source else None,
+                    "locator": {"source_opportunity_id": int(opportunity["id"]), "source_match_id": opportunity.get("source_match_id"),
+                                "source_intelligence_id": opportunity.get("source_intelligence_id")}}
+        db.execute(text("""INSERT OR IGNORE INTO p3_relationship_evidence(
+            relationship_id,evidence_text,locator_json,source_url,evidence_strength,evidence_hash,created_at)
+            VALUES (:relationship_id,:evidence_text,:locator_json,:source_url,'authoritative',:evidence_hash,:created_at)"""),
+            {"relationship_id": relationship_id, "evidence_text": evidence["evidence_text"],
+             "locator_json": json.dumps(evidence["locator"], ensure_ascii=False, sort_keys=True), "source_url": evidence["source_url"],
+             "evidence_hash": _evidence_hash(evidence), "created_at": ts})
+        db.flush()
+        return relationship_id
+
+    @staticmethod
+    def remap_entity_relationships(conn: sqlite3.Connection, *, entity_type: str, source_id: str, target_id: str) -> None:
+        conn.execute("UPDATE p3_canonical_relationships SET subject_id=?,updated_at=? WHERE subject_type=? AND subject_id=?",
+                     (target_id, now_iso(), entity_type, source_id))
+        conn.execute("UPDATE p3_canonical_relationships SET object_id=?,updated_at=? WHERE object_type=? AND object_id=?",
+                     (target_id, now_iso(), entity_type, source_id))
+
+    @staticmethod
+    def restore_entity_relationships(conn: sqlite3.Connection, relationship_ids: list[int], *, entity_type: str,
+                                     source_id: str, target_id: str) -> None:
+        for relationship_id in relationship_ids:
+            conn.execute("""UPDATE p3_canonical_relationships SET
+                subject_id=CASE WHEN subject_type=? AND subject_id=? THEN ? ELSE subject_id END,
+                object_id=CASE WHEN object_type=? AND object_id=? THEN ? ELSE object_id END,updated_at=? WHERE id=?""",
+                (entity_type, target_id, source_id, entity_type, target_id, source_id, now_iso(), relationship_id))
 
     def create_candidate(
         self, *, subject_type: str, subject_id: str, relationship_type: str,

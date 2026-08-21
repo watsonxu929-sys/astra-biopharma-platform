@@ -310,8 +310,9 @@ class EntityMergeService:
                         "relationship_ids": preview["relationship_ids"]}
             conn.execute("UPDATE p3_entity_aliases SET entity_id=?,updated_at=? WHERE entity_type=? AND entity_id=?", (target, now_iso(), entity_type, source))
             conn.execute("UPDATE p3_entity_external_identifiers SET entity_id=?,updated_at=? WHERE entity_type=? AND entity_id=?", (target, now_iso(), entity_type, source))
-            conn.execute("UPDATE p3_canonical_relationships SET subject_id=?,updated_at=? WHERE subject_type=? AND subject_id=?", (target, now_iso(), entity_type, source))
-            conn.execute("UPDATE p3_canonical_relationships SET object_id=?,updated_at=? WHERE object_type=? AND object_id=?", (target, now_iso(), entity_type, source))
+            from app.services.canonical_relationship_service import CanonicalRelationshipService
+            CanonicalRelationshipService.remap_entity_relationships(
+                conn, entity_type=entity_type, source_id=source, target_id=target)
             ts = now_iso()
             conn.execute(
                 "INSERT INTO p3_entity_redirects(entity_type,source_entity_id,target_entity_id,merge_record_id,status,created_at) VALUES (?,?,?,?,'active',?)",
@@ -343,9 +344,10 @@ class EntityMergeService:
                 conn.execute("UPDATE p3_entity_aliases SET entity_id=?,updated_at=? WHERE id=?", (source, now_iso(), alias_id))
             for identifier_id in payload.get("identifier_ids", []):
                 conn.execute("UPDATE p3_entity_external_identifiers SET entity_id=?,updated_at=? WHERE id=?", (source, now_iso(), identifier_id))
-            for relationship_id in payload.get("relationship_ids", []):
-                conn.execute("UPDATE p3_canonical_relationships SET subject_id=CASE WHEN subject_type=? AND subject_id=? THEN ? ELSE subject_id END, object_id=CASE WHEN object_type=? AND object_id=? THEN ? ELSE object_id END,updated_at=? WHERE id=?",
-                             (entity_type, row["target_entity_id"], source, entity_type, row["target_entity_id"], source, now_iso(), relationship_id))
+            from app.services.canonical_relationship_service import CanonicalRelationshipService
+            CanonicalRelationshipService.restore_entity_relationships(
+                conn, payload.get("relationship_ids", []), entity_type=entity_type,
+                source_id=source, target_id=row["target_entity_id"])
             state = payload.get("source_state", {})
             if entity_type == "product":
                 conn.execute(f"UPDATE {table} SET status=?,updated_at=? WHERE {key}=?", (state.get("status", "active"), now_iso(), source))

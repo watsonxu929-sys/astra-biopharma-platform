@@ -176,31 +176,4 @@ def update_signal_status(signal_id: int, status: str, db_path: str | Path | None
 
 
 def convert_signal_to_action(signal_id: int, *, owner: str = "manual", db_path: str | Path | None = None) -> dict[str, Any]:
-    ensure_schema(db_path)
-    with db_connection(db_path) as conn:
-        signal = conn.execute("SELECT * FROM v05e_industry_signals WHERE id=?", (signal_id,)).fetchone()
-        if not signal:
-            return {"created": False, "reason": "not_found"}
-        if signal["converted_action_id"]:
-            return {"created": False, "idempotent": True, "action_id": signal["converted_action_id"]}
-        ts = now_iso()
-        action_no = _next_no(conn, "ACTSIG")
-        cur = conn.execute(
-            """
-            INSERT INTO actions(external_id,task,target_external_id,completion_standard,owner,priority,status,source_type,source_title,source_text,manually_confirmed,created_at)
-            VALUES (?,?,?,?,?,'P1','\u672a\u5f00\u59cb','industry_signal',?,?,1,?)
-            """,
-            (
-                action_no,
-                f"\u8ddf\u8fdb\u4ea7\u4e1a\u4fe1\u53f7\uff1a{signal['title']}",
-                signal["subject_id"],
-                signal["summary"] or "\u4eba\u5de5\u786e\u8ba4\u4fe1\u53f7\u5e76\u5b8c\u6210\u540e\u7eed\u8ddf\u8fdb\u3002",
-                owner,
-                signal["title"],
-                json.dumps({"signal_id": signal_id}, ensure_ascii=False),
-                ts,
-            ),
-        )
-        action_id = int(cur.lastrowid)
-        conn.execute("UPDATE v05e_industry_signals SET status='converted',converted_action_id=?,is_read=1,updated_at=? WHERE id=?", (action_id, ts, signal_id))
-    return {"created": True, "action_id": action_id}
+    return {"created": False, "reason": "legacy_action_writer_frozen", "canonical_entry": "/collaboration"}

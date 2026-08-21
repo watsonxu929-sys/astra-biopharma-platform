@@ -18,6 +18,59 @@ class IntelligenceProductService:
     def __init__(self, db_path: str | Path | None = None):
         self.db_path = db_path
 
+    def create_manual_draft(self, fields: dict, *, actor: str) -> dict:
+        ts = now()
+        with db_connection(self.db_path) as conn:
+            cur = conn.execute("""INSERT INTO v06_intelligence_items(
+                title,summary,content,intel_type,companies,industry_directions,tags,source_name,source_url,
+                visibility,status,credibility,importance,created_by,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,'manual',?,?,'draft',?,?,?,?,?)""", (
+                str(fields.get("title") or "").strip(), fields.get("summary"), fields.get("content"),
+                fields.get("intel_type") or "manual", fields.get("companies"), fields.get("industry_directions"),
+                fields.get("tags"), fields.get("source_url"), fields.get("visibility") or "public",
+                int(fields.get("credibility") or 3), int(fields.get("importance") or 2), fields.get("created_by"), ts, ts))
+            product_id = int(cur.lastrowid)
+            conn.execute("INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,after_json,created_at) VALUES ('intelligence_product',?,'manual_draft_created',?,?,?)",
+                         (product_id, actor, json.dumps({"status": "draft"}, ensure_ascii=False), ts))
+            return dict(conn.execute("SELECT * FROM v06_intelligence_items WHERE id=?", (product_id,)).fetchone())
+
+    def update_product(self, product_id: int, fields: dict, *, actor: str) -> dict:
+        with db_connection(self.db_path) as conn:
+            current = conn.execute("SELECT * FROM v06_intelligence_items WHERE id=?", (product_id,)).fetchone()
+            if not current:
+                raise ValueError("product_not_found")
+            requested_status = str(fields.get("status") or current["status"])
+            if current["status"] != "published" and requested_status == "published":
+                raise ValueError("approved_candidate_publication_required")
+            values = {key: fields.get(key, current[key]) for key in (
+                "title", "summary", "content", "intel_type", "companies", "industry_directions", "tags",
+                "source_url", "visibility", "credibility", "importance")}
+            values.update({"status": requested_status, "updated_at": now(), "id": product_id})
+            conn.execute("""UPDATE v06_intelligence_items SET title=:title,summary=:summary,content=:content,
+                intel_type=:intel_type,companies=:companies,industry_directions=:industry_directions,tags=:tags,
+                source_url=:source_url,visibility=:visibility,credibility=:credibility,importance=:importance,
+                status=:status,updated_at=:updated_at WHERE id=:id""", values)
+            conn.execute("INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,after_json,created_at) VALUES ('intelligence_product',?,'updated',?,?,?)",
+                         (product_id, actor, json.dumps({"status": requested_status}, ensure_ascii=False), values["updated_at"]))
+            return dict(conn.execute("SELECT * FROM v06_intelligence_items WHERE id=?", (product_id,)).fetchone())
+
+    def publish_existing(self, product_id: int, *, actor: str, permissions: set[str]) -> dict:
+        if "review_data" not in permissions:
+            raise PermissionError("review_data_required")
+        with db_connection(self.db_path) as conn:
+            product = conn.execute("SELECT * FROM v06_intelligence_items WHERE id=?", (product_id,)).fetchone()
+            if not product:
+                raise ValueError("product_not_found")
+            if product["status"] == "published":
+                return dict(product)
+            candidate = conn.execute("""SELECT c.id FROM p2_intelligence_product_candidates pc
+                JOIN v05g_extraction_candidates c ON c.id=pc.candidate_id
+                WHERE pc.product_id=? AND c.pipeline_review_status='approved'
+                  AND EXISTS (SELECT 1 FROM p2_fact_candidate_evidence e WHERE e.candidate_id=c.id)""", (product_id,)).fetchone()
+        if not candidate:
+            raise ValueError("approved_candidate_publication_required")
+        return self.publish_candidate(int(candidate["id"]), actor=actor, permissions=permissions)
+
     def publish_candidate(self, candidate_id: int, *, actor: str, permissions: set[str], product_type: str = "brief", title: str = "", summary: str = "", visibility: str = "organization") -> dict:
         if "review_data" not in permissions:
             raise PermissionError("review_data_required")

@@ -331,24 +331,7 @@ def update_grade(lead_id: int, manual_grade: str = Form(""), reason: str = Form(
 
 @router.post("/leads/{lead_id}/suggestions/{suggestion_id}/action")
 def suggestion_to_action(request: Request, lead_id: int, suggestion_id: int, owner: str = Form("")):
-    owner = owner.strip() or current_username(request)
-    with db_connection() as conn:
-        sug = conn.execute("SELECT * FROM v04f_lead_suggestions WHERE id=? AND lead_id=?", (suggestion_id, lead_id)).fetchone()
-        lead = conn.execute("SELECT * FROM v04f_lead_records WHERE id=?", (lead_id,)).fetchone()
-        if not sug or not lead:
-            raise HTTPException(404, "建议不存在")
-        if sug["converted_action_id"]:
-            return RedirectResponse(f"/leads/{lead_id}", status_code=303)
-        action_no = _next_no(conn, "ACT")
-        cur = conn.execute(
-            """
-            INSERT INTO actions(external_id, task, target_external_id, completion_standard, owner, priority, status, suggested_deadline, source_type, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, '未开始', ?, 'v0.4F线索建议', ?)
-            """,
-            (action_no, sug["title"], lead["subject_id"], sug["basis"], owner, sug["priority"] or "P2", sug["recommended_due"], now()),
-        )
-        conn.execute("UPDATE v04f_lead_suggestions SET converted_action_id=?, updated_at=? WHERE id=?", (cur.lastrowid, now(), suggestion_id))
-    return RedirectResponse(f"/leads/{lead_id}", status_code=303)
+    raise HTTPException(410, "旧行动任务写入口已冻结，请从正式协作入口创建任务")
 
 
 @router.get("/club", response_class=HTMLResponse)

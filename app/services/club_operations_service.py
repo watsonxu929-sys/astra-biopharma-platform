@@ -667,7 +667,7 @@ class ClubResourceMatchingService:
     ) -> dict[str, Any]:
         if direction not in {"demand", "supply"}:
             raise ClubOperationError(400, "INVALID_RESOURCE_DIRECTION", "资源方向无效")
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
         from app.services.unified_resource_service import UnifiedResourceService
 
@@ -685,20 +685,13 @@ class ClubResourceMatchingService:
                 unified = UnifiedResourceService(session)
                 create_fields = {
                     **fields, "direction": direction, "owner_person_id": member.get("person_id"),
-                    "owner_organization_id": member.get("organization_id"),
+                    "organization_id": member.get("organization_id"),
                     "legacy_source_type": "qbay_membership", "legacy_source_id": str(membership_id),
                     "status": fields.get("status") or "pending_review",
                 }
                 duplicates = unified.find_duplicates(create_fields)
                 created = not bool(duplicates)
                 resource = duplicates[0] if duplicates else unified.create(actor_user_id=actor_user_id, fields=create_fields)
-                if created:
-                    session.execute(
-                        text("UPDATE v06_market_resources SET source_event_id=:source_event_id,target_audience=:target_audience,pilot_batch_id=:pilot WHERE id=:id"),
-                        {"source_event_id": fields.get("source_event_id"), "target_audience": fields.get("target_audience"),
-                         "pilot": fields.get("pilot_batch_id"), "id": resource.id},
-                    )
-                    session.commit()
                 result = unified.to_api(resource)
                 result["pilot_batch_id"] = fields.get("pilot_batch_id")
                 result["idempotent"] = not created
@@ -717,16 +710,25 @@ class ClubResourceMatchingService:
         status = {"approved": "published", "rejected": "rejected", "need_more_info": "pending_review"}.get(decision)
         if not status:
             raise ClubOperationError(400, "INVALID_RESOURCE_DECISION", "无效资源审核状态")
-        ts = now_iso()
         with db_connection(self.db_path) as conn:
-            conn.execute("BEGIN IMMEDIATE")
             resource = _row(conn.execute("SELECT * FROM v06_market_resources WHERE id=?", (resource_id,)).fetchone())
             if not resource:
                 raise ClubOperationError(404, "RESOURCE_NOT_FOUND", "资源不存在")
             if resource["status"] == status:
                 return {"resource": resource, "idempotent": True}
-            conn.execute("UPDATE v06_market_resources SET status=?,reviewed_by=?,reviewed_at=?,review_note=?,updated_at=? WHERE id=?", (status, actor, ts, note or None, ts, resource_id))
-            updated = dict(conn.execute("SELECT * FROM v06_market_resources WHERE id=?", (resource_id,)).fetchone())
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from app.services.unified_resource_service import UnifiedResourceService
+        engine = create_engine(f"sqlite:///{self.db_path.as_posix()}", connect_args={"check_same_thread": False})
+        try:
+            with Session(engine) as session:
+                owner = UnifiedResourceService(session)
+                record = owner.update_status(resource_id, actor_user_id=actor_user_id or int(resource["publisher_id"]),
+                    status=status, is_admin=True, reviewed_by=actor, reviewed_at=now_iso(), review_note=note or None)
+                updated = owner.to_api(record)
+        finally:
+            engine.dispose()
+        with db_connection(self.db_path) as conn:
             record_audit(conn, action="resource.reviewed", target_type="market_resource", target_id=resource_id,
                          actor=actor, actor_user_id=actor_user_id, before={"status": resource["status"]},
                          after={"status": status}, reason=note, pilot_batch_id=resource.get("pilot_batch_id"))
@@ -739,6 +741,7 @@ class ClubResourceMatchingService:
     def generate_matches(self, *, pilot_batch_id: str | None = None) -> list[dict[str, Any]]:
         ts = now_iso()
         created: list[dict[str, Any]] = []
+        candidates: list[dict[str, Any]] = []
         with db_connection(self.db_path) as conn:
             conn.execute("BEGIN IMMEDIATE")
             resource_where = "status='published' AND (valid_until IS NULL OR valid_until>=?)"
@@ -787,19 +790,22 @@ class ClubResourceMatchingService:
                     existing = conn.execute("SELECT * FROM p4_resource_match_candidates WHERE demand_resource_id=? AND supply_resource_id=?", (demand["id"], supply["id"])).fetchone()
                     if existing:
                         continue
-                    cur = conn.execute(
-                        """
-                        INSERT INTO p4_resource_match_candidates(
-                          match_no,demand_resource_id,supply_resource_id,recommended_person_id,recommended_organization_id,
-                          score,reasons_json,relationship_path_json,common_contacts_json,risks_json,evidence_json,
-                          generation_method,status,pilot_batch_id,created_at,updated_at
-                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?)
-                        """,
-                        (_number("QBMAT"), demand["id"], supply["id"], supply.get("owner_person_id"), supply.get("organization_id"),
-                         min(100, score), _json(reasons), _json(paths), _json([]), _json(risks), _json(evidence),
-                         "controlled_rule_v1", pilot_batch_id or demand.get("pilot_batch_id") or supply.get("pilot_batch_id"), ts, ts),
-                    )
-                    created.append(dict(conn.execute("SELECT * FROM p4_resource_match_candidates WHERE id=?", (cur.lastrowid,)).fetchone()))
+                    candidates.append({"match_no": _number("QBMAT"), "demand_resource_id": demand["id"],
+                        "supply_resource_id": supply["id"], "recommended_person_id": supply.get("owner_person_id"),
+                        "recommended_organization_id": supply.get("organization_id"), "score": min(100, score),
+                        "reasons": reasons, "relationship_paths": paths, "risks": risks, "evidence": evidence,
+                        "generation_method": "controlled_rule_v1", "status": "pending",
+                        "pilot_batch_id": pilot_batch_id or demand.get("pilot_batch_id") or supply.get("pilot_batch_id")})
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from app.services.golden_loop_service import GoldenLoopService
+        engine = create_engine(f"sqlite:///{self.db_path.as_posix()}", connect_args={"check_same_thread": False})
+        try:
+            with Session(engine) as session:
+                owner = GoldenLoopService(session)
+                created = [owner.persist_match_candidate(item) for item in candidates]
+        finally:
+            engine.dispose()
         return created
 
     def review_match(
@@ -807,16 +813,22 @@ class ClubResourceMatchingService:
     ) -> dict[str, Any]:
         if decision not in {"reviewed", "accepted", "rejected", "introduced", "closed"}:
             raise ClubOperationError(400, "INVALID_MATCH_DECISION", "无效匹配状态")
-        ts = now_iso()
         with db_connection(self.db_path) as conn:
-            conn.execute("BEGIN IMMEDIATE")
             match = _row(conn.execute("SELECT * FROM p4_resource_match_candidates WHERE id=?", (match_id,)).fetchone())
             if not match:
                 raise ClubOperationError(404, "MATCH_NOT_FOUND", "匹配候选不存在")
             if match["status"] == decision:
                 return {"match": match, "idempotent": True}
-            conn.execute("UPDATE p4_resource_match_candidates SET status=?,reviewed_by=?,reviewed_at=?,review_note=?,updated_at=? WHERE id=?", (decision, actor, ts, note or None, ts, match_id))
-            updated = dict(conn.execute("SELECT * FROM p4_resource_match_candidates WHERE id=?", (match_id,)).fetchone())
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from app.services.golden_loop_service import GoldenLoopService
+        engine = create_engine(f"sqlite:///{self.db_path.as_posix()}", connect_args={"check_same_thread": False})
+        try:
+            with Session(engine) as session:
+                updated = GoldenLoopService(session).review_match(match_id, decision=decision, actor=actor, note=note)
+        finally:
+            engine.dispose()
+        with db_connection(self.db_path) as conn:
             record_audit(conn, action="match.reviewed", target_type="resource_match", target_id=match_id,
                          actor=actor, actor_user_id=actor_user_id, before={"status": match["status"]},
                          after={"status": decision}, reason=note, pilot_batch_id=match.get("pilot_batch_id"))
@@ -855,14 +867,22 @@ class ClubResourceMatchingService:
                  match.get("pilot_batch_id"), ts, ts),
             )
             lead = dict(conn.execute("SELECT * FROM p4_club_lead_candidates WHERE id=?", (cur.lastrowid,)).fetchone())
-            conn.execute("UPDATE p4_resource_match_candidates SET status='converted_to_lead',updated_at=? WHERE id=?", (ts, match_id))
             record_audit(conn, action="lead.created", target_type="club_lead_candidate", target_id=lead["id"],
                          actor=actor, actor_user_id=actor_user_id, after={"status": "pending"},
                          pilot_batch_id=match.get("pilot_batch_id"))
             emit_domain_event(conn, event_type="lead.created", aggregate_type="club_lead_candidate",
                               aggregate_id=lead["id"], payload={"source_type": "resource_match", "source_id": match_id},
                               actor_user_id=actor_user_id, pilot_batch_id=match.get("pilot_batch_id"))
-            return lead
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from app.services.golden_loop_service import GoldenLoopService
+        engine = create_engine(f"sqlite:///{self.db_path.as_posix()}", connect_args={"check_same_thread": False})
+        try:
+            with Session(engine) as session:
+                GoldenLoopService(session).review_match(match_id, decision="converted_to_lead", actor=actor)
+        finally:
+            engine.dispose()
+        return lead
 
     def generate_event_relationship_candidates(self, club_event_id: int) -> list[dict[str, Any]]:
         ts = now_iso()

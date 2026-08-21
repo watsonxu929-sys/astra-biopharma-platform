@@ -10,6 +10,10 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.services.canonical_relationship_service import CanonicalRelationshipService
+from app.services.unified_opportunity_service import UnifiedOpportunityService
+from app.services.unified_resource_service import UnifiedResourceService
+
 
 WRITE_ROLES = {"operator", "reviewer", "admin"}
 OUTCOMES = {"won", "lost", "paused"}
@@ -295,52 +299,20 @@ class GoldenLoopService:
         content_hash = item.get("evidence_hash") or hashlib.sha256(
             str(item.get("content") or item.get("summary") or item["title"]).encode("utf-8")
         ).hexdigest()
-        now = _now()
         try:
-            result = self.db.execute(
-                text(
-                    """
-                    INSERT INTO v06_market_resources(
-                        title,direction,resource_type,category,summary,description,publisher_id,
-                        owner_person_id,organization_id,visibility,region,industry_direction,tags,
-                        cooperation_mode,budget_note,contact_visibility,status,created_at,updated_at,
-                        source_intelligence_id,project_id,source_intelligence_title,
-                        source_content_hash,opportunity_type,cooperation_terms,confidentiality_level
-                    ) VALUES (
-                        :title,:direction,:resource_type,:category,:summary,:description,:publisher_id,
-                        :owner_person_id,:organization_id,'organization',:region,:industry_direction,:tags,
-                        :cooperation_mode,:budget_note,'connected','published',:created_at,:updated_at,
-                        :source_intelligence_id,:project_id,:source_intelligence_title,
-                        :source_content_hash,:opportunity_type,:cooperation_terms,'internal'
-                    )
-                    """
-                ),
-                {
-                    "title": title,
-                    "direction": direction,
-                    "resource_type": str(fields.get("resource_type") or "产业合作"),
-                    "category": str(fields.get("category") or fields.get("resource_type") or "产业合作"),
-                    "summary": fields.get("summary") or item.get("summary"),
-                    "description": fields.get("description") or item.get("content"),
-                    "publisher_id": int(actor_user_id),
-                    "owner_person_id": owner_person_id,
-                    "organization_id": organization_id,
-                    "region": fields.get("region") or item.get("region"),
-                    "industry_direction": fields.get("industry_direction") or item.get("industry_directions"),
-                    "tags": fields.get("tags") or item.get("tags"),
-                    "cooperation_mode": fields.get("cooperation_mode"),
-                    "budget_note": fields.get("budget_note"),
-                    "created_at": now,
-                    "updated_at": now,
-                    "source_intelligence_id": int(intelligence_id),
-                    "project_id": project_id,
-                    "source_intelligence_title": item["title"],
-                    "source_content_hash": content_hash,
-                    "opportunity_type": fields.get("opportunity_type"),
-                    "cooperation_terms": fields.get("cooperation_terms"),
-                },
-            )
-            resource_id = int(result.lastrowid)
+            resource = UnifiedResourceService(self.db).create(actor_user_id=actor_user_id, commit=False, fields={
+                **fields, "title": title, "direction": direction, "resource_type": str(fields.get("resource_type") or "产业合作"),
+                "category": str(fields.get("category") or fields.get("resource_type") or "产业合作"),
+                "summary": fields.get("summary") or item.get("summary"), "description": fields.get("description") or item.get("content"),
+                "owner_person_id": owner_person_id, "organization_id": organization_id,
+                "region": fields.get("region") or item.get("region"),
+                "industry_direction": fields.get("industry_direction") or item.get("industry_directions"),
+                "tags": fields.get("tags") or item.get("tags"), "status": "published", "visibility": "organization",
+                "source_intelligence_id": int(intelligence_id), "project_id": project_id,
+                "source_intelligence_title": item["title"], "source_content_hash": content_hash,
+                "confidentiality_level": "internal",
+            })
+            resource_id = int(resource.id)
             self._workflow_event(
                 intelligence_id,
                 action="resource_created",
@@ -352,6 +324,47 @@ class GoldenLoopService:
             self.db.rollback()
             raise
         return self._resource(resource_id)
+
+    def persist_match_candidate(self, fields: dict[str, Any], *, commit: bool = True) -> dict[str, Any]:
+        now = _now()
+        existing = self._one("SELECT * FROM p4_resource_match_candidates WHERE demand_resource_id=:demand AND supply_resource_id=:supply",
+                             {"demand": int(fields["demand_resource_id"]), "supply": int(fields["supply_resource_id"])})
+        if existing:
+            return existing
+        result = self.db.execute(text("""INSERT INTO p4_resource_match_candidates(
+            match_no,demand_resource_id,supply_resource_id,recommended_person_id,recommended_organization_id,score,
+            reasons_json,relationship_path_json,common_contacts_json,risks_json,evidence_json,generation_method,status,
+            pilot_batch_id,created_at,updated_at) VALUES (:match_no,:demand,:supply,:person,:organization,:score,:reasons,
+            :paths,:contacts,:risks,:evidence,:method,:status,:pilot,:now,:now)"""), {
+            "match_no": fields.get("match_no") or f"MATCH-{uuid.uuid4().hex[:12].upper()}",
+            "demand": int(fields["demand_resource_id"]), "supply": int(fields["supply_resource_id"]),
+            "person": fields.get("recommended_person_id"), "organization": fields.get("recommended_organization_id"),
+            "score": int(fields.get("score") or 0), "reasons": _json(fields.get("reasons") or []),
+            "paths": _json(fields.get("relationship_paths") or []), "contacts": _json(fields.get("common_contacts") or []),
+            "risks": _json(fields.get("risks") or []), "evidence": _json(fields.get("evidence") or []),
+            "method": fields.get("generation_method") or "manual", "status": fields.get("status") or "pending",
+            "pilot": fields.get("pilot_batch_id"), "now": now,
+        })
+        if commit:
+            self.db.commit()
+        return self._match(int(result.lastrowid))
+
+    def review_match(self, match_id: int, *, decision: str, actor: str, note: str = "", commit: bool = True) -> dict[str, Any]:
+        self._match(match_id)
+        self.db.execute(text("""UPDATE p4_resource_match_candidates SET status=:status,reviewed_by=:actor,
+            reviewed_at=:now,review_note=:note,updated_at=:now WHERE id=:id"""),
+            {"status": decision, "actor": actor, "now": _now(), "note": note or None, "id": int(match_id)})
+        if commit:
+            self.db.commit()
+        return self._match(match_id)
+
+    def link_match_opportunity(self, match_id: int, opportunity_id: int, *, commit: bool = True) -> dict[str, Any]:
+        self.db.execute(text("""UPDATE p4_resource_match_candidates SET opportunity_id=:opportunity_id,
+            status='converted_to_lead',updated_at=:now WHERE id=:match_id"""),
+            {"opportunity_id": int(opportunity_id), "now": _now(), "match_id": int(match_id)})
+        if commit:
+            self.db.commit()
+        return self._match(match_id)
 
     def confirm_match(
         self,
@@ -580,76 +593,21 @@ class GoldenLoopService:
             {"match_id": int(match_id)},
         )
         if existing:
-            self.db.execute(
-                text("UPDATE p4_resource_match_candidates SET opportunity_id=:opp_id,status='converted_to_lead',updated_at=:now WHERE id=:id"),
-                {"opp_id": existing["id"], "now": _now(), "id": int(match_id)},
-            )
-            self.db.commit()
+            self.link_match_opportunity(match_id, int(existing["id"]))
             return existing
-        now = _now()
         source_intelligence_id = demand.get("source_intelligence_id") or supply.get("source_intelligence_id")
         try:
-            result = self.db.execute(
-                text(
-                    """
-                    INSERT INTO v06_opportunities(
-                        title,opp_type,source_type,source_id,initiator_id,organization_id,
-                        demand_organization_id,supply_organization_id,related_resource_id,
-                        description,expected_outcome,priority,next_action,stage,owner_id,status,
-                        visibility,human_confirmed_by,human_confirmed_at,created_at,updated_at,
-                        source_intelligence_id,source_demand_resource_id,
-                        source_supply_resource_id,source_match_id
-                    ) VALUES (
-                        :title,'resource_match','resource_match',:source_id,:actor,:organization_id,
-                        :demand_org,:supply_org,:related_resource_id,
-                        :description,'推动供需双方形成可核验合作','P1','登记首次商务跟进',
-                        'lead',:actor,'active','organization',:actor,:now,:now,:now,
-                        :source_intelligence_id,:demand_id,:supply_id,:source_match_id
-                    )
-                    """
-                ),
-                {
-                    "title": f"合作机会｜{demand['title']} × {supply['title']}",
-                    "source_id": int(match_id),
-                    "actor": int(actor_user_id),
-                    "organization_id": demand.get("organization_id"),
-                    "demand_org": demand.get("organization_id"),
-                    "supply_org": supply.get("organization_id"),
-                    "related_resource_id": int(demand["id"]),
-                    "description": match.get("explanation") or "运营人员确认的供需匹配",
-                    "now": now,
-                    "source_intelligence_id": source_intelligence_id,
-                    "demand_id": int(demand["id"]),
-                    "supply_id": int(supply["id"]),
-                    "source_match_id": int(match_id),
-                },
-            )
-            opportunity_id = int(result.lastrowid)
-            self.db.execute(
-                text(
-                    """
-                    UPDATE p4_resource_match_candidates
-                    SET opportunity_id=:opportunity_id,status='converted_to_lead',updated_at=:now
-                    WHERE id=:match_id
-                    """
-                ),
-                {"opportunity_id": opportunity_id, "now": now, "match_id": int(match_id)},
-            )
-            self.db.execute(
-                text(
-                    """
-                    INSERT INTO v06_timeline_entries(
-                        opportunity_id,event_type,description,actor_id,metadata_json,created_at
-                    ) VALUES (:opportunity_id,'created','由已确认供需匹配转化',:actor,:metadata,:now)
-                    """
-                ),
-                {
-                    "opportunity_id": opportunity_id,
-                    "actor": int(actor_user_id),
-                    "metadata": _json({"source_match_id": int(match_id)}),
-                    "now": now,
-                },
-            )
+            opportunity = UnifiedOpportunityService(self.db).create(actor_user_id=actor_user_id, commit=False, fields={
+                "title": f"合作机会｜{demand['title']} × {supply['title']}", "opp_type": "resource_match",
+                "source_type": "resource_match", "source_id": int(match_id), "organization_id": demand.get("organization_id"),
+                "demand_organization_id": demand.get("organization_id"), "supply_organization_id": supply.get("organization_id"),
+                "related_resource_id": int(demand["id"]), "description": match.get("explanation") or "运营人员确认的供需匹配",
+                "expected_outcome": "推动供需双方形成可核验合作", "priority": "P1", "next_action": "登记首次商务跟进",
+                "source_intelligence_id": source_intelligence_id, "source_demand_resource_id": int(demand["id"]),
+                "source_supply_resource_id": int(supply["id"]), "source_match_id": int(match_id), "human_confirmed": True,
+            })
+            opportunity_id = int(opportunity.id)
+            self.link_match_opportunity(match_id, opportunity_id, commit=False)
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -667,70 +625,15 @@ class GoldenLoopService:
         stage_after: str = "",
         next_follow_at: str = "",
     ) -> dict[str, Any]:
-        opportunity = self._opportunity(opportunity_id)
         content = str(content).strip()
         if not content:
             raise HTTPException(status_code=400, detail="跟进内容不能为空")
-        now = _now()
         try:
-            result = self.db.execute(
-                text(
-                    """
-                    INSERT INTO v06_follow_ups(
-                        opportunity_id,follow_type,content,created_by,followed_at,next_follow_at,visibility,
-                        created_at,next_action,contact_result,stage_after
-                    ) VALUES (
-                        :opportunity_id,'note',:content,:actor,:now,:next_follow_at,'organization',
-                        :now,:next_action,:contact_result,:stage_after
-                    )
-                    """
-                ),
-                {
-                    "opportunity_id": int(opportunity_id),
-                    "content": content,
-                    "actor": int(actor_user_id),
-                    "now": now,
-                    "next_action": next_action or None,
-                    "contact_result": contact_result or None,
-                    "stage_after": stage_after or None,
-                    "next_follow_at": next_follow_at or None,
-                },
-            )
-            follow_up_id = int(result.lastrowid)
-            self.db.execute(
-                text(
-                    """
-                    UPDATE v06_opportunities
-                    SET next_action=COALESCE(:next_action,next_action),
-                        next_follow_at=COALESCE(:next_follow_at,next_follow_at),
-                        stage=COALESCE(:stage_after,stage),updated_at=:now
-                    WHERE id=:opportunity_id
-                    """
-                ),
-                {
-                    "next_action": next_action or None,
-                    "stage_after": stage_after or None,
-                    "next_follow_at": next_follow_at or None,
-                    "now": now,
-                    "opportunity_id": int(opportunity_id),
-                },
-            )
-            self.db.execute(
-                text(
-                    """
-                    INSERT INTO v06_timeline_entries(
-                        opportunity_id,event_type,description,actor_id,metadata_json,created_at
-                    ) VALUES (:opportunity_id,'follow_up',:description,:actor,'{}',:now)
-                    """
-                ),
-                {
-                    "opportunity_id": int(opportunity_id),
-                    "description": content[:200],
-                    "actor": int(actor_user_id),
-                    "now": now,
-                },
-            )
-            self.db.commit()
+            follow = UnifiedOpportunityService(self.db).create_follow_up(opp_id=opportunity_id, actor_user_id=actor_user_id,
+                is_admin=True, fields={"content": content, "next_action": next_action or None,
+                "contact_result": contact_result or None, "stage_after": stage_after or None,
+                "next_follow_at": next_follow_at or None})
+            follow_up_id = int(follow.id)
         except Exception:
             self.db.rollback()
             raise
@@ -748,50 +651,13 @@ class GoldenLoopService:
         due_date: str = "",
         priority: str = "P2",
     ) -> dict[str, Any]:
-        self._opportunity(opportunity_id)
         title = title.strip()
         if not title:
             raise HTTPException(status_code=400, detail="任务标题不能为空")
-        now = _now()
-        result = self.db.execute(
-            text(
-                """
-                INSERT INTO v06_collab_tasks(
-                    title,opportunity_id,owner_id,due_date,priority,status,
-                    created_by,created_at,updated_at
-                ) VALUES (
-                    :title,:opportunity_id,:actor,:due_date,:priority,'todo',
-                    :actor,:now,:now
-                )
-                """
-            ),
-            {
-                "title": title,
-                "opportunity_id": int(opportunity_id),
-                "actor": int(actor_user_id),
-                "due_date": due_date or None,
-                "priority": priority if priority in {"P0", "P1", "P2", "P3"} else "P2",
-                "now": now,
-            },
-        )
-        task_id = int(result.lastrowid)
-        self.db.execute(
-            text(
-                """
-                INSERT INTO v06_timeline_entries(
-                    opportunity_id,event_type,description,actor_id,metadata_json,created_at
-                ) VALUES (:opportunity_id,'task',:description,:actor,:metadata,:now)
-                """
-            ),
-            {
-                "opportunity_id": int(opportunity_id),
-                "description": f"Task created: {title}",
-                "actor": int(actor_user_id),
-                "metadata": _json({"task_id": task_id}),
-                "now": now,
-            },
-        )
-        self.db.commit()
+        task = UnifiedOpportunityService(self.db).create_task(opp_id=opportunity_id, actor_user_id=actor_user_id,
+            owner_id=actor_user_id, is_admin=True, fields={"title": title, "due_date": due_date or None,
+            "priority": priority if priority in {"P0", "P1", "P2", "P3"} else "P2"})
+        task_id = int(task.id)
         return self._one("SELECT * FROM v06_collab_tasks WHERE id=:id", {"id": task_id})
 
     def _cooperation_relationship(
@@ -801,133 +667,8 @@ class GoldenLoopService:
         actor_user_id: int,
         evidence_text: str,
     ) -> int | None:
-        demand_org = opportunity.get("demand_organization_id")
-        supply_org = opportunity.get("supply_organization_id")
-        if not evidence_text.strip() or not demand_org or not supply_org or int(demand_org) == int(supply_org):
-            return None
-        demand = self._one(
-            "SELECT external_id FROM organizations WHERE id=:id", {"id": int(demand_org)}
-        )
-        supply = self._one(
-            "SELECT external_id FROM organizations WHERE id=:id", {"id": int(supply_org)}
-        )
-        if not demand or not supply:
-            return None
-        demand_ref = str(demand["external_id"])
-        supply_ref = str(supply["external_id"])
-        existing = self._one(
-            """
-            SELECT * FROM p3_canonical_relationships
-            WHERE relationship_type='cooperates_with' AND review_status='approved'
-              AND is_current=1
-              AND ((subject_type='organization' AND subject_id IN (:demand_ref,:demand_legacy)
-                    AND object_type='organization' AND object_id IN (:supply_ref,:supply_legacy))
-                OR (subject_type='organization' AND subject_id IN (:supply_ref,:supply_legacy)
-                    AND object_type='organization' AND object_id IN (:demand_ref,:demand_legacy)))
-            ORDER BY CASE WHEN source_opportunity_id=:opportunity_id THEN 0 ELSE 1 END,id
-            LIMIT 1
-            """,
-            {
-                "demand_ref": demand_ref,
-                "supply_ref": supply_ref,
-                "demand_legacy": str(demand_org),
-                "supply_legacy": str(supply_org),
-                "opportunity_id": int(opportunity["id"]),
-            },
-        )
-        now = _now()
-        source_intelligence_id = opportunity.get("source_intelligence_id")
-        source_match_id = opportunity.get("source_match_id")
-        if existing:
-            relationship_id = int(existing["id"])
-            self.db.execute(
-                text(
-                    """
-                    UPDATE p3_canonical_relationships
-                    SET source_opportunity_id=COALESCE(source_opportunity_id,:opportunity_id),
-                        source_match_id=COALESCE(source_match_id,:source_match_id),
-                        source_intelligence_id=COALESCE(source_intelligence_id,:source_intelligence_id),
-                        confidence=100,confidence_level='confirmed',
-                        evidence_status='evidence_backed',updated_at=:now
-                    WHERE id=:id
-                    """
-                ),
-                {
-                    "opportunity_id": int(opportunity["id"]),
-                    "source_match_id": source_match_id,
-                    "source_intelligence_id": source_intelligence_id,
-                    "now": now,
-                    "id": relationship_id,
-                },
-            )
-        else:
-            result = self.db.execute(
-                text(
-                    """
-                    INSERT INTO p3_canonical_relationships(
-                        relationship_no,subject_type,subject_id,relationship_type,
-                        object_type,object_id,direction,is_current,confidence,review_status,
-                        evidence_status,source_count,visibility,created_by,reviewed_by,
-                        reviewed_at,review_note,created_at,updated_at,source_opportunity_id,
-                        source_match_id,source_intelligence_id,confidence_level
-                    ) VALUES (
-                        :relationship_no,'organization',:demand_org,'cooperates_with',
-                        'organization',:supply_org,'symmetric',1,100,'approved',
-                        'evidence_backed',1,'internal',:actor,:actor,:now,
-                        'MVP-RC1 商务结果人工确认',:now,:now,:opportunity_id,
-                        :source_match_id,:source_intelligence_id,'confirmed'
-                    )
-                    """
-                ),
-                {
-                    "relationship_no": f"RC1-REL-{uuid.uuid4().hex[:12].upper()}",
-                    "demand_org": demand_ref,
-                    "supply_org": supply_ref,
-                    "actor": str(actor_user_id),
-                    "now": now,
-                    "opportunity_id": int(opportunity["id"]),
-                    "source_match_id": source_match_id,
-                    "source_intelligence_id": source_intelligence_id,
-                },
-            )
-            relationship_id = int(result.lastrowid)
-        evidence_hash = hashlib.sha256(
-            f"rc1|{relationship_id}|{opportunity['id']}|{evidence_text.strip()}".encode("utf-8")
-        ).hexdigest()
-        source = (
-            self._one(
-                "SELECT source_url FROM v06_intelligence_items WHERE id=:id",
-                {"id": int(source_intelligence_id)},
-            )
-            if source_intelligence_id
-            else None
-        )
-        self.db.execute(
-            text(
-                """
-                INSERT OR IGNORE INTO p3_relationship_evidence(
-                    relationship_id,evidence_text,locator_json,source_url,
-                    evidence_strength,evidence_hash,created_at
-                ) VALUES (:relationship_id,:evidence_text,:locator_json,:source_url,
-                          'authoritative',:evidence_hash,:created_at)
-                """
-            ),
-            {
-                "relationship_id": relationship_id,
-                "evidence_text": evidence_text.strip(),
-                "locator_json": _json(
-                    {
-                        "source_opportunity_id": int(opportunity["id"]),
-                        "source_match_id": source_match_id,
-                        "source_intelligence_id": source_intelligence_id,
-                    }
-                ),
-                "source_url": source.get("source_url") if source else None,
-                "evidence_hash": evidence_hash,
-                "created_at": now,
-            },
-        )
-        return relationship_id
+        return CanonicalRelationshipService().upsert_cooperation_outcome(
+            self.db, opportunity, actor_user_id=actor_user_id, evidence_text=evidence_text)
 
     def close_outcome(
         self,
@@ -964,56 +705,9 @@ class GoldenLoopService:
                 relationship_id = None
                 stage, status, closed_at = "paused", "active", None
                 final_result = "暂停"
-            self.db.execute(
-                text(
-                    """
-                    UPDATE v06_opportunities
-                    SET stage=:stage,status=:status,outcome_status=:outcome,
-                        final_result=:final_result,closed_reason=:reason,
-                        final_result_note=:result_note,
-                        final_cooperation_scale=:cooperation_scale,
-                        closed_by_user_id=:actor,closed_at=:closed_at,
-                        result_relationship_id=:relationship_id,updated_at=:now
-                    WHERE id=:id
-                    """
-                ),
-                {
-                    "stage": stage,
-                    "status": status,
-                    "outcome": outcome,
-                    "final_result": final_result,
-                    "reason": reason or None,
-                    "result_note": result_note or None,
-                    "cooperation_scale": cooperation_scale or None,
-                    "actor": int(actor_user_id),
-                    "closed_at": closed_at,
-                    "relationship_id": relationship_id,
-                    "now": now,
-                    "id": int(opportunity_id),
-                },
-            )
-            self.db.execute(
-                text(
-                    """
-                    INSERT INTO v06_timeline_entries(
-                        opportunity_id,event_type,description,actor_id,metadata_json,created_at
-                    ) VALUES (:opportunity_id,'outcome',:description,:actor,:metadata,:now)
-                    """
-                ),
-                {
-                    "opportunity_id": int(opportunity_id),
-                    "description": final_result,
-                    "actor": int(actor_user_id),
-                    "metadata": _json(
-                        {
-                            "outcome": outcome,
-                            "reason": reason,
-                            "relationship_id": relationship_id,
-                        }
-                    ),
-                    "now": now,
-                },
-            )
+            UnifiedOpportunityService(self.db).close_outcome(opportunity_id, actor_user_id=actor_user_id,
+                outcome=outcome, relationship_id=relationship_id, reason=reason, result_note=result_note,
+                cooperation_scale=cooperation_scale, commit=False)
             self.db.commit()
         except Exception:
             self.db.rollback()

@@ -588,38 +588,32 @@ def create_followup_action(
     owner: str = Form(""),
 ):
     ensure_schema()
-    actor = current_username(request)
-    created = 0
-    ts = now_iso()
+    user = current_user(request) or {}
+    actor_user_id = int(user.get("id") or 0)
+    if not actor_user_id:
+        raise HTTPException(403, "operator account required")
     with db_connection() as conn:
         event = _event_detail(conn, club_event_id)
-        for registration_id in registration_ids:
-            registration = conn.execute(
+        registrations = [dict(registration) for registration_id in registration_ids if (registration := conn.execute(
                 "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?",
                 (registration_id, club_event_id),
-            ).fetchone()
-            if not registration:
-                continue
-            action_no = _next_no(conn, "ACT")
-            conn.execute(
-                """
-                INSERT INTO actions(
-                  external_id,task,target_external_id,completion_standard,owner,priority,status,source_type,source_text,
-                  created_at,manually_confirmed,is_active,subject_manually_confirmed
-                )
-                VALUES (?,?,?,?,?,'P2','未开始','v0.5C Q-BAY活动',?,?,1,1,1)
-                """,
-                (
-                    action_no,
-                    task or f"跟进活动报名人：{registration['applicant_name']}",
-                    event["event_no"],
-                    f"记录 {event['name']} 会后沟通结果",
-                    owner or actor,
-                    f"{event['event_no']} / {registration['registration_no']} / {registration['applicant_name']}",
-                    ts,
-                ),
-            )
-            created += 1
+            ).fetchone())]
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.services.unified_opportunity_service import UnifiedOpportunityService
+    path = default_db_path()
+    engine = create_engine(f"sqlite:///{path.as_posix()}", connect_args={"check_same_thread": False})
+    try:
+        with Session(engine) as session:
+            tasks = UnifiedOpportunityService(session)
+            for registration in registrations:
+                tasks.create_task(opp_id=None, actor_user_id=actor_user_id, owner_id=actor_user_id, fields={
+                    "title": task or f"跟进活动报名人：{registration['applicant_name']}", "priority": "P2",
+                    "task_type": "qbay_event_followup", "completion_criteria": f"记录 {event['name']} 会后沟通结果",
+                })
+    finally:
+        engine.dispose()
+    created = len(registrations)
     return RedirectResponse(f"/club/events/{club_event_id}?message=已创建{created}条会后跟进行动", status_code=303)
 
 
