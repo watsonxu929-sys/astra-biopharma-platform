@@ -23,6 +23,12 @@ LOW_QUALITY_PATTERNS = [
     (r"请输入验证码|captcha|验证码", "captcha_required"),
 ]
 
+GENERIC_PAGE_TITLES = (
+    "contact", "careers", "about", "history", "strategy", "leadership",
+    "stories", "mediaroom", "media releases", "press announcements",
+    "press releases", "research & innovation", "clinicaltrials.gov",
+)
+
 
 def check_content_quality(title: str, text: str, url: str = "") -> dict[str, Any]:
     checks = _run_all_checks(title, text, url)
@@ -43,6 +49,7 @@ def _run_all_checks(title: str, text: str, url: str) -> dict[str, bool]:
         "is_not_login": not any(re.search(pattern, text, re.IGNORECASE) for pattern, _ in LOW_QUALITY_PATTERNS),
         "is_not_error": "404" not in text[:200] and "Not Found" not in text[:200],
         "is_not_navigation_only": not _is_navigation_only(text),
+        "is_specific_article": _is_specific_article_title(title),
         "has_biopharma_content": _has_biopharma_keywords(title, text),
         "has_published_time": bool(_find_published_time(text)),
         "is_not_duplicate": True,
@@ -62,9 +69,22 @@ def _determine_status(checks: dict[str, bool]) -> tuple[str, str]:
         return "parse_failed", "页面不存在或错误"
     if not checks["is_not_navigation_only"]:
         return "low_quality", "导航页或菜单页"
+    if not checks["is_specific_article"]:
+        return "low_quality", "栏目页或通用页面"
     if not checks["has_biopharma_content"]:
         return "irrelevant", "与生物医药产业无关"
     return "accepted", "通过质量检查"
+
+
+def _is_specific_article_title(title: str) -> bool:
+    normalized = re.sub(r"\s+", " ", (title or "").strip().lower())
+    parts = [part.strip(" -|") for part in normalized.split("|")]
+    return not any(
+        term == normalized
+        or term in parts
+        or any(part.startswith(f"{term} ") for part in parts)
+        for term in GENERIC_PAGE_TITLES
+    )
 
 
 def _is_navigation_only(text: str) -> bool:

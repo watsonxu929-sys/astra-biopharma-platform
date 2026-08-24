@@ -6,8 +6,8 @@
 {% if result.q %}<p class="page-subtitle">搜索「{{ result.q }}」共找到 {{ result.total }} 条结果</p>
 <div class="search-groups">
 {% for group in result.groups %}
-<div class="search-group"><h3>{{ group.label }} ({{ group.items|length }})</h3>
-{% for item in group.items %}<div class="search-result-item"><a href="{{ item.url }}">{{ item.title }}</a><div class="summary">{{ item.summary }}</div></div>{% endfor %}</div>{% endfor %}
+<div class="search-group"><h3>{{ group.label }} ({{ group["items"]|length }})</h3>
+{% for item in group["items"] %}<div class="search-result-item"><a href="{{ item.url }}">{{ item.title }}</a><div class="summary">{{ item.summary }}</div></div>{% endfor %}</div>{% endfor %}
 {% if not result.groups %}<div class="empty-state"><div class="empty-icon">&#x1f50d;</div><h3>未找到匹配结果</h3><p>尝试使用不同的关键词或扩大搜索范围。</p></div>{% endif %}
 </div>{% else %}<div class="empty-state"><p>请输入搜索关键词</p></div>{% endif %}
 </div>

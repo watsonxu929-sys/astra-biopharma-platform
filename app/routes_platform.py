@@ -482,7 +482,9 @@ def intelligence_detail(
     evidence = IntelligenceProductService().trace(item_id)["evidence"]
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "intelligence", item_id) if user_id is not None else False
-    trace = GoldenLoopService(db).trace(item_id)
+    golden = GoldenLoopService(db)
+    trace = golden.trace(item_id)
+    event_insight, subject_candidates = golden.event_insight(item_id), golden.subject_candidates(item_id)
     query = subject_q.strip()
     pattern = f"%{query}%"
     people = db.execute(text("SELECT id,name FROM people WHERE COALESCE(is_active,1)=1 AND (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
@@ -493,6 +495,7 @@ def intelligence_detail(
         request, "platform/intelligence_detail.html", item=item, evidence=evidence,
         is_favorited=fav, user_id=user_id, trace=trace, subject_q=query,
         people=people, organizations=organizations, projects=projects,
+        event_insight=event_insight, subject_candidates=subject_candidates,
         can_write=role in {"operator", "reviewer", "admin"}, message=message,
     )
 

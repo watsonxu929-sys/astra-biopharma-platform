@@ -11,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.services.canonical_relationship_service import CanonicalRelationshipService
+from app.services.intelligence_product_service import EVENT_PROFILES
 from app.services.unified_opportunity_service import UnifiedOpportunityService
 from app.services.unified_resource_service import UnifiedResourceService
 
@@ -21,6 +22,21 @@ SUBJECT_TABLES = {
     "person": ("people", "name"),
     "organization": ("organizations", "standard_name"),
     "project": ("projects", "name"),
+}
+EVENT_ACTIONS = {
+    "approval": ["查看获批主体", "核对产品与适应症", "判断是否形成资源需求"],
+    "clinical": ["查看研发主体", "核对临床阶段", "持续关注后续节点"],
+    "financing": ["查看融资企业", "核对投资机构", "建立持续关注"],
+    "merger": ["查看交易双方", "核对关系与资产变化", "判断合作窗口"],
+    "cooperation": ["查看合作双方", "核对合作证据", "判断是否创建合作机会"],
+    "product_launch": ["查看产品主体", "判断渠道或服务需求", "必要时创建资源"],
+    "tech_progress": ["查看研发主体", "核对技术证据", "持续关注产业化进度"],
+    "policy": ["查看适用主体", "核对政策范围", "判断区域或合规影响"],
+    "corporate": ["查看企业档案", "判断是否需要持续关注"],
+    "conference": ["查看涉及主体", "判断是否形成活动或合作线索"],
+    "recruitment": ["查看相关人物", "关联任职企业", "核对是否形成正式关系证据"],
+    "expansion": ["查看扩张主体", "检查空间与产业服务需求", "必要时创建资源"],
+    "other": ["查看公开来源", "人工判断涉及主体与业务价值"],
 }
 
 
@@ -63,19 +79,34 @@ class GoldenLoopService:
     ) -> None:
         item = self._one(
             """
-            SELECT source_record_id FROM v06_intelligence_items
-            WHERE id=:id AND source_record_type='v05f_collection_items'
-              AND source_record_id IS NOT NULL
+            SELECT source_record_type,source_record_id FROM v06_intelligence_items
+            WHERE id=:id
             """,
             {"id": int(intelligence_id)},
         )
         if not item:
             return
-        collection = self._one(
-            "SELECT id FROM v05f_collection_items WHERE id=:id",
-            {"id": int(item["source_record_id"])},
-        )
-        if not collection:
+        collection_id = None
+        if item.get("source_record_type") == "v05f_collection_items" and item.get("source_record_id"):
+            collection_id = int(item["source_record_id"])
+        elif item.get("source_record_type") == "fact_candidate" and item.get("source_record_id"):
+            row = self._one(
+                "SELECT collection_item_id FROM v05g_extraction_candidates WHERE id=:id",
+                {"id": int(item["source_record_id"])},
+            )
+            collection_id = int(row["collection_item_id"]) if row and row.get("collection_item_id") else None
+        if not collection_id:
+            row = self._one(
+                """
+                SELECT c.collection_item_id FROM p2_intelligence_product_candidates pc
+                JOIN v05g_extraction_candidates c ON c.id=pc.candidate_id
+                WHERE pc.product_id=:id AND c.collection_item_id IS NOT NULL
+                ORDER BY c.id LIMIT 1
+                """,
+                {"id": int(intelligence_id)},
+            )
+            collection_id = int(row["collection_item_id"]) if row else None
+        if not collection_id:
             return
         self.db.execute(
             text(
@@ -91,7 +122,7 @@ class GoldenLoopService:
             ),
             {
                 "item_id": int(intelligence_id),
-                "collection_id": int(collection["id"]),
+                "collection_id": collection_id,
                 "action": action,
                 "actor": int(actor_user_id),
                 "actor_username": str(actor_user_id),
@@ -248,6 +279,124 @@ class GoldenLoopService:
                     else f"/network/entities/{row['subject_type']}/{subject['external_id']}"
                 )
         return rows
+
+    def event_insight(self, intelligence_id: int) -> dict[str, Any]:
+        item = self._published_intelligence(intelligence_id)
+        event_type = str(item.get("event_type") or "").strip().lower()
+        if event_type not in EVENT_PROFILES:
+            label_to_code = {profile[0]: code for code, profile in EVENT_PROFILES.items()}
+            event_type = label_to_code.get(str(item.get("intel_type") or "").strip(), "other")
+        label, default_importance, reason = EVENT_PROFILES.get(
+            event_type,
+            ("其他", 1, "规则未识别出明确事件类型，需要人工结合公开证据判断。"),
+        )
+        importance = max(1, min(5, int(item.get("importance") or default_importance)))
+        return {
+            "event_type": event_type,
+            "event_label": label,
+            "importance": importance,
+            "importance_reason": reason,
+            "actions": EVENT_ACTIONS.get(event_type, EVENT_ACTIONS["other"]),
+        }
+
+    def subject_candidates(self, intelligence_id: int) -> list[dict[str, Any]]:
+        self._published_intelligence(intelligence_id)
+        matched = self._many(
+            """
+            SELECT sm.candidate_subject_type AS subject_type,
+                   sm.matched_subject_id AS external_id,
+                   sm.matched_subject_label AS extracted_label,
+                   sm.match_method,sm.match_score
+            FROM p2_intelligence_product_candidates pc
+            JOIN v05g_extraction_candidates origin ON origin.id=pc.candidate_id
+            JOIN v05g_extraction_candidates c
+              ON c.collection_item_id=origin.collection_item_id
+             AND c.candidate_type IN ('organization','person')
+            JOIN v05g_subject_match_candidates sm ON sm.extraction_candidate_id=c.id
+            WHERE pc.product_id=:item_id
+              AND sm.matched_subject_id IS NOT NULL
+              AND sm.status IN ('confirmed','candidate','ambiguous')
+            ORDER BY sm.match_score DESC,sm.id
+            """,
+            {"item_id": int(intelligence_id)},
+        )
+        matched.extend(
+            self._many(
+                """
+                SELECT ci.subject_type_candidate AS subject_type,
+                       ci.subject_id_candidate AS external_id,
+                       s.name AS extracted_label,
+                       'source_registry' AS match_method,100 AS match_score
+                FROM p2_intelligence_product_candidates pc
+                JOIN v05g_extraction_candidates origin ON origin.id=pc.candidate_id
+                JOIN v05f_collection_items ci ON ci.id=origin.collection_item_id
+                LEFT JOIN v04g_monitoring_sources s ON s.id=ci.monitoring_source_id
+                WHERE pc.product_id=:item_id
+                  AND ci.subject_type_candidate IN ('organization','person')
+                  AND ci.subject_id_candidate IS NOT NULL
+                """,
+                {"item_id": int(intelligence_id)},
+            )
+        )
+        linked = {
+            (str(row["subject_type"]), int(row["subject_id"]))
+            for row in self._many(
+                "SELECT subject_type,subject_id FROM core_intelligence_subject_links WHERE intelligence_item_id=:id",
+                {"id": int(intelligence_id)},
+            )
+        }
+        ignored = {
+            str(row["note"] or "")
+            for row in self._many(
+                "SELECT note FROM core_intelligence_workflow_events WHERE intelligence_item_id=:id AND action='subject_candidate_ignored'",
+                {"id": int(intelligence_id)},
+            )
+        }
+        candidates: list[dict[str, Any]] = []
+        seen: set[tuple[str, int]] = set()
+        for row in matched:
+            subject_type = str(row.get("subject_type") or "")
+            config = SUBJECT_TABLES.get(subject_type)
+            if not config:
+                continue
+            table, label_column = config
+            subject = self._one(
+                f'SELECT id,"{label_column}" AS label FROM "{table}" WHERE external_id=:external_id AND COALESCE(is_active,1)=1',
+                {"external_id": row.get("external_id")},
+            )
+            if not subject:
+                continue
+            key = (subject_type, int(subject["id"]))
+            marker = f"{subject_type}:{subject['id']}"
+            if key in seen or key in linked or marker in ignored:
+                continue
+            seen.add(key)
+            score = max(0, min(100, int(row.get("match_score") or 0)))
+            candidates.append(
+                {
+                    "subject_type": subject_type,
+                    "subject_id": int(subject["id"]),
+                    "subject_label": subject["label"],
+                    "confidence": "高" if score >= 85 else "中",
+                    "score": score,
+                    "reason": "名称与现有正式主体精确一致" if score >= 85 else "名称包含关系或存在同名，需要人工确认",
+                }
+            )
+        return candidates[:8]
+
+    def ignore_subject_candidate(
+        self, intelligence_id: int, *, subject_type: str, subject_id: int, actor_user_id: int
+    ) -> None:
+        self._published_intelligence(intelligence_id)
+        if subject_type not in SUBJECT_TABLES:
+            raise HTTPException(status_code=400, detail="主体类型无效")
+        self._workflow_event(
+            intelligence_id,
+            action="subject_candidate_ignored",
+            actor_user_id=actor_user_id,
+            note=f"{subject_type}:{int(subject_id)}",
+        )
+        self.db.commit()
 
     def create_resource_from_intelligence(
         self,

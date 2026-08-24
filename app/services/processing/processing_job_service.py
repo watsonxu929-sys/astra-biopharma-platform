@@ -294,7 +294,38 @@ def _insert_candidate(conn: sqlite3.Connection, job_id: int, job: sqlite3.Row, c
                 now(),
             ),
         )
-        return int(cur.lastrowid)
+        candidate_id = int(cur.lastrowid)
+        evidence_excerpt = str(candidate.get("evidence_excerpt") or "").strip()
+        has_evidence_store = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='p2_fact_candidate_evidence'"
+        ).fetchone()
+        if has_evidence_store and job["snapshot_id"] and evidence_excerpt:
+            evidence_hash = hashlib.sha256(evidence_excerpt.encode("utf-8")).hexdigest()
+            conn.execute(
+                """
+                UPDATE v05g_extraction_candidates
+                SET generated_by='rule',provider='rule',model='deterministic-rules',
+                    prompt_version='r6-collection-v1',pipeline_review_status='pending',updated_at=?
+                WHERE id=?
+                """,
+                (now(), candidate_id),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO p2_fact_candidate_evidence(
+                    candidate_id,snapshot_id,evidence_excerpt,locator_json,evidence_hash,created_at
+                ) VALUES (?,?,?,?,?,?)
+                """,
+                (
+                    candidate_id,
+                    int(job["snapshot_id"]),
+                    evidence_excerpt,
+                    _json({"source_position": candidate.get("source_position"), "rule": candidate.get("extraction_rule")}),
+                    evidence_hash,
+                    now(),
+                ),
+            )
+        return candidate_id
     except sqlite3.IntegrityError:
         return None
 

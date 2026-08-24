@@ -144,7 +144,18 @@ def _clean_name(value: str) -> str:
     return value.strip("，。；;、（）()[]【】")
 
 def _is_bad_heading(value: str) -> bool:
-    return value in {"有限公司", "生物医药公司", "管理团队"} or len(value) > 80
+    if value in {"有限公司", "生物医药公司", "管理团队"} or len(value) > 36:
+        return True
+    lowered = value.lower()
+    sentence_markers = (
+        "另一方面", "助力", "通达", "致力", "推动", "开展", "通过",
+        "相关话题", "可以", "我们", "our ", "we ", "for ",
+    )
+    if any(marker in lowered for marker in sentence_markers):
+        return True
+    if len(value) > 20 and lowered.endswith(("bio", "pharma")):
+        return True
+    return False
 
 def _sentence_with_any(text: str, keywords: list[str]) -> str:
     for part in re.split(r"[。；;\n]", text):

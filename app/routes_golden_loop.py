@@ -102,6 +102,28 @@ async def link_intelligence_subject(
     return _redirect(f"/intelligence/{intelligence_id}", "主体关联已保存")
 
 
+@router.post("/golden-loop/intelligence/{intelligence_id}/subject-candidates/ignore")
+async def ignore_intelligence_subject_candidate(
+    intelligence_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id, _ = _writer(request)
+    form = await request.form()
+    try:
+        subject_type = str(form.get("subject_type") or "")
+        subject_id = int(form.get("subject_id") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="主体候选参数无效")
+    GoldenLoopService(db).ignore_subject_candidate(
+        intelligence_id,
+        subject_type=subject_type,
+        subject_id=subject_id,
+        actor_user_id=user_id,
+    )
+    return _redirect(f"/intelligence/{intelligence_id}", "已忽略该主体候选")
+
+
 @router.post("/golden-loop/intelligence/{intelligence_id}/resources")
 async def create_resource_from_intelligence(
     intelligence_id: int,

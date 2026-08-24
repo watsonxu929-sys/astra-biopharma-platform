@@ -28,11 +28,43 @@
     <p><strong>{{ trace.guidance.current_state }}</strong></p><p>{{ trace.guidance.next_action }}</p>
   </section>
 
+  <section class="platform-card"><h2>为什么值得关注</h2>
+    <p><span class="badge badge-info">{{ event_insight.event_label }}</span> <strong>重要度 {{ event_insight.importance }}/5</strong></p>
+    <p>{{ event_insight.importance_reason }}</p>
+    <h3>建议下一步</h3>
+    <ul>
+      {% for action in event_insight.actions %}<li>{{ action }}</li>{% endfor %}
+    </ul>
+    <p class="text-muted">事件类型和建议由确定性规则生成，最终业务判断由用户完成。</p>
+  </section>
+
   <section class="platform-card"><h2>涉及谁</h2>
     {% for subject in trace.subjects %}
       <a class="badge" href="{{ subject.subject_url }}">{{ {'person':'人物','organization':'企业/机构','project':'项目'}.get(subject.subject_type, '主体') }} · {{ subject.subject_label }}</a>
     {% else %}<p class="text-muted">尚未关联人物、企业或项目。先选择正式主体，后续资源会自动继承该上下文。</p>{% endfor %}
     {% if can_write %}
+    {% if subject_candidates %}
+    <div class="platform-grid platform-grid-2" style="margin-top:16px;">
+      {% for candidate in subject_candidates %}
+      <article class="platform-card" style="margin:0;">
+        <p><strong>可能涉及：{{ candidate.subject_label }}</strong></p>
+        <p><span class="badge">置信度：{{ candidate.confidence }}</span> <span class="text-muted">{{ candidate.reason }}</span></p>
+        <div class="header-actions">
+          <form method="post" action="/golden-loop/intelligence/{{ item.id }}/subjects">
+            <input type="hidden" name="subject_type" value="{{ candidate.subject_type }}">
+            <input type="hidden" name="subject_id" value="{{ candidate.subject_id }}">
+            <button class="btn btn-primary btn-sm" type="submit">确认关联</button>
+          </form>
+          <form method="post" action="/golden-loop/intelligence/{{ item.id }}/subject-candidates/ignore">
+            <input type="hidden" name="subject_type" value="{{ candidate.subject_type }}">
+            <input type="hidden" name="subject_id" value="{{ candidate.subject_id }}">
+            <button class="btn btn-outline btn-sm" type="submit">忽略</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% endif %}
     <form method="get" action="/intelligence/{{ item.id }}" style="margin-top:16px;">
       <label>搜索人物/企业<input name="subject_q" value="{{ subject_q }}" placeholder="输入人物、企业或项目名称"></label>
       <button class="btn btn-outline" type="submit">搜索</button>
