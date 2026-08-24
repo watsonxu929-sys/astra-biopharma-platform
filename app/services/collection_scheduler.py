@@ -21,6 +21,15 @@ from app.services.intelligence_flow_service import (
 _logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
 _lock = threading.Lock()
+_FORMAL_DATABASE = (Path(__file__).resolve().parents[2] / "data" / "app.db").resolve()
+
+
+def _pytest_database_is_safe(db_path: str | Path | None) -> bool:
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    if db_path is None:
+        return False
+    return Path(db_path).resolve() != _FORMAL_DATABASE
 
 
 def _scheduler_enabled() -> bool:
@@ -34,6 +43,8 @@ def run_collection_cycle(
     db_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Use the same collection callable for scheduled and manual runs."""
+    if not _pytest_database_is_safe(db_path):
+        raise RuntimeError("pytest_scheduler_requires_explicit_non_formal_database")
     started = time.perf_counter()
     scheduled = schedule_due_collection_jobs(limit=limit, db_path=db_path, operator=operator)
     worker = run_collection_worker_with_cascade(
@@ -55,8 +66,8 @@ def run_collection_cycle(
 
 def start_scheduler(*, force: bool = False, db_path: str | Path | None = None) -> bool:
     global _scheduler
-    if os.environ.get("PYTEST_CURRENT_TEST") and db_path is None:
-        _logger.warning("Scheduler refused: pytest requires an explicit test database")
+    if not _pytest_database_is_safe(db_path):
+        _logger.warning("Scheduler refused: pytest requires an explicit non-formal database")
         return False
     if not force and not _scheduler_enabled():
         _logger.info("Scheduler is disabled in config (SCHEDULER_ENABLED=False)")

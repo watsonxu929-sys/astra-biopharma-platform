@@ -123,7 +123,10 @@ def test_rapidfuzz_remains_a_score_helper_not_an_auto_merger() -> None:
     assert isinstance(similar, float)
 
 
-def test_scheduler_manual_and_timed_paths_use_one_callable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scheduler_manual_and_timed_paths_use_one_callable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     calls: list[tuple[str, str]] = []
 
     def fake_schedule(**kwargs):
@@ -136,7 +139,12 @@ def test_scheduler_manual_and_timed_paths_use_one_callable(monkeypatch: pytest.M
 
     monkeypatch.setattr(collection_scheduler, "schedule_due_collection_jobs", fake_schedule)
     monkeypatch.setattr(collection_scheduler, "run_collection_worker_with_cascade", fake_worker)
-    result = collection_scheduler.run_collection_cycle(limit=2, operator="acceptance")
+    test_db = tmp_path / "scheduler.db"
+    result = collection_scheduler.run_collection_cycle(
+        limit=2,
+        operator="acceptance",
+        db_path=test_db,
+    )
     assert result["scheduled"]["created"] == 1
     assert result["worker"]["processed"] == 1
     assert calls == [("schedule", "acceptance"), ("worker", "acceptance")]
@@ -146,7 +154,7 @@ def test_scheduler_manual_and_timed_paths_use_one_callable(monkeypatch: pytest.M
         "run_collection_cycle",
         lambda **kwargs: {"same_callable": True, "operator": kwargs["operator"]},
     )
-    assert collection_scheduler.run_scheduler_once() == {
+    assert collection_scheduler.run_scheduler_once(test_db) == {
         "same_callable": True,
         "operator": "manual-run",
     }
@@ -155,6 +163,14 @@ def test_scheduler_manual_and_timed_paths_use_one_callable(monkeypatch: pytest.M
 def test_scheduler_refuses_implicit_database_under_pytest() -> None:
     assert collection_scheduler.start_scheduler(force=True) is False
     assert collection_scheduler.is_scheduler_running() is False
+
+
+def test_scheduler_refuses_formal_database_under_pytest() -> None:
+    formal_db = Path(__file__).resolve().parents[1] / "data" / "app.db"
+    assert collection_scheduler.start_scheduler(force=True, db_path=formal_db) is False
+    assert collection_scheduler.is_scheduler_running() is False
+    with pytest.raises(RuntimeError, match="explicit_non_formal_database"):
+        collection_scheduler.run_collection_cycle(db_path=formal_db)
 
 
 def test_apscheduler_registers_only_collection_cycle(tmp_path: Path) -> None:

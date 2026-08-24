@@ -83,6 +83,7 @@ class PlaywrightAdapter:
                         state="attached",
                         timeout=max(1000, min(timeout_ms, 60000)),
                     )
+                page.wait_for_timeout(min(2000, max(500, timeout_ms // 10)))
                 if screenshot_path:
                     page.screenshot(path=screenshot_path, full_page=True)
                 return DynamicFetchResult(
