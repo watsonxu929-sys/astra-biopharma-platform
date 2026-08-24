@@ -54,7 +54,10 @@ def test_rc1_web_runtime_defaults_are_safe() -> None:
 
 def test_rc1_lifecycle_entrypoints_are_explicit() -> None:
     web = (ROOT / "scripts" / "windows" / "web_service_windows.bat").read_text(encoding="utf-8")
-    worker = (ROOT / "scripts" / "windows" / "collection_worker_windows.bat").read_text(encoding="utf-8")
-    for source in (web, worker):
-        for action in ("start", "stop", "status"):
-            assert f'if /i "%~1"=="{action}"' in source
+    scheduler = (ROOT / "scripts" / "windows" / "start_scheduler_windows.bat").read_text(encoding="utf-8")
+    worker = (ROOT / "scripts" / "windows" / "start_worker_windows.bat").read_text(encoding="utf-8")
+    for action in ("start", "stop", "status"):
+        assert f'if /i "%~1"=="{action}"' in web
+    assert "scripts\\run_scheduler.py" in scheduler
+    assert "--sleep" not in scheduler
+    assert "scripts\\run_worker.py" in worker

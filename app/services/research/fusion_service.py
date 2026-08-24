@@ -6,11 +6,11 @@ import re
 import sqlite3
 import uuid
 from datetime import date, datetime
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
 from app.v04c_review import db_connection
+from app.core.similarity import similarity_ratio
 
 EVENT_RELATIONS = {
     "same_event", "related_event", "duplicate_report", "update_event", "conflict", "unrelated"
@@ -62,7 +62,7 @@ def classify_event_relation(left: dict[str, Any], right: dict[str, Any]) -> dict
         _set(left.get("products") or left.get("product")),
         _set(right.get("products") or right.get("product")),
     )
-    title_score = SequenceMatcher(None, _text(left.get("title")), _text(right.get("title"))).ratio()
+    title_score = similarity_ratio(_text(left.get("title")), _text(right.get("title")))
     content_score = _jaccard(_tokens(left.get("content")), _tokens(right.get("content")))
     left_date, right_date = _date(left.get("occurred_at") or left.get("event_date")), _date(right.get("occurred_at") or right.get("event_date"))
     day_gap = abs((left_date - right_date).days) if left_date and right_date else None

@@ -5,11 +5,12 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from app.core.content_extraction import extract_main_text
 from .base import Citation, ParseResult
 
 
 class HtmlParser:
-    name = "beautifulsoup_html_v1"
+    name = "trafilatura_html_v1"
 
     def supports(self, content_type: str) -> bool:
         return "html" in (content_type or "").lower()
@@ -20,11 +21,8 @@ class HtmlParser:
         return {"title": (soup.title.string.strip() if soup.title and soup.title.string else snapshot.get("page_title") or ""), "description": description.get("content", "").strip() if description else ""}
 
     def extract_text(self, snapshot: dict[str, Any]) -> str:
-        soup = BeautifulSoup(snapshot.get("raw_html") or snapshot.get("raw_content") or "", "html.parser")
-        for node in soup(["script", "style", "noscript", "nav", "footer"]):
-            node.decompose()
-        root = soup.find("article") or soup.find("main") or soup.body or soup
-        return re.sub(r"\s+", " ", root.get_text(" ", strip=True)).strip()
+        text, _ = extract_main_text(snapshot.get("raw_html") or snapshot.get("raw_content") or "")
+        return text
 
     def extract_sections(self, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
         soup = BeautifulSoup(snapshot.get("raw_html") or snapshot.get("raw_content") or "", "html.parser")

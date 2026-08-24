@@ -1,49 +1,64 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import get_settings
+from app.services.collection_service import list_sources
 from app.services.intelligence_flow_service import (
     run_collection_worker_with_cascade,
     schedule_due_collection_jobs,
 )
-from app.services.collection_service import list_sources
 
-_settings = get_settings()
 _logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
 _lock = threading.Lock()
 
 
 def _scheduler_enabled() -> bool:
-    return _settings.scheduler_enabled
+    return get_settings().scheduler_enabled
 
 
-def _schedule_collection_job():
-    try:
-        scheduled = schedule_due_collection_jobs(limit=10, operator="scheduler")
-        _logger.info(f"Scheduled {scheduled['created']} collection jobs, skipped {scheduled['skipped']}")
-    except Exception as exc:
-        _logger.error(f"Scheduler failed to schedule jobs: {exc}", exc_info=True)
+def run_collection_cycle(
+    *,
+    limit: int = 20,
+    operator: str = "scheduler",
+    db_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Use the same collection callable for scheduled and manual runs."""
+    started = time.perf_counter()
+    scheduled = schedule_due_collection_jobs(limit=limit, db_path=db_path, operator=operator)
+    worker = run_collection_worker_with_cascade(
+        once=False,
+        limit=limit,
+        db_path=db_path,
+        operator=operator,
+    )
+    result = {"scheduled": scheduled, "worker": worker}
+    _logger.info(
+        "collection_cycle result=SUCCESS operator=%s scheduled=%s processed=%s elapsed_ms=%s",
+        operator,
+        scheduled["created"],
+        worker["processed"],
+        round((time.perf_counter() - started) * 1000),
+    )
+    return result
 
 
-def _run_collection_worker():
-    try:
-        result = run_collection_worker_with_cascade(once=False, limit=5, operator="scheduler-worker")
-        _logger.info(f"Collection worker processed {result['processed']} jobs")
-    except Exception as exc:
-        _logger.error(f"Collection worker failed: {exc}", exc_info=True)
-
-
-def start_scheduler() -> bool:
+def start_scheduler(*, force: bool = False, db_path: str | Path | None = None) -> bool:
     global _scheduler
-    if not _scheduler_enabled():
+    if os.environ.get("PYTEST_CURRENT_TEST") and db_path is None:
+        _logger.warning("Scheduler refused: pytest requires an explicit test database")
+        return False
+    if not force and not _scheduler_enabled():
         _logger.info("Scheduler is disabled in config (SCHEDULER_ENABLED=False)")
         return False
     with _lock:
@@ -53,24 +68,18 @@ def start_scheduler() -> bool:
         try:
             _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
             _scheduler.add_job(
-                _schedule_collection_job,
+                run_collection_cycle,
                 CronTrigger(minute="*/15"),
-                id="collection_scheduler",
-                name="Schedule due collection jobs",
+                id="collection_cycle",
+                name="Schedule and process due collection jobs",
                 misfire_grace_time=60,
-            )
-            _scheduler.add_job(
-                _run_collection_worker,
-                CronTrigger(minute="*/20"),
-                id="collection_worker",
-                name="Process pending collection jobs",
-                misfire_grace_time=60,
+                kwargs={"db_path": db_path},
             )
             _scheduler.start()
             _logger.info("Collection scheduler started successfully")
             return True
         except Exception as exc:
-            _logger.error(f"Failed to start scheduler: {exc}", exc_info=True)
+            _logger.error("Failed to start scheduler: %s", exc, exc_info=True)
             _scheduler = None
             return False
 
@@ -106,15 +115,13 @@ def get_scheduler_info() -> dict[str, Any]:
     return {"running": _scheduler.running, "jobs": jobs, "next_run_times": next_run_times}
 
 
-def run_scheduler_once() -> dict[str, Any]:
-    _schedule_collection_job()
-    return run_collection_worker_with_cascade(once=False, limit=20, operator="manual-run")
+def run_scheduler_once(db_path: str | Path | None = None) -> dict[str, Any]:
+    return run_collection_cycle(limit=20, operator="manual-run", db_path=db_path)
 
 
 def get_sources_with_next_run() -> list[dict[str, Any]]:
     rows, _ = list_sources(page=1, page_size=50)
     result = []
-    now = datetime.now()
     frequency_map = {
         "hourly": timedelta(hours=1),
         "daily": timedelta(days=1),

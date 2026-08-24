@@ -5,7 +5,6 @@ import re
 import sqlite3
 import unicodedata
 from datetime import datetime, timezone
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Iterable, Literal
 from urllib.parse import quote
@@ -15,6 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.v04c_review import db_connection, default_db_path
+from app.core.similarity import similarity_ratio
 
 router = APIRouter(prefix="/review/entities", tags=["v0.4E-A 主体消歧与别名管理"])
 MODULE_DIR = Path(__file__).resolve().parent
@@ -395,8 +395,8 @@ def score_pair(subject_type: str, left: sqlite3.Row, right: sqlite3.Row) -> tupl
         base = 0.91
         reasons.append("去除常见机构后缀后名称一致")
     else:
-        ratio = SequenceMatcher(None, n_left, n_right).ratio()
-        compact_ratio = SequenceMatcher(None, c_left, c_right).ratio() if c_left and c_right else 0.0
+        ratio = similarity_ratio(n_left, n_right)
+        compact_ratio = similarity_ratio(c_left, c_right) if c_left and c_right else 0.0
         base = max(ratio, compact_ratio)
         reasons.append(f"名称相似度 {base:.2f}")
     bonus, field_reasons = _field_similarity(left, right, config["compare_cols"])

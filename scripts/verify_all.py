@@ -88,7 +88,6 @@ COMPILE_TARGETS = [
     "scripts/verify_v05e.py",
     "scripts/migrate_v05f.py",
     "scripts/verify_v05f.py",
-    "scripts/run_collection_worker.py",
     "scripts/migrate_v05g.py",
     "scripts/verify_v05g.py",
     "scripts/run_processing_worker.py",
@@ -225,6 +224,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
 

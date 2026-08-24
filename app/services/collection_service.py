@@ -3,27 +3,30 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import logging
 import re
 import secrets
 import sqlite3
 import time
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 from urllib.robotparser import RobotFileParser
 
+import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
+from app.core.content_extraction import extract_main_text
 from app.services.collectors import PlaywrightAdapter, PlaywrightCollectionError, PlaywrightUnavailable
 from app.services.processing.content_quality_service import check_content_quality, assess_content_quality, QUALITY_STATUS_LABELS
 from app.v04c_review import db_connection, default_db_path
 from scripts.migrate_v05f import migrate as migrate_v05f
 
 USER_AGENT = "QBAY-Industry-Intelligence-Bot/0.5F"
+_logger = logging.getLogger(__name__)
 TRACKING_PARAMS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "from", "share", "spm"}
 SOURCE_TYPES = {"rss", "api", "webpage", "list_page", "dynamic_page", "manual_url_list"}
 COLLECTION_MODES = {"http", "rss", "api", "playwright", "auto"}
@@ -47,6 +50,11 @@ COLLECTION_STATUS_LABELS = {
     "duplicate": "重复内容",
     "duplicate_running_job": "已有运行中的任务",
     "playwright_unavailable": "浏览器采集暂不可用",
+    "FETCH_FAILED": "抓取失败",
+    "PARSE_FAILED": "解析失败",
+    "EXTRACTION_EMPTY": "正文为空",
+    "DUPLICATE": "重复内容",
+    "SUCCESS": "成功",
     "new": "新增",
     "changed": "有变化",
     "ignored": "已忽略",
@@ -66,6 +74,11 @@ COLLECTION_EXPLANATIONS = {
     "duplicate": "采集内容已存在，系统未重复入库。",
     "duplicate_running_job": "同一数据源已有待执行或运行中的任务，本次没有重复创建。",
     "playwright_unavailable": "当前本地环境未启用浏览器采集，可改用HTTP、RSS、API或手工来源。",
+    "FETCH_FAILED": "无法访问来源地址，请检查网络、证书或目标站点状态。",
+    "PARSE_FAILED": "来源已访问，但Feed或返回内容无法解析。",
+    "EXTRACTION_EMPTY": "页面已访问，但没有提取到可用正文。",
+    "DUPLICATE": "采集内容已存在，系统未重复入库。",
+    "SUCCESS": "采集成功。",
     "pending": "任务已创建并进入队列，尚未开始抓取。",
     "queued": "任务已进入队列，等待执行器处理。",
     "running": "任务正在执行。",
@@ -189,6 +202,8 @@ class ExtractedPage:
     warnings: list[str]
     http_status: int = 200
     content_type: str = "text/html"
+    guid: str = ""
+    extractor: str = "trafilatura"
 
 
 def now() -> str:
@@ -274,49 +289,6 @@ def _date_candidate(soup: BeautifulSoup, text: str) -> str:
     return value[:50] if value else ""
 
 
-def _clean_soup(soup: BeautifulSoup) -> None:
-    for tag in soup(["script", "style", "noscript", "svg", "canvas", "iframe", "form", "button", "nav", "footer", "header"]):
-        tag.decompose()
-    for selector in [
-        ".share", ".social", ".recommend", ".related", ".comment", ".breadcrumb", ".breadcrumbs",
-        ".sidebar", ".language-switcher", "[class*='cookie']", "[class*='footer']", "[class*='nav']",
-    ]:
-        for node in soup.select(selector):
-            node.decompose()
-
-
-def _best_node(soup: BeautifulSoup):
-    candidates = []
-    for selector in ["article", "main", "[role='main']", ".article-content", ".article-body", ".content", ".news-content", "#content"]:
-        for node in soup.select(selector):
-            text = node.get_text("\n", strip=True)
-            if len(text) >= 120:
-                candidates.append((len(text), node))
-    if candidates:
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        return candidates[0][1]
-    return soup.body or soup
-
-
-def _text_from_node(node) -> str:
-    lines = []
-    for raw in node.get_text("\n", strip=True).splitlines():
-        line = re.sub(r"\s+", " ", raw).strip()
-        if len(line) >= 2:
-            lines.append(line)
-    deduped = []
-    seen_short: set[str] = set()
-    for line in lines:
-        if deduped and deduped[-1] == line:
-            continue
-        if len(line) <= 32:
-            if line in seen_short:
-                continue
-            seen_short.add(line)
-        deduped.append(line)
-    return "\n".join(deduped)
-
-
 def _structure_type(url: str, title: str, text: str) -> str:
     sample = f"{url}\n{title}\n{text[:2000]}".lower()
     if any(k in sample for k in ["rss", "<feed", "<channel"]):
@@ -344,13 +316,10 @@ def extract_html(raw_html: str, url: str) -> ExtractedPage:
     description = _meta(soup, "description", "og:description")
     author = _meta(soup, "author", "article:author")
     lang = (soup.html.get("lang") if soup.html else "") or ""
-    clean_copy = BeautifulSoup(str(soup), "html.parser")
-    _clean_soup(clean_copy)
-    node = _best_node(clean_copy)
-    text = _text_from_node(node)
+    text, extractor = extract_main_text(raw_html)
     warnings = []
     if len(text) < 50:
-        warnings.append("empty_content")
+        warnings.extend(["empty_content", "EXTRACTION_EMPTY"])
     truncated = False
     if len(raw_html) > 1_000_000:
         raw_html = raw_html[:1_000_000]
@@ -360,7 +329,7 @@ def extract_html(raw_html: str, url: str) -> ExtractedPage:
         truncated = True
     if truncated:
         warnings.append("content_truncated")
-    cleaned_html = str(node)[:200_000]
+    cleaned_html = f"<article>{html.escape(text)}</article>"[:200_000]
     normalized = normalize_url(url, canonical_url=canonical)
     published = _date_candidate(soup, text)
     content_hash = _hash_text(text)
@@ -382,6 +351,7 @@ def extract_html(raw_html: str, url: str) -> ExtractedPage:
         page_structure=_structure_type(url, title, text),
         language=lang[:40],
         warnings=warnings,
+        extractor=extractor,
     )
 
 
@@ -447,12 +417,12 @@ def _http_get(
                     return "", 304, response.headers.get("content-type", ""), dict(response.headers)
                 response.raise_for_status()
                 return response.text, response.status_code, response.headers.get("content-type", ""), dict(response.headers)
-            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError):
-                retryable = "response" not in locals() or response.status_code in {408, 429, 500, 502, 503, 504}
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
+                retryable = not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code in {408, 429, 500, 502, 503, 504}
                 if attempt >= min(retries, 2) or not retryable:
-                    raise
+                    raise RuntimeError("FETCH_FAILED") from exc
                 time.sleep(min(4.0, 0.5 * (2 ** attempt)))
-    raise RuntimeError("http_fetch_failed")
+    raise RuntimeError("FETCH_FAILED")
 
 
 def check_robots(url: str, user_agent: str = USER_AGENT, timeout: int = 8) -> dict[str, Any]:
@@ -630,27 +600,27 @@ def _release_lock(conn: sqlite3.Connection, source_id: int, token: str) -> None:
 
 
 def _parse_rss(xml_text: str, source_url: str, max_links: int = 50) -> list[ExtractedPage]:
-    root = ET.fromstring(xml_text.strip())
-    entries = []
-    if root.tag.lower().endswith("rss") or root.find(".//channel") is not None:
-        nodes = root.findall(".//item")
-    else:
-        nodes = root.findall(".//{*}entry")
-    for node in nodes[:max_links]:
-        def pick(*names: str) -> str:
-            for name in names:
-                found = node.find(name) or node.find(f"{{*}}{name}")
-                if found is not None:
-                    if name == "link" and found.get("href"):
-                        return str(found.get("href"))
-                    return "".join(found.itertext()).strip()
-            return ""
-        title = pick("title") or "untitled"
-        link = pick("link", "guid") or source_url
-        summary = pick("description", "summary", "content")
+    parsed = feedparser.parse(xml_text)
+    if not parsed.entries:
+        raise RuntimeError("PARSE_FAILED") from getattr(parsed, "bozo_exception", None)
+    entries: list[ExtractedPage] = []
+    for entry in parsed.entries[:max_links]:
+        title = str(entry.get("title") or "untitled")
+        guid = str(entry.get("id") or entry.get("guid") or "")
+        link = str(entry.get("link") or guid or source_url)
+        content = entry.get("content") or []
+        content_value = content[0].get("value", "") if content and isinstance(content[0], dict) else ""
+        summary = str(entry.get("summary") or entry.get("description") or content_value or title)
         html_text = f"<html><head><title>{html.escape(title)}</title></head><body><article>{summary or title}</article></body></html>"
         page = extract_html(html_text, link)
-        page.published_at = pick("pubDate", "published", "updated")[:80]
+        parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
+        if parsed_time:
+            page.published_at = datetime(*parsed_time[:6], tzinfo=timezone.utc).isoformat()
+        else:
+            page.published_at = str(entry.get("published") or entry.get("updated") or "")[:80]
+        page.author = str(entry.get("author") or "")[:200]
+        page.description = BeautifulSoup(summary, "html.parser").get_text(" ", strip=True)[:500]
+        page.guid = guid[:500]
         entries.append(page)
     return entries
 
@@ -740,7 +710,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             (
                 _next_no(conn, "SNP"), source["id"], run_id, page.title, page.url, ts,
                 page.text[:12000], page.text[:80000], page.content_hash,
-                _json({"description": page.description, "author": page.author, "warnings": page.warnings, "page_structure": page.page_structure}),
+                _json({"description": page.description, "author": page.author, "warnings": page.warnings, "page_structure": page.page_structure, "guid": page.guid, "extractor": page.extractor, "source": source["name"]}),
                 ts, page.url, page.normalized_url, page.canonical_url, page.published_at, page.http_status,
                 "{}", page.raw_html if int(source["save_raw_html"] or 0) else "", page.cleaned_html,
                 page.structure_hash, "utf-8", page.content_type, len(page.text), int("content_truncated" in page.warnings),
@@ -774,7 +744,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             page.title, page.url, page.normalized_url, page.canonical_url, page.published_at, ts,
             page.content_type, page.page_structure, page.language, dedup_status, change_status,
             processing_status, source["subject_type"], source["subject_id"], page.content_hash, page.structure_hash,
-            duplicate_of, _json(page.warnings), _json({"summary": page.summary, "description": page.description, "author": page.author}),
+            duplicate_of, _json(page.warnings), _json({"summary": page.summary, "description": page.description, "author": page.author, "guid": page.guid, "extractor": page.extractor, "source": source["name"]}),
             quality_result["quality_status"], quality_result["quality_reason"], ts, ts,
         ),
     )
@@ -800,6 +770,9 @@ def _source_allowed_domains(source: sqlite3.Row) -> list[str]:
 
 
 def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
+    started = time.perf_counter()
+    parser_name = "unknown"
+    extractor_names: set[str] = set()
     ensure_schema(db_path)
     with db_connection(db_path) as conn:
         run = conn.execute("SELECT * FROM v04g_monitoring_runs WHERE id=?", (run_id,)).fetchone()
@@ -867,13 +840,14 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     (now(), now(), source["id"]),
                 )
                 _release_lock(conn, source["id"], token)
-                return {"run_id": run_id, "status": "unchanged", "not_modified": True}
+                return {"run_id": run_id, "status": "unchanged", "not_modified": True, "result_code": "SUCCESS"}
             if "last_etag" in source_columns:
                 conn.execute(
                     "UPDATE v04g_monitoring_sources SET last_etag=?,last_modified_header=? WHERE id=?",
                     (headers.get("etag"), headers.get("last-modified"), source["id"]),
                 )
             if source_type == "rss" or "xml" in content_type or "<rss" in raw[:200].lower() or "<feed" in raw[:200].lower():
+                parser_name = "feedparser"
                 for feed_page in _parse_rss(raw, source["url"], int(source["max_links"] or 20)):
                     link = {
                         "url": feed_page.url,
@@ -901,6 +875,7 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                             )
                     pages.append((feed_page, link_id))
             elif source_type == "api" or "json" in content_type:
+                parser_name = "json"
                 payload = json.loads(raw)
                 records = payload if isinstance(payload, list) else payload.get("data") or payload.get("items") or payload.get("results") or []
                 for record in records[: int(source["max_links"] or 20)]:
@@ -911,6 +886,7 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     text = str(record.get("summary") or record.get("description") or record.get("content") or title)
                     pages.append((extract_html(f"<html><head><title>{html.escape(title)}</title></head><body><article>{html.escape(text)}</article></body></html>", link), None))
             elif source_type == "manual_url_list":
+                parser_name = "manual_url_list"
                 for line in raw.splitlines()[: int(source["max_links"] or 20)]:
                     line = line.strip()
                     if not line:
@@ -919,6 +895,7 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     _record_link(conn, source["id"], run_id, link)
                     discovered_count += 1
             else:
+                parser_name = "html"
                 page = extract_html(raw, source["url"])
                 page.http_status = http_status
                 page.content_type = content_type
@@ -941,6 +918,7 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
 
             counts = {"new": 0, "duplicate": 0, "changed": 0, "failed": 0, "skipped": 0, "queued": 0, "snapshots": 0}
             for page, link_id in pages:
+                extractor_names.add(page.extractor)
                 stored = _store_page(conn, source, run_id, page, link_id)
                 counts["snapshots"] += 1
                 if stored["dedup_status"] in {"duplicate", "unchanged"}:
@@ -981,9 +959,38 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
             if "health_status" in source.keys():
                 conn.execute("UPDATE v04g_monitoring_sources SET health_status='healthy' WHERE id=?", (source["id"],))
             _release_lock(conn, source["id"], token)
-            return {"run_id": run_id, "status": status, **counts, "discovered": discovered_count}
+            empty_count = sum("EXTRACTION_EMPTY" in page.warnings for page, _ in pages)
+            result_code = (
+                "EXTRACTION_EMPTY"
+                if pages and empty_count == len(pages)
+                else "DUPLICATE"
+                if counts["duplicate"] and not counts["new"] and not counts["changed"]
+                else "SUCCESS"
+            )
+            elapsed_ms = round((time.perf_counter() - started) * 1000)
+            _logger.info(
+                "collection url=%s parser=%s extractor=%s result=%s elapsed_ms=%s",
+                source["url"],
+                parser_name,
+                ",".join(sorted(extractor_names)) or "none",
+                result_code,
+                elapsed_ms,
+            )
+            return {
+                "run_id": run_id,
+                "status": status,
+                "result_code": result_code,
+                **counts,
+                "discovered": discovered_count,
+            }
         except Exception as exc:
-            error_type = getattr(exc, "args", [exc.__class__.__name__])[0] or exc.__class__.__name__
+            raw_error = getattr(exc, "args", [exc.__class__.__name__])[0] or exc.__class__.__name__
+            if isinstance(exc, (httpx.HTTPError, httpx.TimeoutException)) or str(raw_error) == "FETCH_FAILED":
+                error_type = "FETCH_FAILED"
+            elif isinstance(exc, json.JSONDecodeError) or str(raw_error) == "PARSE_FAILED":
+                error_type = "PARSE_FAILED"
+            else:
+                error_type = str(raw_error)
             failures = int(source["consecutive_failures"] or 0) + 1
             auto_paused = failures >= 3
             conn.execute(
@@ -1007,7 +1014,23 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
             if "health_status" in source.keys():
                 conn.execute("UPDATE v04g_monitoring_sources SET health_status=? WHERE id=?", ("paused" if auto_paused else "degraded", source["id"] ))
             _release_lock(conn, source["id"], token)
-            return {"run_id": run_id, "status": "failed", "error_type": str(error_type), "error": str(exc)[:800]}
+            elapsed_ms = round((time.perf_counter() - started) * 1000)
+            _logger.error(
+                "collection url=%s parser=%s extractor=%s result=%s elapsed_ms=%s error_type=%s",
+                source["url"],
+                parser_name,
+                ",".join(sorted(extractor_names)) or "none",
+                error_type,
+                elapsed_ms,
+                error_type,
+            )
+            return {
+                "run_id": run_id,
+                "status": "failed",
+                "result_code": str(error_type),
+                "error_type": str(error_type),
+                "error": str(exc)[:800],
+            }
 
 
 def run_worker(*, once: bool = True, job_id: int | None = None, source_id: int | None = None, due_only: bool = False, limit: int = 20, db_path: str | Path | None = None, operator: str = "worker") -> dict[str, Any]:

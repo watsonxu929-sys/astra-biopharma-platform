@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
 from app.v04c_review import db_connection
+from app.core.similarity import similarity_ratio
 
 
 def normalized_title(value: str) -> str:
@@ -15,7 +15,7 @@ def normalized_title(value: str) -> str:
 
 
 def title_similarity(left: str, right: str) -> float:
-    return SequenceMatcher(None, normalized_title(left), normalized_title(right)).ratio()
+    return similarity_ratio(normalized_title(left), normalized_title(right))
 
 
 def event_dedup_key(subject: str, event_type: str, event_date: str) -> str:

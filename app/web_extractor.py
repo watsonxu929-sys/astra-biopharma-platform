@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+from app.core.content_extraction import extract_main_text
 
 
 @dataclass
@@ -113,76 +114,6 @@ def _extract_published_at(soup: BeautifulSoup, text: str) -> str:
     return ""
 
 
-def _clean_html(soup: BeautifulSoup) -> None:
-    for tag in soup(
-        [
-            "script",
-            "style",
-            "noscript",
-            "svg",
-            "canvas",
-            "iframe",
-            "form",
-            "header",
-            "nav",
-            "footer",
-            "aside",
-            "button",
-        ]
-    ):
-        tag.decompose()
-
-    for selector in [
-        ".advertisement",
-        ".ads",
-        ".ad",
-        ".share",
-        ".social",
-        ".recommend",
-        ".related",
-        ".comment",
-        "#comments",
-        ".breadcrumb",
-        ".breadcrumbs",
-        ".sidebar",
-        ".side-nav",
-        ".subnav",
-        ".language-switcher",
-        "[class*='breadcrumb']",
-        "[class*='footer']",
-        "[class*='header-nav']",
-    ]:
-        for node in soup.select(selector):
-            node.decompose()
-
-
-def _best_content_node(soup: BeautifulSoup):
-    candidates = []
-
-    for selector in [
-        "article",
-        "main",
-        "[role='main']",
-        ".article-content",
-        ".article-body",
-        ".content",
-        ".post-content",
-        ".news-content",
-        "#article-content",
-        "#content",
-    ]:
-        for node in soup.select(selector):
-            text = node.get_text("\n", strip=True)
-            if len(text) >= 150:
-                candidates.append((len(text), node))
-
-    if candidates:
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        return candidates[0][1]
-
-    return soup.body or soup
-
-
 def fetch_and_extract(url: str) -> WebExtractResult:
     url = validate_public_url(url)
 
@@ -226,28 +157,7 @@ def fetch_and_extract(url: str) -> WebExtractResult:
         or (soup.title.get_text(" ", strip=True) if soup.title else "")
     )
 
-    _clean_html(soup)
-    node = _best_content_node(soup)
-
-    lines = []
-    for raw_line in node.get_text("\n", strip=True).splitlines():
-        line = re.sub(r"\s+", " ", raw_line).strip()
-        if len(line) >= 2:
-            lines.append(line)
-
-    deduplicated = []
-    seen_short: dict[str, int] = {}
-    for line in lines:
-        if deduplicated and line == deduplicated[-1]:
-            continue
-        if len(line) <= 30:
-            count = seen_short.get(line, 0)
-            if count >= 1:
-                continue
-            seen_short[line] = count + 1
-        deduplicated.append(line)
-
-    text = "\n".join(deduplicated)
+    text, _extractor = extract_main_text(html)
     if len(text) < 50:
         raise ValueError("未提取到足够正文，请直接复制网页正文。")
 

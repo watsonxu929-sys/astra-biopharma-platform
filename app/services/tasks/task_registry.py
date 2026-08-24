@@ -6,20 +6,20 @@ TaskHandler = Callable[[dict[str, Any], str | None], dict[str, Any]]
 
 
 def _collection(payload: dict[str, Any], db_path: str | None = None) -> dict[str, Any]:
+    from app.services.collection_scheduler import run_collection_cycle
     from app.services.collection_service import create_job
-    from app.services.intelligence_flow_service import (
-        run_collection_worker_with_cascade,
-        schedule_due_collection_jobs,
-    )
+    from app.services.intelligence_flow_service import run_collection_worker_with_cascade
 
     limit = int(payload.get("limit") or 10)
     if payload.get("source_id"):
         create_job(int(payload["source_id"]), trigger_type="worker", operator="unified-worker", db_path=db_path)
-    scheduled = {"created": 0, "skipped": 0}
     if payload.get("due_only") or payload.get("schedule_due"):
-        scheduled = schedule_due_collection_jobs(limit=limit, db_path=db_path, operator="scheduler")
+        cycle = run_collection_cycle(limit=limit, operator="unified-worker", db_path=db_path)
+        result = cycle["worker"]
+        result["scheduled_collection_jobs"] = cycle["scheduled"]
+        return result
     result = run_collection_worker_with_cascade(once=True, limit=limit, db_path=db_path, operator="unified-worker")
-    result["scheduled_collection_jobs"] = scheduled
+    result["scheduled_collection_jobs"] = {"created": 0, "skipped": 0}
     return result
 
 
