@@ -134,15 +134,20 @@ def _profile_for_scoring(conn: sqlite3.Connection, lead: sqlite3.Row) -> dict[st
     sid = lead["subject_id"]
     people = conn.execute(
         """
-        SELECT COUNT(*) AS c FROM relations
-        WHERE is_active=1 AND (source_external_id=? OR target_external_id=?)
+        SELECT COUNT(*) AS c FROM p3_canonical_relationships
+        WHERE review_status<>'archived' AND (subject_id=? OR object_id=?)
         """,
         (sid, sid),
+    ).fetchone()["c"]
+    resource_column = {"organization": "organization_id", "person": "owner_person_id", "project": "project_id"}.get(lead["subject_type"])
+    resource_count = conn.execute(
+        f"SELECT COUNT(*) AS c FROM v06_market_resources WHERE {resource_column}=?" if resource_column else "SELECT 0 AS c",
+        (subject.get("id") or -1,) if resource_column else (),
     ).fetchone()["c"]
     stats = {
         "people": people,
         "events": conn.execute("SELECT COUNT(*) AS c FROM events WHERE related_entity=? OR related_organization_id=?", (sid, subject.get("id") or -1)).fetchone()["c"],
-        "resources": conn.execute("SELECT COUNT(*) AS c FROM resources WHERE owner_external_id=? OR owner_organization_id=?", (sid, subject.get("id") or -1)).fetchone()["c"],
+        "resources": resource_count,
         "projects": conn.execute("SELECT COUNT(*) AS c FROM projects WHERE owner_external_id=? OR owner_organization_id=?", (sid, subject.get("id") or -1)).fetchone()["c"],
     }
     try:
@@ -718,7 +723,6 @@ def member_detail(member_id: int, request: Request, message: str = "", error: st
                  AND (owner_person_id=? OR organization_id=? OR (legacy_source_type='qbay_membership' AND legacy_source_id=?))
                ORDER BY id DESC""", (member_data.get("person_id"), member_data.get("organization_id"), str(member_id)),
         ).fetchall()]
-        needs.extend(dict(r) for r in conn.execute("SELECT *, 'v04f_club_needs' AS source_model FROM v04f_club_needs WHERE membership_id=? ORDER BY id DESC", (member_id,)).fetchall())
         offerings = [dict(r) for r in conn.execute(
             """SELECT id,title,description,resource_type AS offering_type,industry_direction AS industry_tags,
                       region,status,'v06_market_resources' AS source_model
@@ -726,16 +730,18 @@ def member_detail(member_id: int, request: Request, message: str = "", error: st
                  AND (owner_person_id=? OR organization_id=? OR (legacy_source_type='qbay_membership' AND legacy_source_id=?))
                ORDER BY id DESC""", (member_data.get("person_id"), member_data.get("organization_id"), str(member_id)),
         ).fetchall()]
-        offerings.extend(dict(r) for r in conn.execute("SELECT *, 'v04f_club_offerings' AS source_model FROM v04f_club_offerings WHERE membership_id=? ORDER BY id DESC", (member_id,)).fetchall())
         matches = [dict(r) for r in conn.execute(
             """
-            SELECT cm.* FROM v04f_club_matches cm
-            JOIN v04f_club_needs n ON n.id=cm.need_id
-            JOIN v04f_club_offerings o ON o.id=cm.offering_id
-            WHERE n.membership_id=? OR o.membership_id=?
-            ORDER BY cm.match_score DESC
+            SELECT cm.*,cm.score AS match_score,d.title AS need_title,s.title AS offering_title
+            FROM p4_resource_match_candidates cm
+            JOIN v06_market_resources d ON d.id=cm.demand_resource_id
+            JOIN v06_market_resources s ON s.id=cm.supply_resource_id
+            WHERE d.owner_person_id=? OR d.organization_id=? OR (d.legacy_source_type='qbay_membership' AND d.legacy_source_id=?)
+               OR s.owner_person_id=? OR s.organization_id=? OR (s.legacy_source_type='qbay_membership' AND s.legacy_source_id=?)
+            ORDER BY cm.score DESC
             """,
-            (member_id, member_id),
+            (member_data.get("person_id"), member_data.get("organization_id"), str(member_id),
+             member_data.get("person_id"), member_data.get("organization_id"), str(member_id)),
         ).fetchall()]
         try:
             event_history = [dict(r) for r in conn.execute(

@@ -87,7 +87,7 @@ CAPABILITIES: tuple[Capability, ...] = (
 
     cap("collaboration", "协作", "协作", "合作机会、跟进和任务", "collaboration", None, "/opportunities", "/api/v1/opportunities", "handshake", order=50, legacy=("/collaboration",)),
     cap("collaboration.home", "协同首页", "首页", "业务协同工作台和任务队列", "collaboration", "collaboration", "/collaboration", "/api/v1/opportunities", "layout-dashboard", order=51),
-    cap("collaboration.leads", "线索", "线索", "业务线索和线索审核", "collaboration", "collaboration", "/collaboration/leads", "/api/v1/opportunities", "target", order=52),
+    cap("collaboration.leads", "历史线索（已退役）", "已退役", "Legacy 线索入口已停用，统一使用合作机会", "collaboration", "collaboration", "/opportunities", "/api/v1/opportunities", "target", status="disabled", order=52),
     cap("collaboration.opportunities", "合作机会", "机会", "合作机会管理和阶段推进", "collaboration", "collaboration", "/collaboration/opportunities", "/api/v1/opportunities", "handshake", order=53),
     cap("collaboration.tasks", "任务与跟进", "任务", "协作任务和商务跟进记录", "collaboration", "collaboration", "/collaboration/tasks", "/api/v1/opportunities", "list-checks", order=54),
     cap("collaboration.meetings", "会议与材料", "会议", "会议安排和材料管理", "collaboration", "collaboration", "/collaboration/meetings", "/api/v1/opportunities", "clock", order=55),

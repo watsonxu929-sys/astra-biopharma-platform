@@ -134,9 +134,18 @@ def get_subject(subject_type: str, subject_id: str, db_path: str | Path | None =
         data = dict(row)
         ref = _ref(subject_type, data)
         external_id = data["external_id"]
-        relation_count = conn.execute("SELECT COUNT(*) FROM relations WHERE COALESCE(is_active,1)=1 AND (source_external_id=? OR target_external_id=?)", (external_id, external_id)).fetchone()[0]
+        relation_count = conn.execute("SELECT COUNT(*) FROM p3_canonical_relationships WHERE review_status<>'archived' AND (subject_id=? OR object_id=?)", (external_id, external_id)).fetchone()[0]
         event_count = conn.execute("SELECT COUNT(*) FROM events WHERE COALESCE(is_active,1)=1 AND related_entity=?", (external_id,)).fetchone()[0]
-        action_count = conn.execute("SELECT COUNT(*) FROM actions WHERE COALESCE(is_active,1)=1 AND target_external_id=?", (external_id,)).fetchone()[0]
+        if subject_type == "person":
+            task_where, task_params = "o.target_person_id=?", (data["id"],)
+        elif subject_type == "organization":
+            task_where, task_params = "? IN (o.organization_id,o.target_organization_id,o.demand_organization_id,o.supply_organization_id)", (data["id"],)
+        else:
+            task_where, task_params = "0=1", ()
+        action_count = conn.execute(
+            f"SELECT COUNT(*) FROM v06_collab_tasks t JOIN v06_opportunities o ON o.id=t.opportunity_id WHERE {task_where}",
+            task_params,
+        ).fetchone()[0]
         review_count = 0
         if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='v04c_review_items'").fetchone():
             review_count = conn.execute("SELECT COUNT(*) FROM v04c_review_items WHERE subject_id=? AND status IN ('pending','in_review','deferred')", (external_id,)).fetchone()[0]
@@ -159,10 +168,10 @@ def subject_collection(subject_type: str, subject_id: str, kind: str, *, page: i
     external_id = subject["external_id"]
     with db_connection(db_path) as conn:
         if kind == "relationships":
-            where = "COALESCE(is_active,1)=1 AND (source_external_id=? OR target_external_id=?)"
+            where = "review_status<>'archived' AND (subject_id=? OR object_id=?)"
             params = [external_id, external_id]
-            total = conn.execute(f"SELECT COUNT(*) FROM relations WHERE {where}", params).fetchone()[0]
-            rows = conn.execute(f"SELECT id,external_id,source_external_id,relation_type,target_external_id,period,verification_status FROM relations WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?", [*params, page_size, (page - 1) * page_size]).fetchall()
+            total = conn.execute(f"SELECT COUNT(*) FROM p3_canonical_relationships WHERE {where}", params).fetchone()[0]
+            rows = conn.execute(f"SELECT id,relationship_no,subject_type,subject_id,relationship_type,object_type,object_id,direction,valid_from,valid_to,is_current,confidence,review_status,evidence_status FROM p3_canonical_relationships WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?", [*params, page_size, (page - 1) * page_size]).fetchall()
         elif kind == "timeline":
             where = "COALESCE(is_active,1)=1 AND related_entity=?"
             params = [external_id]
@@ -175,10 +184,15 @@ def subject_collection(subject_type: str, subject_id: str, kind: str, *, page: i
                 total += conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {title} LIKE ?", (f"%{external_id}%",)).fetchone()[0]
                 rows.extend(conn.execute(f"SELECT id,{title} AS title,source_type,created_at FROM {table} WHERE {title} LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?", (f"%{external_id}%", page_size, (page - 1) * page_size)).fetchall())
         elif kind == "actions":
-            where = "COALESCE(is_active,1)=1 AND target_external_id=?"
-            params = [external_id]
-            total = conn.execute(f"SELECT COUNT(*) FROM actions WHERE {where}", params).fetchone()[0]
-            rows = conn.execute(f"SELECT id,external_id,task,owner,priority,status,suggested_deadline FROM actions WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?", [*params, page_size, (page - 1) * page_size]).fetchall()
+            if subject["subject_type"] == "person":
+                where, params = "o.target_person_id=?", [subject["id"]]
+            elif subject["subject_type"] == "organization":
+                where, params = "? IN (o.organization_id,o.target_organization_id,o.demand_organization_id,o.supply_organization_id)", [subject["id"]]
+            else:
+                where, params = "0=1", []
+            join = "FROM v06_collab_tasks t JOIN v06_opportunities o ON o.id=t.opportunity_id"
+            total = conn.execute(f"SELECT COUNT(*) {join} WHERE {where}", params).fetchone()[0]
+            rows = conn.execute(f"SELECT t.id,t.title,t.opportunity_id,t.owner_id,t.due_date,t.priority,t.status,t.created_at {join} WHERE {where} ORDER BY t.id DESC LIMIT ? OFFSET ?", [*params, page_size, (page - 1) * page_size]).fetchall()
         elif kind == "reviews" and conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='v04c_review_items'").fetchone():
             aliases = {
                 "organization": ["org", "organization", "organizations"],

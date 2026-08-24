@@ -143,12 +143,12 @@ def collaboration_home(request: Request):
             "SELECT COUNT(*) FROM v06_opportunities WHERE stage IN ('lost','closed') AND strftime('%Y-%m', created_at)=strftime('%Y-%m', 'now')"
         )
 
-    if _db_has_table("v04f_lead_records"):
-        metrics["新线索"] = _scalar(
-            "SELECT COUNT(*) FROM v04f_lead_records WHERE lifecycle_status='new'"
+    if _db_has_table("v06_opportunities"):
+        metrics["新机会"] = _scalar(
+            "SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND stage IN ('lead','draft')"
         )
-        metrics["待确认线索"] = _scalar(
-            "SELECT COUNT(*) FROM v04f_lead_records WHERE lifecycle_status IN ('new','reviewing')"
+        metrics["待确认机会"] = _scalar(
+            "SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND stage IN ('lead','draft','validating')"
         )
 
     if _db_has_table("v06_follow_ups"):
@@ -194,166 +194,24 @@ def collaboration_home(request: Request):
     )
 
 
-@router.get("/collaboration/leads", response_class=HTMLResponse)
-def collaboration_leads(request: Request, tab: str = "pending"):
-    user_id = _get_user_id(request)
-    tab_map = {
-        "pending": "待确认", "qualified": "已确认",
-        "disqualified": "已否决", "converted": "已转化",
-    }
-
-    has_v04f = _db_has_table("v04f_lead_records")
-    has_p5 = _db_has_table("p5_club_leads")
-
-    if not has_v04f and not has_p5:
-        return _templates().TemplateResponse(
-            request, "collaboration_leads.html", {
-                "tab": tab, "tab_map": tab_map, "leads": [],
-                "no_table": True, "status_map": LEAD_STATUS_MAP,
-                "is_operator": _is_operator(request),
-            }
-        )
-
-    status_filter = {
-        "pending": ["new", "reviewing"],
-        "qualified": ["qualified"],
-        "disqualified": ["disqualified"],
-        "converted": ["converted"],
-    }.get(tab, ["new", "reviewing"])
-
-    if has_v04f:
-        leads = _list(
-            "SELECT id, title, source_type, source_id, priority, owner_user_id, lifecycle_status, converted_opportunity_id, updated_at FROM v04f_lead_records WHERE lifecycle_status IN :status ORDER BY updated_at DESC LIMIT 50",
-            {"status": status_filter}
-        )
-    else:
-        leads = _list(
-            "SELECT id, title, source_type, source_id, priority, owner_user_id, lifecycle_status, converted_opportunity_id, updated_at FROM p5_club_leads WHERE lifecycle_status IN :status ORDER BY updated_at DESC LIMIT 50",
-            {"status": status_filter}
-        )
-
-    return _templates().TemplateResponse(
-        request, "collaboration_leads.html", {
-            "tab": tab, "tab_map": tab_map, "leads": leads,
-            "no_table": False, "status_map": LEAD_STATUS_MAP,
-            "is_operator": _is_operator(request),
-        }
-    )
+@router.get("/collaboration/leads", include_in_schema=False)
+def retired_collaboration_leads():
+    return RedirectResponse(url="/opportunities", status_code=303)
 
 
-@router.post("/collaboration/leads", response_class=HTMLResponse)
-async def create_lead(request: Request, db: Session = Depends(get_db)):
-    form = await request.form()
-    user_id = _get_user_id(request)
-    if not user_id:
-        return _templates().TemplateResponse(
-            request, "collaboration_leads.html", {
-                "tab": "pending", "tab_map": {"pending": "待确认"},
-                "leads": [], "no_table": False,
-                "status_map": LEAD_STATUS_MAP,
-                "is_operator": _is_operator(request),
-                "error": "请先登录",
-            }
-        )
-
-    try:
-        svc = BusinessCollaborationService(db)
-        result = svc.create_lead({
-            "title": form.get("title", ""),
-            "source_type": form.get("source_type", "manual"),
-            "subject_type": "organization",
-            "subject_id": str(form.get("subject_id", "")),
-            "demand_organization_id": int(form.get("demand_org_id", 0)) or None,
-            "supply_organization_id": int(form.get("supply_org_id", 0)) or None,
-            "recommendation_reason": form.get("reason", ""),
-            "owner_user_id": user_id,
-            "priority": form.get("priority", "P2"),
-            "suggested_next_action": form.get("next_action", ""),
-            "pilot_batch_id": "T5-1-WRITE-CLOSURE",
-        }, actor_user_id=user_id)
-        return RedirectResponse(url="/collaboration/leads?tab=pending", status_code=302)
-    except Exception as e:
-        return _templates().TemplateResponse(
-            request, "collaboration_leads.html", {
-                "tab": "pending", "tab_map": {"pending": "待确认"},
-                "leads": [], "no_table": False,
-                "status_map": LEAD_STATUS_MAP,
-                "is_operator": _is_operator(request),
-                "error": str(e),
-            }
-        )
+@router.post("/collaboration/leads", include_in_schema=False)
+async def retired_create_lead():
+    return RedirectResponse(url="/opportunities", status_code=303)
 
 
-@router.post("/collaboration/leads/{lead_id}/review", response_class=HTMLResponse)
-async def review_lead(request: Request, lead_id: int, db: Session = Depends(get_db)):
-    form = await request.form()
-    user_id = _get_user_id(request)
-    if not user_id:
-        return _templates().TemplateResponse(
-            request, "collaboration_leads.html", {
-                "tab": "pending", "tab_map": {"pending": "待确认"},
-                "leads": [], "no_table": False,
-                "status_map": LEAD_STATUS_MAP,
-                "is_operator": _is_operator(request),
-                "error": "请先登录",
-            }
-        )
-
-    decision = form.get("decision", "")
-    reason = form.get("reason", "")
-
-    try:
-        svc = BusinessCollaborationService(db)
-        svc.review_lead(lead_id, decision=decision, actor_user_id=user_id, reason=reason)
-        tab = "qualified" if decision == "qualified" else "disqualified"
-        return RedirectResponse(url=f"/collaboration/leads?tab={tab}", status_code=302)
-    except Exception as e:
-        return _templates().TemplateResponse(
-            request, "collaboration_leads.html", {
-                "tab": "pending", "tab_map": {"pending": "待确认"},
-                "leads": [], "no_table": False,
-                "status_map": LEAD_STATUS_MAP,
-                "is_operator": _is_operator(request),
-                "error": str(e),
-            }
-        )
+@router.post("/collaboration/leads/{lead_id}/review", include_in_schema=False)
+async def retired_review_lead(lead_id: int):
+    return RedirectResponse(url="/opportunities", status_code=303)
 
 
-@router.post("/collaboration/leads/{lead_id}/convert", response_class=HTMLResponse)
-async def convert_lead(request: Request, lead_id: int, db: Session = Depends(get_db)):
-    form = await request.form()
-    user_id = _get_user_id(request)
-    if not user_id:
-        return _templates().TemplateResponse(
-            request, "collaboration_leads.html", {
-                "tab": "pending", "tab_map": {"pending": "待确认"},
-                "leads": [], "no_table": False,
-                "status_map": LEAD_STATUS_MAP,
-                "is_operator": _is_operator(request),
-                "error": "请先登录",
-            }
-        )
-
-    try:
-        svc = BusinessCollaborationService(db)
-        result = svc.convert_lead(lead_id, actor_user_id=user_id, fields={
-            "title": form.get("title", ""),
-            "opp_type": form.get("opp_type", "collaboration"),
-            "priority": form.get("priority", "P2"),
-            "next_action": form.get("next_action", ""),
-        })
-        opp_id = result["opportunity"]["id"]
-        return RedirectResponse(url=f"/collaboration/opportunities/{opp_id}", status_code=302)
-    except Exception as e:
-        return _templates().TemplateResponse(
-            request, "collaboration_leads.html", {
-                "tab": "qualified", "tab_map": {"qualified": "已确认"},
-                "leads": [], "no_table": False,
-                "status_map": LEAD_STATUS_MAP,
-                "is_operator": _is_operator(request),
-                "error": str(e),
-            }
-        )
+@router.post("/collaboration/leads/{lead_id}/convert", include_in_schema=False)
+async def retired_convert_lead(lead_id: int):
+    return RedirectResponse(url="/opportunities", status_code=303)
 
 
 @router.get("/collaboration/opportunities", response_class=HTMLResponse)

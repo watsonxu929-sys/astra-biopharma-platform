@@ -109,23 +109,22 @@ def qbay_member_anchors(conn: sqlite3.Connection) -> dict[str, list[dict[str, An
 
 
 def _relation_graph(conn: sqlite3.Connection) -> dict[str, list[dict[str, str]]]:
-    if not table_exists(conn, "relations"):
+    if not table_exists(conn, "p3_canonical_relationships"):
         return {}
     rows = conn.execute(
         """
-        SELECT source_external_id, target_external_id, relation_type, external_id
-        FROM relations
-        WHERE COALESCE(is_active,1)=1
-          AND source_external_id IS NOT NULL
-          AND target_external_id IS NOT NULL
+        SELECT subject_id, object_id, relationship_type, relationship_no
+        FROM p3_canonical_relationships
+        WHERE review_status='approved' AND is_current=1
+          AND subject_id IS NOT NULL AND object_id IS NOT NULL
         """
     ).fetchall()
     graph: dict[str, list[dict[str, str]]] = {}
     for row in rows:
-        source = row["source_external_id"]
-        target = row["target_external_id"]
-        relation_type = row["relation_type"] or "关联"
-        relation_no = row["external_id"] or ""
+        source = row["subject_id"]
+        target = row["object_id"]
+        relation_type = row["relationship_type"] or "关联"
+        relation_no = row["relationship_no"] or ""
         graph.setdefault(source, []).append(
             {
                 "to": target,

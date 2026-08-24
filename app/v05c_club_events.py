@@ -97,10 +97,11 @@ def _event_detail(conn: sqlite3.Connection, club_event_id: int) -> dict[str, Any
         "SELECT COUNT(*) AS c FROM v05c_club_event_participation WHERE club_event_id=? AND attendance_status IN ('checked_in','attended')",
         (club_event_id,),
     ).fetchone()["c"]
+    task_columns = {str(column[1]) for column in conn.execute("PRAGMA table_info(v06_collab_tasks)")}
     followups = conn.execute(
-        "SELECT COUNT(*) AS c FROM actions WHERE source_type='v0.5C Q-BAY活动' AND target_external_id=?",
-        (data["event_no"],),
-    ).fetchone()["c"]
+        "SELECT COUNT(*) AS c FROM v06_collab_tasks WHERE completion_criteria LIKE ?",
+        (f"%{data['name']}%",),
+    ).fetchone()["c"] if "completion_criteria" in task_columns else 0
     data["stats"] = {
         "registrations": stats["registrations"] or 0,
         "approved": stats["approved"] or 0,
@@ -145,8 +146,12 @@ def _recalculate_activity(conn: sqlite3.Connection, membership_id: int) -> dict[
         (membership_id,),
     ).fetchone()[0]
     absent = max(0, int(registered or 0) - int(checked or 0))
-    needs = conn.execute("SELECT COUNT(*) FROM v04f_club_needs WHERE membership_id=?", (membership_id,)).fetchone()[0]
-    offers = conn.execute("SELECT COUNT(*) FROM v04f_club_offerings WHERE membership_id=?", (membership_id,)).fetchone()[0]
+    member = conn.execute("SELECT person_id,organization_id FROM v04f_club_memberships WHERE id=?", (membership_id,)).fetchone()
+    person_id = member["person_id"] if member else None
+    organization_id = member["organization_id"] if member else None
+    owner_clause = "(owner_person_id=? OR organization_id=? OR (legacy_source_type='qbay_membership' AND legacy_source_id=?))"
+    needs = conn.execute(f"SELECT COUNT(*) FROM v06_market_resources WHERE direction='demand' AND {owner_clause}", (person_id, organization_id, str(membership_id))).fetchone()[0]
+    offers = conn.execute(f"SELECT COUNT(*) FROM v06_market_resources WHERE direction='supply' AND {owner_clause}", (person_id, organization_id, str(membership_id))).fetchone()[0]
     score = min(100, int(registered or 0) * 8 + int(checked or 0) * 18 + int(needs or 0) * 8 + int(offers or 0) * 8 - absent * 5)
     if score >= 80:
         level = "高度活跃"

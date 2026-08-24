@@ -46,9 +46,9 @@ def dashboard_data(*, days: int = 7, industry: str = "", region: str = "", signa
             "new_organizations": _count(conn, f"SELECT COUNT(*) FROM organizations WHERE created_at>=? AND {org_where}", tuple([since, *params])),
             "new_people": _count(conn, "SELECT COUNT(*) FROM people WHERE created_at>=?", (since,)),
             "new_projects": _count(conn, "SELECT COUNT(*) FROM projects WHERE created_at>=?", (since,)),
-            "new_leads": _count(conn, "SELECT COUNT(*) FROM v04f_lead_records WHERE created_at>=?", (since,)),
+            "new_leads": _count(conn, "SELECT COUNT(*) FROM v06_opportunities WHERE created_at>=?", (since,)),
             "conflicts": _count(conn, "SELECT COUNT(*) FROM v04c_review_items WHERE item_type='conflict' AND status IN ('pending','in_review','deferred')"),
-            "overdue_actions": _count(conn, "SELECT COUNT(*) FROM actions WHERE COALESCE(is_active,1)=1 AND suggested_deadline IS NOT NULL AND suggested_deadline<date('now') AND status NOT IN ('已完成','completed','done')"),
+            "overdue_actions": _count(conn, "SELECT COUNT(*) FROM v06_collab_tasks WHERE due_date IS NOT NULL AND due_date<date('now') AND status NOT IN ('completed','closed','cancelled')"),
         }
         signal_rows = [dict(r) for r in conn.execute("SELECT signal_type,COUNT(*) AS count FROM v05e_industry_signals WHERE discovered_at>=? GROUP BY signal_type ORDER BY count DESC", (since,)).fetchall()]
         active_regions = [dict(r) for r in conn.execute("SELECT region,COUNT(*) AS count FROM organizations WHERE region IS NOT NULL AND region<>'' GROUP BY region ORDER BY count DESC LIMIT 10").fetchall()]
@@ -62,7 +62,7 @@ def dashboard_data(*, days: int = 7, industry: str = "", region: str = "", signa
         "drilldowns": {
             "high_signals": "/signals?signal_level=high",
             "pending_proposals": "/intelligence/monitoring/proposals?status=pending",
-            "overdue_actions": "/actions",
+            "overdue_actions": "/collaboration/tasks",
             "failed_sources": "/intelligence/monitoring/sources",
         },
         "recent_signals": recent_signals,

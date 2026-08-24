@@ -14,8 +14,6 @@ RESOURCE_STATUSES = {"draft", "pending_review", "published", "paused", "matched"
 
 class UnifiedResourceService:
     canonical_model = "v06_market_resources"
-    legacy_adapters = ("resources", "v04f_club_needs", "v04f_club_offerings")
-
     def __init__(self, db: Session):
         self.db = db
 
@@ -44,9 +42,7 @@ class UnifiedResourceService:
             stmt = stmt.where(MarketResource.region.contains(region))
         total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = list(self.db.scalars(stmt.order_by(desc(MarketResource.created_at)).offset((page - 1) * page_size).limit(page_size)).all())
-        items: list[Any] = rows
-        legacy = self.legacy_resources(direction=direction, q=q, limit=max(0, page_size - len(rows))) if include_legacy and page == 1 and status == "published" else []
-        return {"items": items, "legacy_items": legacy, "total": int(total) + len(legacy), "page": page, "page_size": page_size}
+        return {"items": rows, "legacy_items": [], "total": int(total), "page": page, "page_size": page_size}
 
     def detail(self, resource_id: int) -> MarketResource:
         resource = self.db.get(MarketResource, int(resource_id))
@@ -177,25 +173,6 @@ class UnifiedResourceService:
                 matches.append({"resource": candidate, "score": score, "reasons": reasons})
         matches.sort(key=lambda item: item["score"], reverse=True)
         return matches[:limit]
-
-    def legacy_resources(self, *, direction: str = "", q: str = "", limit: int = 20) -> list[dict[str, Any]]:
-        if limit <= 0:
-            return []
-        rows: list[dict[str, Any]] = []
-        try:
-            if direction in {"", "demand"}:
-                for row in self.db.execute(text("SELECT n.*,m.user_id,m.organization_id FROM v04f_club_needs n LEFT JOIN v04f_club_memberships m ON m.id=n.membership_id WHERE n.status='active' ORDER BY n.id DESC LIMIT :limit"), {"limit": limit}).mappings():
-                    if q and q not in (row.get("title") or "") and q not in (row.get("description") or ""):
-                        continue
-                    rows.append({"canonical_id": f"legacy:club_need:{row['id']}", "legacy": True, "source_system": "qbay", "direction": "demand", "id": row["id"], "title": row["title"], "summary": row.get("description"), "resource_type": row.get("need_type"), "region": row.get("region")})
-            if len(rows) < limit and direction in {"", "supply"}:
-                for row in self.db.execute(text("SELECT o.*,m.user_id,m.organization_id FROM v04f_club_offerings o LEFT JOIN v04f_club_memberships m ON m.id=o.membership_id WHERE o.status='active' ORDER BY o.id DESC LIMIT :limit"), {"limit": limit - len(rows)}).mappings():
-                    if q and q not in (row.get("title") or "") and q not in (row.get("description") or ""):
-                        continue
-                    rows.append({"canonical_id": f"legacy:club_offering:{row['id']}", "legacy": True, "source_system": "qbay", "direction": "supply", "id": row["id"], "title": row["title"], "summary": row.get("description"), "resource_type": row.get("offering_type"), "region": row.get("region")})
-        except Exception:
-            return rows
-        return rows[:limit]
 
     def to_api(self, resource: MarketResource | dict[str, Any]) -> dict[str, Any]:
         if isinstance(resource, dict):

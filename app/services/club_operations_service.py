@@ -1023,7 +1023,7 @@ class ClubOperationsDashboardService:
                 "待审核匹配": 0,
                 "推进中匹配": 0,
                 "潜在线索": 0,
-                "待处理任务": scalar("SELECT COUNT(*) FROM actions WHERE status NOT IN ('已完成','completed','closed','cancelled')"),
+                "待处理任务": scalar("SELECT COUNT(*) FROM v06_collab_tasks WHERE status NOT IN ('completed','closed','cancelled')"),
             }
             if self._exists(conn, "p4_resource_match_candidates"):
                 metrics["待审核活动"] = scalar("SELECT COUNT(*) FROM v05c_club_event_profiles WHERE lifecycle_status='pending_review'")

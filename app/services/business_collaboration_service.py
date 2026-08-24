@@ -182,99 +182,6 @@ class BusinessCollaborationService:
               AND role IN ('owner','collaborator') AND ended_at IS NULL
         """), {"opp": opportunity_id, "uid": str(actor_user_id)}).first() is not None
 
-    def create_lead(self, fields: dict[str, Any], *, actor_user_id: int) -> dict[str, Any]:
-        self.require_schema()
-        source_type = str(fields.get("source_type") or "manual")
-        source_record_id = str(fields.get("source_record_id") or "").strip() or None
-        if source_record_id:
-            existing = _mapping(self.db.execute(text("""
-                SELECT * FROM v04f_lead_records WHERE source_type=:type AND source_record_id=:source LIMIT 1
-            """), {"type": source_type, "source": source_record_id}))
-            if existing:
-                existing["idempotent"] = True
-                return existing
-        ts = now_iso()
-        subject_type = str(fields.get("subject_type") or "organization")
-        if subject_type not in {"organization", "project"}:
-            raise HTTPException(400, detail={"code": "INVALID_LEAD_SUBJECT", "message": "线索主体类型无效", "details": {}})
-        subject_id = str(fields.get("subject_id") or fields.get("demand_organization_id") or fields.get("supply_organization_id") or "").strip()
-        if not subject_id:
-            raise HTTPException(400, detail={"code": "LEAD_SUBJECT_REQUIRED", "message": "线索必须关联机构或项目", "details": {}})
-        result = self.db.execute(text("""
-            INSERT INTO v04f_lead_records(
-              lead_no,subject_type,subject_id,funnel_stage,system_score,system_grade,owner,next_action,
-              status,created_at,updated_at,title,source_type,source_record_id,demand_organization_id,
-              supply_organization_id,person_ids_json,organization_ids_json,recommendation_reason,
-              relationship_path_json,evidence_json,owner_user_id,priority,suggested_next_action,
-              lifecycle_status,pilot_batch_id
-            ) VALUES (
-              :no,:subject_type,:subject_id,'待识别',0,'C',:owner,:next_action,'active',:at,:at,
-              :title,:source_type,:source_record_id,:demand_org,:supply_org,:people,:organizations,
-              :reason,:path,:evidence,:owner_user,:priority,:next_action,'new',:pilot
-            )
-        """), {
-            "no": _number("P5L"), "subject_type": subject_type, "subject_id": subject_id,
-            "owner": str(fields.get("owner") or actor_user_id), "next_action": fields.get("next_action"),
-            "at": ts, "title": str(fields.get("title") or "未命名商务线索").strip(),
-            "source_type": source_type, "source_record_id": source_record_id,
-            "demand_org": fields.get("demand_organization_id"), "supply_org": fields.get("supply_organization_id"),
-            "people": _dump(fields.get("person_ids") or []), "organizations": _dump(fields.get("organization_ids") or []),
-            "reason": fields.get("recommendation_reason"), "path": _dump(fields.get("relationship_path") or []),
-            "evidence": _dump(fields.get("evidence") or []), "owner_user": fields.get("owner_user_id") or actor_user_id,
-            "priority": fields.get("priority") or "P2", "pilot": fields.get("pilot_batch_id"),
-        })
-        lead_id = int(result.lastrowid)
-        lead = self.lead_detail(lead_id)
-        self._audit("lead.created", "lead", lead_id, actor_user_id, after={"status": "new"}, pilot_batch_id=lead.get("pilot_batch_id"))
-        self.db.commit()
-        lead["idempotent"] = False
-        return lead
-
-    def list_leads(self, *, lifecycle_status: str = "", limit: int = 200) -> list[dict[str, Any]]:
-        self.require_schema()
-        sql = "SELECT * FROM v04f_lead_records WHERE source_type IS NOT NULL"
-        params: dict[str, Any] = {"limit": max(1, min(int(limit), 500))}
-        if lifecycle_status:
-            sql += " AND lifecycle_status=:status"
-            params["status"] = lifecycle_status
-        sql += " ORDER BY updated_at DESC,id DESC LIMIT :limit"
-        return [dict(row) for row in self.db.execute(text(sql), params).mappings()]
-
-    def lead_detail(self, lead_id: int) -> dict[str, Any]:
-        self.require_schema()
-        row = _mapping(self.db.execute(text("SELECT * FROM v04f_lead_records WHERE id=:id"), {"id": lead_id}))
-        if not row:
-            raise HTTPException(404, detail={"code": "LEAD_NOT_FOUND", "message": "线索不存在", "details": {}})
-        for key in ("person_ids_json", "organization_ids_json", "relationship_path_json", "evidence_json"):
-            row[key.removesuffix("_json")] = _loads(row.get(key), [])
-        return row
-
-    def review_lead(self, lead_id: int, *, decision: str, actor_user_id: int, reason: str = "") -> dict[str, Any]:
-        self.require_schema()
-        if decision not in {"reviewing", "qualified", "disqualified"}:
-            raise HTTPException(400, detail={"code": "INVALID_LEAD_DECISION", "message": "无效线索审核状态", "details": {}})
-        if decision == "disqualified" and not reason.strip():
-            raise HTTPException(400, detail={"code": "LEAD_REASON_REQUIRED", "message": "否决线索必须填写原因", "details": {}})
-        lead = self.lead_detail(lead_id)
-        if lead["lifecycle_status"] == decision:
-            return {"lead": lead, "idempotent": True}
-        if lead["lifecycle_status"] == "converted":
-            raise HTTPException(409, detail={"code": "LEAD_ALREADY_CONVERTED", "message": "已转化线索不能重新审核", "details": {}})
-        self.db.execute(text("""
-            UPDATE v04f_lead_records SET lifecycle_status=:status,
-              funnel_stage=:stage,decision_reason=:reason,updated_at=:at WHERE id=:id
-        """), {
-            "status": decision, "stage": {"reviewing": "审核中", "qualified": "已确认", "disqualified": "已否决"}[decision],
-            "reason": reason or None, "at": now_iso(), "id": lead_id,
-        })
-        self._audit("lead.reviewed", "lead", lead_id, actor_user_id,
-                    before={"status": lead["lifecycle_status"]}, after={"status": decision},
-                    reason=reason, pilot_batch_id=lead.get("pilot_batch_id"))
-        if decision == "qualified":
-            self._event("lead.qualified", "lead", lead_id, {"source_type": lead.get("source_type")}, actor_user_id, lead.get("pilot_batch_id"))
-        self.db.commit()
-        return {"lead": self.lead_detail(lead_id), "idempotent": False}
-
     def _insert_participant(self, opportunity_id: int, *, participant_type: str, participant_id: int | str,
                             role: str, actor_user_id: int, visibility: str = "organization",
                             is_internal: bool = False, pilot_batch_id: str | None = None) -> None:
@@ -293,87 +200,6 @@ class BusinessCollaborationService:
             "internal": int(is_internal), "visibility": visibility, "at": ts,
             "actor": actor_user_id, "pilot": pilot_batch_id,
         })
-
-    def convert_lead(self, lead_id: int, *, actor_user_id: int,
-                     fields: dict[str, Any], is_admin: bool = False) -> dict[str, Any]:
-        self.require_schema()
-        lead = self.lead_detail(lead_id)
-        if lead.get("converted_opportunity_id"):
-            return {"opportunity": self._opportunity_row(int(lead["converted_opportunity_id"])), "lead": lead, "idempotent": True}
-        if lead["lifecycle_status"] != "qualified":
-            raise HTTPException(409, detail={"code": "QUALIFIED_LEAD_REQUIRED", "message": "只有人工确认的线索可以转化", "details": {}})
-        source_type = str(lead.get("source_type") or "lead")
-        source_record_id = str(lead.get("source_record_id") or lead_id)
-        duplicate = _mapping(self.db.execute(text("""
-            SELECT opportunity_id FROM p5_opportunity_sources
-            WHERE source_type=:type AND source_record_id=:source LIMIT 1
-        """), {"type": source_type, "source": source_record_id}))
-        if duplicate:
-            raise HTTPException(409, detail={
-                "code": "DUPLICATE_OPPORTUNITY_SOURCE", "message": "该来源已存在正式合作机会",
-                "details": {"opportunity_id": duplicate["opportunity_id"]},
-            })
-        ts = now_iso()
-        opportunity = self.opportunities.create(actor_user_id=actor_user_id, fields={
-            "title": fields.get("title") or lead.get("title") or "未命名合作机会",
-            "opp_type": fields.get("opp_type") or "collaboration",
-            "source_type": "lead", "source_id": lead_id,
-            "demand_organization_id": lead.get("demand_organization_id"),
-            "supply_organization_id": lead.get("supply_organization_id"),
-            "description": fields.get("description") or lead.get("recommendation_reason"),
-            "expected_outcome": fields.get("expected_outcome"),
-            "priority": fields.get("priority") or lead.get("priority") or "P2",
-            "estimated_amount": fields.get("estimated_amount"),
-            "next_action": fields.get("next_action") or lead.get("suggested_next_action"),
-            "next_follow_at": _as_datetime(fields.get("next_follow_at")),
-            "owner_id": fields.get("owner_id") or lead.get("owner_user_id") or actor_user_id,
-            "visibility": fields.get("visibility") or "organization",
-            "stage": "draft", "opportunity_no": _number("P5O"), "currency": fields.get("currency"),
-            "success_probability": fields.get("success_probability"), "target_complete_at": fields.get("target_complete_at"),
-            "risk_summary": fields.get("risk_summary"), "last_stage_changed_at": now_iso(),
-            "pilot_batch_id": lead.get("pilot_batch_id"),
-            "human_confirmed": True,
-        }, commit=False)
-        self.db.flush()
-        self.db.execute(text("""
-            INSERT INTO p5_opportunity_stage_history(
-              opportunity_id,old_stage,new_stage,reason,actor_user_id,pilot_batch_id,created_at
-            ) VALUES (:opp,NULL,'draft','线索人工确认转化',:actor,:pilot,:at)
-        """), {"opp": opportunity.id, "actor": actor_user_id, "pilot": lead.get("pilot_batch_id"), "at": ts})
-        self.db.execute(text("""
-            INSERT INTO p5_opportunity_sources(
-              opportunity_id,source_type,source_record_id,source_label,evidence_json,
-              relationship_path_json,added_by_user_id,pilot_batch_id,created_at
-            ) VALUES (:opp,:type,:source,:label,:evidence,:path,:actor,:pilot,:at)
-        """), {
-            "opp": opportunity.id, "type": source_type, "source": source_record_id,
-            "label": lead.get("title"), "evidence": lead.get("evidence_json"),
-            "path": lead.get("relationship_path_json"), "actor": actor_user_id,
-            "pilot": lead.get("pilot_batch_id"), "at": ts,
-        })
-        owner_id = int(fields.get("owner_id") or lead.get("owner_user_id") or actor_user_id)
-        self._insert_participant(opportunity.id, participant_type="user", participant_id=owner_id,
-                                 role="owner", actor_user_id=actor_user_id, is_internal=True,
-                                 pilot_batch_id=lead.get("pilot_batch_id"))
-        for org_id, role in ((lead.get("demand_organization_id"), "demand_party"), (lead.get("supply_organization_id"), "supply_party")):
-            if org_id:
-                self._insert_participant(opportunity.id, participant_type="organization", participant_id=org_id,
-                                         role=role, actor_user_id=actor_user_id, pilot_batch_id=lead.get("pilot_batch_id"))
-        for person_id in _loads(lead.get("person_ids_json"), []):
-            self._insert_participant(opportunity.id, participant_type="person", participant_id=person_id,
-                                     role="business_contact", actor_user_id=actor_user_id,
-                                     pilot_batch_id=lead.get("pilot_batch_id"))
-        self.db.execute(text("""
-            UPDATE v04f_lead_records SET lifecycle_status='converted',funnel_stage='已转化',
-              converted_opportunity_id=:opp,updated_at=:at WHERE id=:id
-        """), {"opp": opportunity.id, "at": ts, "id": lead_id})
-        self._event("lead.converted", "lead", lead_id, {"opportunity_id": opportunity.id}, actor_user_id, lead.get("pilot_batch_id"))
-        self._event("opportunity.created", "opportunity", opportunity.id, {"lead_id": lead_id, "stage": "draft"}, actor_user_id, lead.get("pilot_batch_id"))
-        self._audit("lead.converted", "lead", lead_id, actor_user_id,
-                    before={"status": "qualified"}, after={"status": "converted", "opportunity_id": opportunity.id},
-                    pilot_batch_id=lead.get("pilot_batch_id"))
-        self.db.commit()
-        return {"opportunity": self._opportunity_row(opportunity.id), "lead": self.lead_detail(lead_id), "idempotent": False}
 
     def update_stage(self, opportunity_id: int, *, stage: str, actor_user_id: int,
                      reason: str = "", is_admin: bool = False) -> dict[str, Any]:
@@ -673,8 +499,8 @@ class BusinessCollaborationService:
         month = datetime.now().strftime("%Y-%m")
         scalar = lambda sql, params=None: int(self.db.execute(text(sql), params or {}).scalar() or 0)
         metrics = {
-            "新线索": scalar("SELECT COUNT(*) FROM v04f_lead_records WHERE lifecycle_status='new'"),
-            "待确认线索": scalar("SELECT COUNT(*) FROM v04f_lead_records WHERE lifecycle_status IN ('reviewing','qualified')"),
+            "新机会": scalar("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND stage IN ('lead','draft')"),
+            "待确认机会": scalar("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND stage IN ('lead','draft','validating')"),
             "推进中机会": scalar("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND stage NOT IN ('won','lost','closed')"),
             "本周待跟进": scalar("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND date(next_follow_at) BETWEEN date(:today) AND date(:week)", {"today": today, "week": week}),
             "已逾期跟进": scalar("SELECT COUNT(*) FROM v06_opportunities WHERE status='active' AND next_follow_at IS NOT NULL AND date(next_follow_at)<date(:today)", {"today": today}),
@@ -693,7 +519,7 @@ class BusinessCollaborationService:
         return {
             "schema_ready": True, "metrics": metrics,
             "queues": {
-                "线索审核": "/collaboration/leads", "合作机会": "/opportunities",
+                "合作机会": "/opportunities",
                 "任务": "/collaboration/tasks", "会议": "/collaboration/meetings",
                 "风险提醒": "/collaboration/risks",
             },

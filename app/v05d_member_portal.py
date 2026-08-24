@@ -527,40 +527,6 @@ async def submit_membership_link_request(request: Request):
 @router.get("/member", response_class=HTMLResponse)
 def member_home(request: Request):
     return RedirectResponse("/club", status_code=303)
-    ctx = _member_context(request)
-    mid = int(ctx["member"]["id"])
-    with db_connection() as conn:
-        counts = {
-            "pending_changes": conn.execute("SELECT COUNT(*) FROM v05d_profile_change_requests WHERE membership_id=? AND status='pending'", (mid,)).fetchone()[0],
-            "my_needs": conn.execute("SELECT COUNT(*) FROM v04f_club_needs WHERE membership_id=?", (mid,)).fetchone()[0],
-            "my_offerings": conn.execute("SELECT COUNT(*) FROM v04f_club_offerings WHERE membership_id=?", (mid,)).fetchone()[0],
-            "registrations": conn.execute("SELECT COUNT(*) FROM v05c_club_event_registrations WHERE membership_id=?", (mid,)).fetchone()[0],
-            "unread": conn.execute("SELECT COUNT(*) FROM v05d_member_notifications WHERE membership_id=? AND status='unread'", (mid,)).fetchone()[0],
-        }
-        notifications = [dict(r) for r in conn.execute("SELECT * FROM v05d_member_notifications WHERE membership_id=? ORDER BY created_at DESC LIMIT 5", (mid,)).fetchall()]
-        
-        user_id = conn.execute("SELECT user_id FROM v04f_club_memberships WHERE id=?", (mid,)).fetchone()[0]
-        if user_id:
-            user_link_status = "linked"
-            user = conn.execute("SELECT username,display_name,role,status FROM v05a_users WHERE id=?", (user_id,)).fetchone()
-            if user:
-                user_link_status_label = f"已关联账号：{user['display_name']} ({user['username']})"
-            else:
-                user_link_status_label = "已关联账号（账号不存在）"
-            can_request_link = False
-        else:
-            existing_req = conn.execute("SELECT 1 FROM membership_user_link_requests WHERE membership_id=? AND status='pending'", (mid,)).fetchone()
-            if existing_req:
-                user_link_status = "pending"
-                user_link_status_label = "关联申请待审核"
-                can_request_link = False
-            else:
-                user_link_status = "unlinked"
-                user_link_status_label = "尚未关联登录账号"
-                can_request_link = True
-    return _render(request, "home", counts=counts, notifications=notifications, 
-                   user_link_status=user_link_status, user_link_status_label=user_link_status_label, 
-                   can_request_link=can_request_link)
 
 
 @router.get("/member/profile", response_class=HTMLResponse)
@@ -673,8 +639,13 @@ def _content_page(request: Request, content_type: str):
     mid = int(ctx["member"]["id"])
     with db_connection() as conn:
         drafts = [dict(r) for r in conn.execute("SELECT * FROM v05d_member_content_requests WHERE membership_id=? AND content_type=? ORDER BY id DESC", (mid, content_type)).fetchall()]
-        official_table = "v04f_club_needs" if content_type == "need" else "v04f_club_offerings"
-        official = [dict(r) for r in conn.execute(f"SELECT * FROM {official_table} WHERE membership_id=? ORDER BY id DESC", (mid,)).fetchall()]
+        direction = "demand" if content_type == "need" else "supply"
+        official = [dict(r) for r in conn.execute(
+            """SELECT * FROM v06_market_resources WHERE direction=? AND
+               (owner_person_id=? OR organization_id=? OR (legacy_source_type='qbay_membership' AND legacy_source_id=?))
+               ORDER BY id DESC""",
+            (direction, ctx["member"].get("person_id"), ctx["member"].get("organization_id"), str(mid)),
+        ).fetchall()]
     return _render(request, "content", content_type=content_type, drafts=drafts, official=official)
 
 
@@ -800,15 +771,16 @@ def member_matches(request: Request):
     with db_connection() as conn:
         rows = [dict(r) for r in conn.execute(
             """
-            SELECT cm.*,n.membership_id AS need_member_id,o.membership_id AS offering_member_id,
-                   n.title AS need_title,o.title AS offering_title
-            FROM v04f_club_matches cm
-            JOIN v04f_club_needs n ON n.id=cm.need_id
-            JOIN v04f_club_offerings o ON o.id=cm.offering_id
-            WHERE n.membership_id=? OR o.membership_id=?
+            SELECT cm.*,d.title AS need_title,s.title AS offering_title
+            FROM p4_resource_match_candidates cm
+            JOIN v06_market_resources d ON d.id=cm.demand_resource_id
+            JOIN v06_market_resources s ON s.id=cm.supply_resource_id
+            WHERE d.owner_person_id=? OR d.organization_id=? OR (d.legacy_source_type='qbay_membership' AND d.legacy_source_id=?)
+               OR s.owner_person_id=? OR s.organization_id=? OR (s.legacy_source_type='qbay_membership' AND s.legacy_source_id=?)
             ORDER BY cm.created_at DESC
             """,
-            (mid, mid),
+            (ctx["member"].get("person_id"), ctx["member"].get("organization_id"), str(mid),
+             ctx["member"].get("person_id"), ctx["member"].get("organization_id"), str(mid)),
         ).fetchall()]
         feedback = [dict(r) for r in conn.execute("SELECT * FROM v05d_member_match_feedback WHERE membership_id=? ORDER BY created_at DESC", (mid,)).fetchall()]
     return _render(request, "matches", matches=rows, feedback=feedback)
@@ -826,17 +798,20 @@ async def match_feedback(request: Request, match_id: int):
     with db_connection() as conn:
         match = conn.execute(
             """
-            SELECT cm.*,n.membership_id AS need_member_id,o.membership_id AS offering_member_id
-            FROM v04f_club_matches cm
-            JOIN v04f_club_needs n ON n.id=cm.need_id
-            JOIN v04f_club_offerings o ON o.id=cm.offering_id
+            SELECT cm.*,
+              CASE WHEN d.owner_person_id=? OR d.organization_id=? OR (d.legacy_source_type='qbay_membership' AND d.legacy_source_id=?) THEN 1 ELSE 0 END AS owns_demand,
+              CASE WHEN s.owner_person_id=? OR s.organization_id=? OR (s.legacy_source_type='qbay_membership' AND s.legacy_source_id=?) THEN 1 ELSE 0 END AS owns_supply
+            FROM p4_resource_match_candidates cm
+            JOIN v06_market_resources d ON d.id=cm.demand_resource_id
+            JOIN v06_market_resources s ON s.id=cm.supply_resource_id
             WHERE cm.id=?
             """,
-            (match_id,),
+            (ctx["member"].get("person_id"), ctx["member"].get("organization_id"), str(mid),
+             ctx["member"].get("person_id"), ctx["member"].get("organization_id"), str(mid), match_id),
         ).fetchone()
-        if not match or mid not in {match["need_member_id"], match["offering_member_id"]}:
+        if not match or not (match["owns_demand"] or match["owns_supply"]):
             raise HTTPException(404, "match not found")
-        side = "requester" if mid == match["need_member_id"] else "provider"
+        side = "requester" if match["owns_demand"] else "provider"
         status_after = f"{side}_{feedback}"
         conn.execute(
             """

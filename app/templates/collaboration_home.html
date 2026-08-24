@@ -5,12 +5,12 @@
 {% block content %}
 <div class="page-header">
   <h1>业务协同工作台</h1>
-  <p>线索、合作机会、任务与跟进管理</p>
+  <p>合作机会、任务与跟进管理</p>
 </div>
 
 <section class="card-stats">
-  <div class="stat-item"><span class="stat-value">{{ metrics['新线索'] or 0 }}</span><span class="stat-label">新线索</span></div>
-  <div class="stat-item"><span class="stat-value">{{ metrics['待确认线索'] or 0 }}</span><span class="stat-label">待确认线索</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['新机会'] or 0 }}</span><span class="stat-label">新机会</span></div>
+  <div class="stat-item"><span class="stat-value">{{ metrics['待确认机会'] or 0 }}</span><span class="stat-label">待确认机会</span></div>
   <div class="stat-item"><span class="stat-value">{{ metrics['推进中机会'] or 0 }}</span><span class="stat-label">推进中机会</span></div>
   <div class="stat-item"><span class="stat-value">{{ metrics['本周待跟进'] or 0 }}</span><span class="stat-label">本周待跟进</span></div>
   <div class="stat-item"><span class="stat-value">{{ metrics['已逾期跟进'] or 0 }}</span><span class="stat-label">已逾期跟进</span></div>
@@ -76,7 +76,6 @@
   <section class="card">
     <h2>快捷入口</h2>
     <div class="quick-links">
-      <a href="/collaboration/leads" class="quick-link">线索审核</a>
       <a href="/collaboration/opportunities" class="quick-link">合作机会</a>
       <a href="/collaboration/tasks" class="quick-link">任务管理</a>
       <a href="/collaboration/meetings" class="quick-link">会议安排</a>
