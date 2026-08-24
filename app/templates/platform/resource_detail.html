@@ -3,32 +3,38 @@
 {% block platform_title %}{{ resource.title }}{% endblock %}
 {% block platform_content %}
 {% set record = golden_resource %}
-<div class="platform-content" style="max-width:900px;margin:0 auto;padding:24px 32px;">
+<div class="platform-content" style="max-width:960px;margin:0 auto;padding:24px 32px;">
   <a href="/resources">← 返回资源市场</a>
   <div class="flex-between mt-16" style="align-items:flex-start;gap:16px;">
     <div style="min-width:0;flex:1 1 auto;"><h1 class="page-title" style="overflow-wrap:anywhere;">{{ resource.title }}</h1>
-      <div class="opp-meta"><span class="badge">{{ '供给' if resource.direction == 'supply' else '需求' }}</span><span>{{ resource.resource_type }}</span><span>{{ resource.region or '' }}</span><span>状态：{{ resource.status|status_label }}</span></div>
+      <div class="opp-meta"><span class="badge">{{ '供给' if resource.direction == 'supply' else '需求' }}</span><span>{{ resource.resource_type }}</span><span>{{ resource.region or '区域待补充' }}</span><span>状态：{{ resource.status|status_label }}</span></div>
     </div>
-    {% if record.source_intelligence_id %}<a class="btn btn-primary" style="flex:0 0 auto;white-space:nowrap;" href="/platform/golden-loop?intelligence_id={{ record.source_intelligence_id }}">查看来源与进展</a>{% endif %}
+    {% if record.source_intelligence_id %}<a class="btn btn-outline" href="/intelligence/{{ record.source_intelligence_id }}">查看来源情报</a>{% endif %}
   </div>
   {% if record.source_intelligence_id %}<section class="platform-card"><strong>来源情报</strong><p><a href="/intelligence/{{ record.source_intelligence_id }}">{{ record.intelligence_title or record.source_intelligence_title or '查看来源情报' }}</a></p></section>{% endif %}
-  <section class="platform-card"><h2>当前状态与下一步</h2>
-    <p><strong>{{ trace.guidance.current_state }}</strong></p><p>{{ trace.guidance.next_action }}</p>
-  </section>
-  <section class="platform-card"><h2>资源说明</h2><p>{{ resource.summary or '暂无摘要' }}</p>{% if resource.description %}<p style="white-space:pre-wrap;">{{ resource.description }}</p>{% endif %}</section>
+  <section class="platform-card"><h2>当前状态与下一步</h2><p><strong>{{ trace.guidance.current_state }}</strong></p><p>{{ trace.guidance.next_action }}</p></section>
+  <section class="platform-card"><h2>资源说明</h2><p>{{ resource.summary or '尚未填写摘要，建议补充具体资源内容。' }}</p>{% if resource.description %}<p style="white-space:pre-wrap;">{{ resource.description }}</p>{% endif %}</section>
   <div class="platform-grid platform-grid-2">
-    <section class="platform-card"><h3>归属主体</h3><p>机构：{{ record.organization_name or '未设置' }} · 人物：{{ record.owner_person_name or '未设置' }} · 项目：{{ record.project_name or '未设置' }}</p></section>
-    <section class="platform-card"><h3>合作条件</h3><p>{{ record.cooperation_mode or '待沟通' }}</p><p>{{ record.cooperation_terms or '' }}</p></section>
+    <section class="platform-card"><h3>谁需要/提供</h3><p>{{ record.organization_name or record.owner_person_name or '主体信息待补充' }}</p><p class="text-muted">{{ record.project_name or '' }}</p></section>
+    <section class="platform-card"><h3>合作条件</h3><p>{{ record.cooperation_mode or '合作方式待沟通' }}</p><p>{{ record.cooperation_terms or '' }}</p><p>有效期：{{ record.valid_until or '长期有效/待补充' }}</p></section>
   </div>
-  <section class="platform-card"><h2>候选匹配</h2>
-    {% set reason_names = {'resource_type':'资源类型一致','industry_direction':'产业方向一致','region':'区域条件一致','tags':'业务标签相关'} %}
-    {% for item in matches[:5] %}<p><a href="/resources/{{ item.resource.id }}">{{ item.resource.title }}</a> · 得分 {{ item.score }} · {% for reason in item.reasons %}{{ reason_names.get(reason, '业务条件匹配') }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% else %}<p class="text-muted">暂无可确认的匹配候选。</p>{% endfor %}
-    <p><a href="/platform/golden-loop{% if record.source_intelligence_id %}?intelligence_id={{ record.source_intelligence_id }}{% endif %}">进入人工确认匹配</a></p>
+  <section class="platform-card"><h2>匹配候选</h2>
+    {% for item in matches %}
+    <article class="platform-card" style="margin:12px 0;">
+      <div class="flex-between" style="gap:12px;align-items:flex-start;"><div><h3><a href="/resources/{{ item.resource.id }}">{{ item.resource.title }}</a></h3><p><strong>对方主体：</strong>{{ item.owner_label }} · <strong>匹配类别：</strong>{{ item.match_category }} · <strong>状态：</strong>{{ item.resource.status|status_label }}</p></div><span class="badge">匹配度 {{ item.score }}</span></div>
+      <p>{{ item.resource.summary or '对方尚未填写资源摘要。' }}</p>
+      <p><strong>推荐理由：</strong>{% for reason in item.reasons %}{{ reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p>
+      {% if can_write %}<form method="post" action="/golden-loop/matches" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="hidden" name="demand_resource_id" value="{{ item.demand_resource_id }}"><input type="hidden" name="supply_resource_id" value="{{ item.supply_resource_id }}"><input type="hidden" name="note" value="基于资源类别、业务关键词和有效状态进行人工核验">
+        <button class="btn btn-primary" type="submit" name="decision" value="confirm">确认匹配</button><button class="btn btn-outline" type="submit" name="decision" value="reject">暂不匹配</button>
+      </form>{% endif %}
+    </article>
+    {% else %}<div class="empty-state"><h3>当前没有满足条件的候选</h3><p>建议补充资源类别、描述或有效期，系统会自动寻找可能合作方。</p></div>{% endfor %}
   </section>
-  <section class="platform-card"><h2>业务追溯</h2>
-    {% for item in trace.matches %}<p><a href="/matches/{{ item.id }}">{{ item.demand_title }} ↔ {{ item.supply_title }}</a></p>{% endfor %}
+  <section class="platform-card"><h2>业务进展</h2>
+    {% for item in trace.matches %}<p><a href="/matches/{{ item.id }}">{{ item.demand_title }} ↔ {{ item.supply_title }}</a> · {{ {'accepted':'已确认','rejected':'暂不匹配','reviewed':'待后续判断','converted_to_lead':'已转合作机会'}.get(item.status, '待确认') }}</p>{% endfor %}
     {% for item in trace.opportunities %}<p><a href="/opportunities/{{ item.id }}">合作机会：{{ item.title }}</a></p>{% endfor %}
-    {% if not trace.matches and not trace.opportunities %}<p class="text-muted">尚未形成匹配或合作机会。</p>{% endif %}
+    {% if not trace.matches and not trace.opportunities %}<p class="text-muted">尚未确认匹配。选择合适候选后即可创建合作机会。</p>{% endif %}
   </section>
   <section class="platform-card"><form method="post" action="/api/v1/favorites/toggle"><input type="hidden" name="target_type" value="resource"><input type="hidden" name="target_id" value="{{ resource.id }}"><button class="btn btn-sm" type="submit">{{ '取消收藏' if is_favorited else '收藏' }}</button></form></section>
 </div>

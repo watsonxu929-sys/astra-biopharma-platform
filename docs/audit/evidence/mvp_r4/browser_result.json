@@ -1,0 +1,232 @@
+{
+  "status": "PASS",
+  "browser": "Chromium 151.0.7922.34",
+  "viewports": [
+    "1366x768",
+    "1600x900"
+  ],
+  "visited": [
+    {
+      "name": "01_workspace",
+      "url": "http://127.0.0.1:8014/platform",
+      "status": 200,
+      "title": "产业协作工作台",
+      "overflow": false
+    },
+    {
+      "name": "02_intelligence",
+      "url": "http://127.0.0.1:8014/intelligence/3",
+      "status": 200,
+      "title": "华瑞医疗新一代影像设备获NMPA批准",
+      "overflow": false
+    },
+    {
+      "name": "03_subject",
+      "url": "http://127.0.0.1:8014/network/people/1",
+      "status": 200,
+      "title": "Admin - 人物详情",
+      "overflow": false
+    },
+    {
+      "name": "04_formal_resource",
+      "url": "http://127.0.0.1:8014/resources/22",
+      "status": 200,
+      "title": "寻找中药质量标准研究合作方",
+      "overflow": false
+    },
+    {
+      "name": "05_formal_opportunity",
+      "url": "http://127.0.0.1:8014/opportunities/15",
+      "status": 200,
+      "title": "Test Opp",
+      "overflow": false
+    },
+    {
+      "name": "10_qbay",
+      "url": "http://127.0.0.1:8014/club",
+      "status": 200,
+      "title": "Q-BAY俱乐部",
+      "overflow": false
+    },
+    {
+      "name": "11_search",
+      "url": "http://127.0.0.1:8014/search?q=%E7%94%9F%E7%89%A9%E5%8C%BB%E8%8D%AF",
+      "status": 200,
+      "title": "搜索结果",
+      "overflow": false
+    },
+    {
+      "name": "wide_01_workspace",
+      "url": "http://127.0.0.1:8014/platform",
+      "status": 200,
+      "title": "产业协作工作台",
+      "overflow": false
+    },
+    {
+      "name": "wide_02_intelligence",
+      "url": "http://127.0.0.1:8014/intelligence/3",
+      "status": 200,
+      "title": "华瑞医疗新一代影像设备获NMPA批准",
+      "overflow": false
+    },
+    {
+      "name": "wide_03_subject",
+      "url": "http://127.0.0.1:8014/network/people/1",
+      "status": 200,
+      "title": "Admin - 人物详情",
+      "overflow": false
+    },
+    {
+      "name": "wide_04_formal_resource",
+      "url": "http://127.0.0.1:8014/resources/22",
+      "status": 200,
+      "title": "寻找中药质量标准研究合作方",
+      "overflow": false
+    },
+    {
+      "name": "wide_05_formal_opportunity",
+      "url": "http://127.0.0.1:8014/opportunities/15",
+      "status": 200,
+      "title": "Test Opp",
+      "overflow": false
+    },
+    {
+      "name": "wide_10_qbay",
+      "url": "http://127.0.0.1:8014/club",
+      "status": 200,
+      "title": "Q-BAY俱乐部",
+      "overflow": false
+    },
+    {
+      "name": "wide_11_search",
+      "url": "http://127.0.0.1:8014/search?q=%E7%94%9F%E7%89%A9%E5%8C%BB%E8%8D%AF",
+      "status": 200,
+      "title": "搜索结果",
+      "overflow": false
+    },
+    {
+      "name": "flow_intelligence_start",
+      "url": "http://127.0.0.1:8015/intelligence/1",
+      "status": 200,
+      "title": "CDE发布2026年创新药审评审批改革新规",
+      "overflow": false
+    },
+    {
+      "name": "04_resource_match_candidates",
+      "url": "http://127.0.0.1:8015/resources/29",
+      "status": 200,
+      "title": "需求｜CDE发布2026年创新药审评审批改革新规",
+      "overflow": false
+    },
+    {
+      "name": "05_match_confirmed",
+      "url": "http://127.0.0.1:8015/matches/1",
+      "status": 200,
+      "title": "供需匹配详情",
+      "overflow": false
+    },
+    {
+      "name": "06_opportunity",
+      "url": "http://127.0.0.1:8015/opportunities/15",
+      "status": 200,
+      "title": "合作机会｜需求｜CDE发布2026年创新药审评审批改革新规 × 供给｜CDE发布2026年创新药审评审批改革新规",
+      "overflow": false
+    },
+    {
+      "name": "07_follow_up",
+      "url": "http://127.0.0.1:8015/opportunities/15?message=%E8%B7%9F%E8%BF%9B%E5%B7%B2%E7%99%BB%E8%AE%B0",
+      "status": 200,
+      "title": "合作机会｜需求｜CDE发布2026年创新药审评审批改革新规 × 供给｜CDE发布2026年创新药审评审批改革新规",
+      "overflow": false
+    },
+    {
+      "name": "08_outcome",
+      "url": "http://127.0.0.1:8015/opportunities/15?message=%E5%95%86%E5%8A%A1%E7%BB%93%E6%9E%9C%E5%B7%B2%E4%BF%9D%E5%AD%98%EF%BC%8C%E6%AD%A3%E5%BC%8F%E5%90%88%E4%BD%9C%E5%85%B3%E7%B3%BB%E5%B7%B2%E5%BD%A2%E6%88%90",
+      "status": 200,
+      "title": "合作机会｜需求｜CDE发布2026年创新药审评审批改革新规 × 供给｜CDE发布2026年创新药审评审批改革新规",
+      "overflow": false
+    },
+    {
+      "name": "09_relationship",
+      "url": "http://127.0.0.1:8015/network/relationships/1",
+      "status": 200,
+      "title": "主体治理与产业关系网络",
+      "overflow": false
+    }
+  ],
+  "screenshots": [
+    "docs\\audit\\evidence\\mvp_r4\\01_workspace.png",
+    "docs\\audit\\evidence\\mvp_r4\\02_intelligence.png",
+    "docs\\audit\\evidence\\mvp_r4\\03_subject.png",
+    "docs\\audit\\evidence\\mvp_r4\\04_formal_resource.png",
+    "docs\\audit\\evidence\\mvp_r4\\05_formal_opportunity.png",
+    "docs\\audit\\evidence\\mvp_r4\\10_qbay.png",
+    "docs\\audit\\evidence\\mvp_r4\\11_search.png",
+    "docs\\audit\\evidence\\mvp_r4\\04_resource_match_candidates.png",
+    "docs\\audit\\evidence\\mvp_r4\\05_match_confirmed.png",
+    "docs\\audit\\evidence\\mvp_r4\\06_opportunity.png",
+    "docs\\audit\\evidence\\mvp_r4\\07_follow_up.png",
+    "docs\\audit\\evidence\\mvp_r4\\08_outcome.png",
+    "docs\\audit\\evidence\\mvp_r4\\09_relationship.png"
+  ],
+  "console_errors": 0,
+  "page_errors": 0,
+  "network_errors": 0,
+  "request_failures": 0,
+  "horizontal_overflow": 0,
+  "flow": {
+    "intelligence_id": 1,
+    "subject_count": 2,
+    "demand_id": 29,
+    "supply_id": 30,
+    "match_id": 1,
+    "opportunity_id": 15,
+    "follow_up": true,
+    "outcome": "won",
+    "relationship_id": 1,
+    "relationship_url": "/network/relationships/1",
+    "evidence_count": 1
+  },
+  "test_database": {
+    "integrity": "ok",
+    "marker_records_before_temp_cleanup": 4,
+    "cleanup": "OS temporary directory removed"
+  },
+  "formal_database": {
+    "before": {
+      "integrity": "ok",
+      "counts": {
+        "people": 44,
+        "organizations": 24,
+        "projects": 5,
+        "v06_intelligence_items": 25,
+        "core_intelligence_subject_links": 0,
+        "v06_market_resources": 29,
+        "p4_resource_match_candidates": 0,
+        "v06_opportunities": 11,
+        "v06_follow_ups": 4,
+        "v06_collab_tasks": 4,
+        "p3_canonical_relationships": 25,
+        "p3_relationship_evidence": 25
+      }
+    },
+    "after": {
+      "integrity": "ok",
+      "counts": {
+        "people": 44,
+        "organizations": 24,
+        "projects": 5,
+        "v06_intelligence_items": 25,
+        "core_intelligence_subject_links": 0,
+        "v06_market_resources": 29,
+        "p4_resource_match_candidates": 0,
+        "v06_opportunities": 11,
+        "v06_follow_ups": 4,
+        "v06_collab_tasks": 4,
+        "p3_canonical_relationships": 25,
+        "p3_relationship_evidence": 25
+      }
+    },
+    "unchanged": true
+  }
+}

@@ -565,7 +565,7 @@ def unified_search(db: Session, q: str, limit: int = 10) -> dict:
         select(Person).where(Person.is_active == True, Person.name.contains(q.strip())).limit(limit)
     ).all())
     results["people"] = {
-        "label": "浜т笟浜虹墿",
+        "label": "产业人物",
         "items": [{"id": p.id, "title": p.name, "summary": f"{p.public_role or ''} | {p.organization_network or ''}", "url": f"/network/people/{p.id}"} for p in people],
     }
 
@@ -574,7 +574,7 @@ def unified_search(db: Session, q: str, limit: int = 10) -> dict:
         select(Organization).where(Organization.is_active == True, Organization.standard_name.contains(q.strip())).limit(limit)
     ).all())
     results["organizations"] = {
-        "label": "Organizations",
+        "label": "企业与机构",
         "items": [{"id": o.id, "title": o.standard_name, "summary": f"{o.org_type or ''} | {o.region or ''}", "url": f"/network/organizations/{o.id}"} for o in orgs],
     }
 

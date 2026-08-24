@@ -28,10 +28,10 @@ P3 增加类型化主体别名与公开标识、解析候选、可回滚合并�
 
 ## 本地安装与启动
 
-1. 双击 `setup_windows.bat` 安装依赖。
-2. 在迁移前运行 `backup_windows.bat`。
-3. 按需运行 `migrate_all_windows.bat`；普通页面请求不会自动执行结构迁移。
-4. 双击 `run_windows.bat` 或 `start_web_windows.bat`，默认访问 `http://127.0.0.1:8000/`。
+1. 双击 `scripts\windows\setup_windows.bat` 安装依赖。
+2. 在迁移前运行 `scripts\windows\backup_windows.bat`。
+3. 按需运行 `scripts\windows\migrate_all_windows.bat`；普通页面请求不会自动执行结构迁移。
+4. 双击根目录唯一正式入口 `run_windows.bat`，默认访问 `http://127.0.0.1:8000/`。
 
 数据库默认位于 `data/app.db`，不得删除或重建；备份位于 `data/backups/`，发布包不包含数据库、备份、`.env`、日志和虚拟环境。
 
@@ -41,14 +41,14 @@ P3 增加类型化主体别名与公开标识、解析候选、可回滚合并�
 .venv\Scripts\python.exe -m compileall app scripts
 .venv\Scripts\python.exe scripts\check_source_encoding.py
 .venv\Scripts\python.exe scriptserify_p0_baseline.py
-verify_all_windows.bat
+scripts\windows\verify_all_windows.bat
 ```
 
 ## P2.2 受控真实来源试点
 
 P2.2 已加入真实静态网页、RSS、单一动态网页、PDF/XLSX解析、内容质量门和规则/AI评测框架。来源配置见 `config/p2_2_source_pilot.json`，试点必须在数据库副本运行：先对副本执行004迁移，再运行 `scripts/run_p2_2_real_source_pilot.py --db <副本路径>`。Playwright和Docling分别使用可选依赖文件，未安装不影响主应用。真实结果与限制见 `docs/p2/P2_2_PILOT_RESULTS.md`.
 
-当前状态与风险见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[KNOWN_ISSUES.md](KNOWN_ISSUES.md)、[架构](docs/ARCHITECTURE.md)、[数据模型](docs/DATA_MODEL.md)、[启动与验证](docs/STARTUP_AND_VERIFICATION.md)。
+当前产品验收见 [MVP-R4审计](docs/audit/MVP_R4_GOLDEN_PATH_PRODUCT_RESULT.md)，工程说明见 [架构](docs/ARCHITECTURE.md)、[数据模型](docs/DATA_MODEL.md)、[启动与验证](docs/STARTUP_AND_VERIFICATION.md)。
 
 ## P1 领域迁移
 

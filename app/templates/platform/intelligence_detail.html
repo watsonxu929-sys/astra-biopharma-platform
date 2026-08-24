@@ -6,51 +6,89 @@
 {% set perms = sec.get('permissions', []) %}
 <div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
   <a href="/intelligence">← 返回情报中心</a>
-  <div class="flex-between mt-16">
-    <div>
-      <h1 class="page-title">{{ item.title }}</h1>
-      <div class="opp-meta">
-        <span class="badge badge-info">{{ item.intel_type }}</span>
-        <span>可信度 {{ item.credibility }}/5</span>
-        <span>重要度 {{ item.importance }}/5</span>
-        <span>来源 {{ item.source_name or '手工录入' }}</span>
-        <span>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '' }}</span>
-      </div>
+  {% if message %}<div class="platform-card mt-16" style="border-left:4px solid var(--color-accent);">{{ message }}</div>{% endif %}
+  <div class="mt-16">
+    <h1 class="page-title" style="overflow-wrap:anywhere;">{{ item.title }}</h1>
+    <div class="opp-meta">
+      <span class="badge badge-info">{{ item.intel_type }}</span>
+      <span>可信度 {{ item.credibility }}/5</span><span>重要度 {{ item.importance }}/5</span>
+      <span>来源 {{ item.source_name or '手工录入' }}</span>
+      <span>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '' }}</span>
     </div>
-    {% if trace is defined %}<a class="btn btn-primary" href="/platform/golden-loop?intelligence_id={{ item.id }}">推进这条情报</a>{% endif %}
   </div>
 
-  <section class="platform-card">
-  {% if trace is defined %}<section class="platform-card"><h2>当前状态与下一步</h2>
-    <p><strong>{{ trace.guidance.current_state }}</strong></p>
-    <p>{{ trace.guidance.next_action }}</p>
-  </section>{% endif %}
-    <h2>来源与摘要</h2>
+  <section class="platform-card"><h2>发生了什么</h2>
     {% if item.source_url %}<p><a href="{{ item.source_url }}" target="_blank" rel="noopener">打开公开来源</a></p>{% endif %}
-    <p>{{ item.summary or item.content or '暂无摘要' }}</p>
+    <p>{{ item.summary or item.content or '这条情报还没有摘要，请查看公开来源。' }}</p>
+    {% if item.content %}<details><summary>查看详细内容</summary><p style="white-space:pre-wrap;">{{ item.content }}</p></details>{% endif %}
   </section>
-  {% if item.content %}<section class="platform-card"><h2>详细内容</h2><p style="white-space:pre-wrap;">{{ item.content }}</p></section>{% endif %}
 
-  {% if trace is defined %}<section class="platform-card">
-    <h2>业务追溯</h2>
+  {% if trace is defined %}
+  <section class="platform-card"><h2>当前状态与下一步</h2>
+    <p><strong>{{ trace.guidance.current_state }}</strong></p><p>{{ trace.guidance.next_action }}</p>
+  </section>
+
+  <section class="platform-card"><h2>涉及谁</h2>
+    {% for subject in trace.subjects %}
+      <a class="badge" href="{{ subject.subject_url }}">{{ {'person':'人物','organization':'企业/机构','project':'项目'}.get(subject.subject_type, '主体') }} · {{ subject.subject_label }}</a>
+    {% else %}<p class="text-muted">尚未关联人物、企业或项目。先选择正式主体，后续资源会自动继承该上下文。</p>{% endfor %}
+    {% if can_write %}
+    <form method="get" action="/intelligence/{{ item.id }}" style="margin-top:16px;">
+      <label>搜索人物/企业<input name="subject_q" value="{{ subject_q }}" placeholder="输入人物、企业或项目名称"></label>
+      <button class="btn btn-outline" type="submit">搜索</button>
+    </form>
+    <form method="post" action="/golden-loop/intelligence/{{ item.id }}/subjects">
+      <label>关联人物/企业<select name="subject_ref" required><option value="">请选择正式主体</option>
+        {% for x in organizations %}<option value="organization:{{ x.id }}">企业/机构 · {{ x.standard_name }}</option>{% endfor %}
+        {% for x in people %}<option value="person:{{ x.id }}">人物 · {{ x.name }}</option>{% endfor %}
+        {% for x in projects %}<option value="project:{{ x.id }}">项目 · {{ x.name }}</option>{% endfor %}
+      </select></label>
+      <button class="btn btn-primary" type="submit">保存关联</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="platform-card"><h2>我能做什么</h2>
+    {% if trace.subjects %}
+    <div class="platform-grid platform-grid-2">
+      {% for direction, label, prefix in [('demand','创建需求','需求｜'),('supply','创建供给','供给｜')] %}
+      <details class="platform-card" style="margin:0;"><summary><strong>{{ label }}</strong></summary>
+        {% if can_write %}<form method="post" action="/golden-loop/intelligence/{{ item.id }}/resources">
+          <input type="hidden" name="direction" value="{{ direction }}">
+          <label>标题<input name="title" value="{{ prefix }}{{ item.title }}" required></label>
+          <label>归属企业<select name="organization_id">
+            {% for subject in trace.subjects if subject.subject_type == 'organization' %}<option value="{{ subject.subject_id }}">{{ subject.subject_label }}</option>{% else %}<option value="">使用已关联人物/项目</option>{% endfor %}
+          </select></label>
+          <label>资源类别<input name="resource_type" value="产业合作" required></label>
+          <label>实际{{ '需求' if direction == 'demand' else '供给' }}内容<textarea name="summary" required>{{ item.summary or '' }}</textarea></label>
+          <label>合作方式<input name="cooperation_mode" placeholder="联合开发、渠道合作、技术许可等"></label>
+          <label>有效期<input name="valid_until" type="date"></label>
+          <button class="btn btn-primary" type="submit">{{ label }}</button>
+        </form>{% else %}<p class="text-muted">当前账号只读，不能创建资源。</p>{% endif %}
+      </details>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-muted">先关联人物或企业，即可直接创建需求和供给，无需重新填写情报或主体编号。</p>{% endif %}
+    <p style="margin-top:16px;"><a class="btn btn-outline" href="{% if trace.resources %}/resources/{{ trace.resources[0].id }}{% else %}/resources{% endif %}">创建合作机会</a> <span class="text-muted">确认供需匹配后，系统会自动带入双方和来源信息。</span></p>
+  </section>
+
+  <section class="platform-card"><h2>业务进展</h2>
     <p>关联主体 {{ trace.subjects|length }} · 供需 {{ trace.resources|length }} · 匹配 {{ trace.matches|length }} · 机会 {{ trace.opportunities|length }} · 跟进 {{ trace.follow_ups|length }} · 正式关系 {{ trace.relationships|length }}</p>
-    {% for subject in trace.subjects %}<a class="badge" href="{{ subject.subject_url }}">{{ subject.subject_label }}</a>{% else %}<p class="text-muted">尚未关联正式主体。</p>{% endfor %}
     {% for resource in trace.resources %}<p><a href="/resources/{{ resource.id }}">{{ '需求' if resource.direction == 'demand' else '供给' }}：{{ resource.title }}</a></p>{% endfor %}
-    {% for match in trace.matches %}<p><a href="/matches/{{ match.id }}">供需匹配：{{ match.match_no or '已确认匹配' }}</a></p>{% endfor %}
+    {% for match in trace.matches %}<p><a href="/matches/{{ match.id }}">供需匹配：{{ match.demand_title }} ↔ {{ match.supply_title }}</a></p>{% endfor %}
     {% for opportunity in trace.opportunities %}<p><a href="/opportunities/{{ opportunity.id }}">合作机会：{{ opportunity.title }}</a></p>{% endfor %}
-    {% for relationship in trace.relationships %}<p><a href="/network/relationships/{{ relationship.id }}">正式合作关系</a></p>{% endfor %}
-    <p><a href="/platform/golden-loop?intelligence_id={{ item.id }}">查看并推进后续业务</a></p>
-  </section>{% endif %}
+    {% for relationship in trace.relationships %}<p><a href="/network/relationships/{{ relationship.id }}">已沉淀合作关系</a></p>{% endfor %}
+    {% if not trace.resources and not trace.matches and not trace.opportunities %}<p class="text-muted">还没有后续业务记录。创建一条需求或供给后，系统会开始寻找可能合作方。</p>{% endif %}
+  </section>
 
-  {% if evidence %}<section class="platform-card"><h2>证据</h2>
+  {% endif %}
+
+  {% if evidence %}<section class="platform-card"><h2>公开证据</h2>
     {% for ev in evidence %}<article><p><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or '查看公开证据' }}</a></p><p>{{ ev.evidence_excerpt }}</p></article>{% endfor %}
   </section>{% endif %}
 
   <section class="platform-card flex-between">
-    <form method="post" action="/api/v1/favorites/toggle">
-      <input type="hidden" name="target_type" value="intelligence"><input type="hidden" name="target_id" value="{{ item.id }}">
-      <button class="btn btn-sm" type="submit">{{ '取消收藏' if is_favorited else '收藏' }}</button>
-    </form>
+    <form method="post" action="/api/v1/favorites/toggle"><input type="hidden" name="target_type" value="intelligence"><input type="hidden" name="target_id" value="{{ item.id }}"><button class="btn btn-sm" type="submit">{{ '取消收藏' if is_favorited else '收藏' }}</button></form>
     {% if sec.get('can_manage_users') or 'review_data' in perms or 'manage_monitoring' in perms %}<a class="btn btn-outline" href="/admin/intelligence/{{ item.id }}">管理此情报</a>{% endif %}
   </section>
 </div>

@@ -14,8 +14,9 @@
     <p class="page-desc">统一查看和管理需求与供给。</p>
   </div>
   <div class="page-header-right">
-    <a class="btn btn-sm" href="/resources?direction=supply">资源供给</a>
-    <a class="btn btn-sm" href="/resources?direction=demand">资源需求</a>
+    <a class="btn btn-sm" href="/resources">全部</a>
+    <a class="btn btn-sm" href="/resources?direction=demand">需求</a>
+    <a class="btn btn-sm" href="/resources?direction=supply">供给</a>
     <a class="btn btn-primary" href="/resources/new">+ 发布资源</a>
   </div>
 </div>
@@ -64,8 +65,10 @@
       </h3>
       <p class="resource-card-summary">{{ r.summary|default('', true)|truncate(100, True) }}</p>
       <div class="resource-card-meta">
-        <span>{{ r.region or '' }}</span>
-        <span>{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '' }}</span>
+        <span>主体：{{ r.owner_label }}</span><span>状态：{{ r.status|status_label }}</span>
+        <span>来源：{{ '情报转化' if r.source_intelligence_id else '业务发布' }}</span>
+        <span>有效期：{{ r.valid_until.strftime('%Y-%m-%d') if r.valid_until else '待补充' }}</span>
+        <span>已确认/待处理匹配：{{ r.candidate_count }}</span>
       </div>
     </article>
     {% endfor %}

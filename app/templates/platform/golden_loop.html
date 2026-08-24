@@ -1,129 +1,16 @@
 {% extends "platform/base.html" %}
 {% set active_nav = "collaboration" %}
-{% block platform_title %}合作闭环工作台{% endblock %}
+{% block platform_title %}合作推进{% endblock %}
 {% block platform_content %}
-<div class="platform-content" style="max-width:1180px;margin:0 auto;padding:24px 32px;">
-  <div class="flex-between">
-    <div>
-      <h1 class="page-title">合作闭环工作台</h1>
-      <p class="text-muted">唯一正式链路：已发布情报 → 正式主体 → 需求/供给 → 匹配 → 机会 → 跟进 → 结果 → 合作关系。</p>
-    </div>
-    <a class="btn btn-outline" href="/platform">返回工作台</a>
-  </div>
-
-  {% if message %}<div class="platform-card" style="border-left:4px solid var(--color-accent);">{{ message }}</div>{% endif %}
-  {% if not can_write %}<div class="platform-card"><strong>只读模式</strong><p class="text-muted">当前账号可查看完整链路，但不能进行新增或修改。</p></div>{% endif %}
-  <section class="platform-card">
-    <h2>1. 选择已发布情报</h2>
-    <table>
-      <thead><tr><th>情报</th><th>主体</th><th>供需</th><th>操作</th></tr></thead>
-      <tbody>
-      {% for item in data.intelligence %}
-        <tr>
-          <td><a href="/intelligence/{{ item.id }}">{{ item.title }}</a></td>
-          <td>{{ item.subject_count }}</td><td>{{ item.resource_count }}</td>
-          <td><a class="btn btn-sm" href="/platform/golden-loop?intelligence_id={{ item.id }}">进入闭环</a></td>
-        </tr>
-      {% else %}<tr><td colspan="4" class="empty">暂无已发布情报。请先完成情报审核与正式发布。</td></tr>{% endfor %}
-      </tbody>
-    </table>
+<div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
+  <div class="flex-between"><div><h1 class="page-title">合作推进</h1><p class="text-muted">从情报详情关联人物或企业、创建供需，再从资源详情确认匹配并推进合作。</p></div><a class="btn btn-outline" href="/platform">返回工作台</a></div>
+  {% if message %}<div class="platform-card">{{ message }}</div>{% endif %}
+  <section class="platform-card"><h2>选择要推进的情报</h2>
+    {% for item in data.intelligence %}<p><a href="/intelligence/{{ item.id }}">{{ item.title }}</a> · 已关联主体 {{ item.subject_count }} · 已形成供需 {{ item.resource_count }}</p>{% else %}<div class="empty-state"><p>暂无已发布情报。请先完成情报审核与正式发布。</p></div>{% endfor %}
   </section>
-
-  {% if trace %}
-  <section class="platform-card">
-    <div class="flex-between">
-      <div><h2>{{ trace.intelligence.title }}</h2><p class="text-muted">情报 #{{ trace.intelligence.id }} · {{ trace.intelligence.source_name or '手工来源' }}</p></div>
-      <a class="btn btn-outline" href="/intelligence/{{ trace.intelligence.id }}">查看情报原文</a>
-    </div>
-    <div class="golden-chain" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-      <span class="badge">情报 1</span><span>→</span>
-      <span class="badge">主体 {{ trace.subjects|length }}</span><span>→</span>
-      <span class="badge">供需 {{ trace.resources|length }}</span><span>→</span>
-      <span class="badge">匹配 {{ trace.matches|length }}</span><span>→</span>
-      <span class="badge">机会 {{ trace.opportunities|length }}</span><span>→</span>
-    <p><strong>当前状态：</strong>{{ trace.guidance.current_state }}　<strong>下一步：</strong>{{ trace.guidance.next_action }}</p>
-      <span class="badge">跟进 {{ trace.follow_ups|length }}</span><span>→</span>
-      <span class="badge">关系 {{ trace.relationships|length }}</span>
-    </div>
-  </section>
-
   <div class="platform-grid platform-grid-2">
-    <section class="platform-card">
-      <h2>2. 关联正式主体</h2>
-      <form method="get" action="/platform/golden-loop" style="margin-bottom:12px;">
-        <input type="hidden" name="intelligence_id" value="{{ trace.intelligence.id }}">
-        <label>搜索正式主体<input name="subject_q" value="{{ subject_q }}" placeholder="输入人物、机构或项目名称"></label>
-        <button class="btn btn-outline" type="submit">搜索</button>
-      </form>
-      {% for link in trace.subjects %}
-        <p><span class="badge">{{ {'person':'人物','organization':'机构','project':'项目'}.get(link.subject_type, '主体') }}</span> <a href="{{ link.subject_url }}">{{ link.subject_label }}</a></p>
-      {% else %}<p class="text-muted">尚未关联主体。必须先关联后才能转为供需。</p>{% endfor %}
-      {% if can_write %}
-      <form method="post" action="/golden-loop/intelligence/{{ trace.intelligence.id }}/subjects">
-        <label>选择正式主体<select name="subject_ref" required><option value="">按名称选择</option>
-          {% for x in organizations %}<option value="organization:{{ x.id }}">机构 · {{ x.standard_name }}</option>{% endfor %}
-          {% for x in people %}<option value="person:{{ x.id }}">人物 · {{ x.name if '�' not in x.name else '姓名待核验' }}</option>{% endfor %}
-          {% for x in projects %}<option value="project:{{ x.id }}">项目 · {{ x.name }}</option>{% endfor %}
-        </select></label>
-        <button class="btn btn-primary" type="submit">保存关联</button>
-      </form>
-      {% endif %}
-    </section>
-
-    <section class="platform-card">
-      <h2>3. 转为需求或供给</h2>
-      {% for resource in trace.resources %}
-        <p><span class="badge">{{ '需求' if resource.direction == 'demand' else '供给' }}</span> <a href="/resources/{{ resource.id }}">{{ resource.title }}</a></p>
-      {% else %}<p class="text-muted">尚未形成供需。保存后将真实写入统一资源表。</p>{% endfor %}
-      {% if can_write %}
-      <form method="post" action="/golden-loop/intelligence/{{ trace.intelligence.id }}/resources">
-        <label>方向<select name="direction" required><option value="demand">需求</option><option value="supply">供给</option></select></label>
-        <label>标题<input name="title" value="{{ '需求｜' ~ trace.intelligence.title }}" required></label>
-        <label>资源类型<input name="resource_type" value="产业合作" required></label>
-        <label>所属机构<select name="organization_id" required>
-          {% for subject in trace.subjects if subject.subject_type == 'organization' %}<option value="{{ subject.subject_id }}">{{ subject.subject_label }}</option>{% else %}<option value="">请先关联正式机构</option>{% endfor %}
-        </select></label>
-        <label>摘要<textarea name="summary" placeholder="说明需要什么或能提供什么">{{ trace.intelligence.summary or '' }}</textarea></label>
-        <label>合作方式<input name="cooperation_mode" placeholder="联合开发、渠道合作、技术许可等"></label>
-        <button class="btn btn-primary" type="submit">生成正式供需</button>
-      </form>
-      {% endif %}
-    </section>
+    <section class="platform-card"><h2>待判断匹配</h2>{% for item in data.matches %}<p><a href="/matches/{{ item.id }}">{{ item.demand_title }} ↔ {{ item.supply_title }}</a></p>{% else %}<p class="text-muted">当前没有待处理匹配。完善资源类别和描述后，系统会寻找可能合作方。</p>{% endfor %}</section>
+    <section class="platform-card"><h2>进行中的合作机会</h2>{% for item in data.opportunities %}<p><a href="/opportunities/{{ item.id }}">{{ item.title }}</a></p>{% else %}<p class="text-muted">确认一组供需匹配后，可以直接转为合作机会。</p>{% endfor %}</section>
   </div>
-  {% endif %}
-
-  <section class="platform-card">
-    <h2>4. 人工确认供需匹配</h2>
-    {% if can_write %}
-    <form method="post" action="/golden-loop/matches" class="platform-grid platform-grid-2">
-      <label>需求<select name="demand_resource_id" required>{% for item in demands %}<option value="{{ item.id }}">{{ item.title }}</option>{% endfor %}</select></label>
-      <label>供给<select name="supply_resource_id" required>{% for item in supplies %}<option value="{{ item.id }}">{{ item.title }}</option>{% endfor %}</select></label>
-      <label style="grid-column:1/-1;">确认说明<input name="note" value="运营人员人工核验供需方向与合作条件"></label>
-      <div><button class="btn btn-primary" type="submit">确认匹配</button></div>
-    </form>
-    {% endif %}
-    <table>
-      <thead><tr><th>需求</th><th>供给</th><th>状态</th><th>机会</th></tr></thead>
-      <tbody>{% for item in data.matches %}<tr>
-        <td>{{ item.demand_title }}</td><td>{{ item.supply_title }}</td>
-        {% set match_status_names = {'pending':'待确认','reviewed':'稍后处理','accepted':'感兴趣','rejected':'不感兴趣','introduced':'已引荐','converted_to_lead':'已转机会','closed':'已关闭'} %}
-        <td>{{ match_status_names.get(item.status, '状态待核验') }}</td>
-        <td><a href="/matches/{{ item.id }}">查看匹配详情</a></td>
-      </tr>{% else %}<tr><td colspan="4" class="empty">暂无匹配。先准备一条需求和一条供给。</td></tr>{% endfor %}</tbody>
-    </table>
-  </section>
-
-  <section class="platform-card">
-    <h2>5. 机会、跟进与商务结果</h2>
-    <table><thead><tr><th>机会</th><th>阶段</th><th>结果</th><th>合作关系</th></tr></thead>
-      <tbody>{% for item in data.opportunities %}<tr>
-        <td><a href="/opportunities/{{ item.id }}">{{ item.title }}</a></td>
-        {% set stage_names = {'new':'新建','qualified':'已确认','contacted':'已联系','negotiating':'商务推进','closed':'已关闭'} %}
-        {% set outcome_names = {'won':'合作达成','lost':'未成交','paused':'暂停'} %}
-        <td>{{ stage_names.get(item.stage, '阶段待核验') }}</td><td>{{ outcome_names.get(item.outcome_status, '推进中') }}</td>
-        <td>{% if item.result_relationship_id %}<a href="/network/relationships/{{ item.result_relationship_id }}">查看正式关系</a>{% else %}未形成{% endif %}</td>
-      </tr>{% else %}<tr><td colspan="4" class="empty">暂无合作机会。确认匹配后转为机会。</td></tr>{% endfor %}</tbody>
-    </table>
-  </section>
 </div>
 {% endblock %}

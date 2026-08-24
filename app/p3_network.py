@@ -116,7 +116,18 @@ def _business_trace(entity_type: str, internal_id: int) -> dict[str, list[dict]]
             )]
         else:
             opportunities = []
-    return {"intelligence": intelligence, "resources": resources, "opportunities": opportunities}
+        opportunity_ids = [int(row["id"]) for row in opportunities]
+        if opportunity_ids:
+            placeholders = ",".join("?" for _ in opportunity_ids)
+            follow_ups = [dict(row) for row in conn.execute(
+                f"""SELECT f.id,f.content,f.next_action,f.followed_at,o.id AS opportunity_id,o.title AS opportunity_title
+                    FROM v06_follow_ups f JOIN v06_opportunities o ON o.id=f.opportunity_id
+                    WHERE o.id IN ({placeholders}) ORDER BY f.followed_at DESC LIMIT 5""",
+                opportunity_ids,
+            )]
+        else:
+            follow_ups = []
+    return {"intelligence": intelligence, "resources": resources, "opportunities": opportunities, "follow_ups": follow_ups}
 
 
 

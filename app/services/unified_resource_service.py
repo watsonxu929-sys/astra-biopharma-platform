@@ -1,15 +1,28 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import desc, func, or_, select, text
 from sqlalchemy.orm import Session
 
+from app.models import Organization, Person
 from app.models_platform import MarketResource
 
 RESOURCE_STATUSES = {"draft", "pending_review", "published", "paused", "matched", "closed", "expired", "rejected", "archived"}
+_MATCH_STOPWORDS = {"资源", "合作", "服务", "提供", "需求", "供给", "寻找", "当前"}
+
+
+def _match_keywords(value: Any) -> set[str]:
+    terms: set[str] = set()
+    for token in re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]+", str(value or "").lower()):
+        if len(token) >= 2:
+            terms.add(token)
+        if any("\u4e00" <= char <= "\u9fff" for char in token) and len(token) > 2:
+            terms.update(token[index:index + 2] for index in range(len(token) - 1))
+    return terms - _MATCH_STOPWORDS
 
 
 class UnifiedResourceService:
@@ -75,6 +88,9 @@ class UnifiedResourceService:
             ))
         if duplicate:
             return duplicate
+        valid_until = fields.get("valid_until")
+        if isinstance(valid_until, str):
+            valid_until = datetime.fromisoformat(valid_until.strip()) if valid_until.strip() else None
         resource = MarketResource(
             title=title,
             direction=direction,
@@ -93,7 +109,7 @@ class UnifiedResourceService:
             tags=fields.get("tags"),
             cooperation_mode=fields.get("cooperation_mode"),
             budget_note=fields.get("budget_note"),
-            valid_until=fields.get("valid_until"),
+            valid_until=valid_until,
             contact_visibility=fields.get("contact_visibility") or "connected",
             status=status,
             source_intelligence_id=int(source_intelligence_id) if source_intelligence_id else None,
@@ -158,19 +174,93 @@ class UnifiedResourceService:
     def match(self, resource_id: int, limit: int = 10) -> list[dict[str, Any]]:
         resource = self.detail(resource_id)
         opposite = "demand" if resource.direction == "supply" else "supply"
-        candidates = list(self.db.scalars(self._base_stmt("published").where(MarketResource.direction == opposite, MarketResource.id != resource.id).limit(100)).all())
+        candidates = list(self.db.scalars(
+            self._base_stmt("published").where(
+                MarketResource.direction == opposite, MarketResource.id != resource.id
+            ).limit(100)
+        ).all())
+        rejected_pairs = {
+            (int(row.demand_resource_id), int(row.supply_resource_id))
+            for row in self.db.execute(text("""
+                SELECT demand_resource_id,supply_resource_id
+                FROM p4_resource_match_candidates
+                WHERE status='rejected' OR intention_status='not_interested'
+            """))
+        }
+        organization_ids = {int(row.organization_id) for row in candidates if row.organization_id}
+        person_ids = {int(row.owner_person_id) for row in candidates if row.owner_person_id}
+        organizations = {
+            int(row.id): row.standard_name
+            for row in self.db.scalars(select(Organization).where(Organization.id.in_(organization_ids))).all()
+        } if organization_ids else {}
+        people = {
+            int(row.id): row.name
+            for row in self.db.scalars(select(Person).where(Person.id.in_(person_ids))).all()
+        } if person_ids else {}
+
+        def owner_key(item: MarketResource) -> tuple[str, int] | None:
+            if item.organization_id:
+                return ("organization", int(item.organization_id))
+            if item.owner_person_id:
+                return ("person", int(item.owner_person_id))
+            return None
+
+        def keywords(item: MarketResource) -> set[str]:
+            return _match_keywords(" ".join(str(part or "") for part in (
+                item.title, item.resource_type, item.category, item.summary,
+                item.description, item.industry_direction, item.region, item.tags,
+            )))
+
+        source_owner = owner_key(resource)
+        source_keywords = keywords(resource)
         matches = []
         for candidate in candidates:
+            candidate_owner = owner_key(candidate)
+            if source_owner and candidate_owner and source_owner == candidate_owner:
+                continue
+            demand_id = resource.id if resource.direction == "demand" else candidate.id
+            supply_id = resource.id if resource.direction == "supply" else candidate.id
+            if (int(demand_id), int(supply_id)) in rejected_pairs:
+                continue
+
             score = 0
-            reasons = []
-            if candidate.resource_type == resource.resource_type:
-                score += 40; reasons.append("resource_type")
-            if resource.industry_direction and candidate.industry_direction and resource.industry_direction in candidate.industry_direction:
-                score += 30; reasons.append("industry_direction")
-            if resource.region and candidate.region and resource.region in candidate.region:
-                score += 20; reasons.append("region")
-            if score > 0:
-                matches.append({"resource": candidate, "score": score, "reasons": reasons})
+            reasons: list[str] = []
+            source_category = str(resource.category or resource.resource_type or "").strip().lower()
+            candidate_category = str(candidate.category or candidate.resource_type or "").strip().lower()
+            category_compatible = bool(source_category and source_category == candidate_category)
+            if category_compatible:
+                score += 45
+                reasons.append(f"资源类别一致：{candidate.resource_type or candidate.category}")
+
+            industry_overlap = _match_keywords(resource.industry_direction) & _match_keywords(candidate.industry_direction)
+            if industry_overlap:
+                score += 20
+                reasons.append(f"产业方向重合：{'、'.join(sorted(industry_overlap)[:3])}")
+
+            region_overlap = _match_keywords(resource.region) & _match_keywords(candidate.region)
+            if region_overlap:
+                score += 10
+                reasons.append(f"区域条件相近：{'、'.join(sorted(region_overlap)[:2])}")
+
+            keyword_overlap = source_keywords & keywords(candidate)
+            if keyword_overlap:
+                score += min(25, 5 * len(keyword_overlap))
+                reasons.append(f"关键词重合：{'、'.join(sorted(keyword_overlap)[:4])}")
+
+            if not category_compatible and not keyword_overlap:
+                continue
+            reasons.append("双方资源当前均为有效状态")
+            owner_label = organizations.get(int(candidate.organization_id)) if candidate.organization_id else None
+            owner_label = owner_label or (people.get(int(candidate.owner_person_id)) if candidate.owner_person_id else None)
+            matches.append({
+                "resource": candidate,
+                "score": min(score, 100),
+                "reasons": reasons,
+                "owner_label": owner_label or "主体信息待补充",
+                "match_category": candidate.resource_type or candidate.category or "其他",
+                "demand_resource_id": int(demand_id),
+                "supply_resource_id": int(supply_id),
+            })
         matches.sort(key=lambda item: item["score"], reverse=True)
         return matches[:limit]
 

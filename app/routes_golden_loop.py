@@ -99,7 +99,7 @@ async def link_intelligence_subject(
         subject_id=subject_id,
         actor_user_id=user_id,
     )
-    return _redirect(f"/platform/golden-loop?intelligence_id={intelligence_id}", "主体关联已保存")
+    return _redirect(f"/intelligence/{intelligence_id}", "主体关联已保存")
 
 
 @router.post("/golden-loop/intelligence/{intelligence_id}/resources")
@@ -121,6 +121,7 @@ async def create_resource_from_intelligence(
             "description": form.get("description"),
             "cooperation_mode": form.get("cooperation_mode"),
             "cooperation_terms": form.get("cooperation_terms"),
+            "valid_until": form.get("valid_until"),
             "organization_id": form.get("organization_id"),
         },
     )
@@ -131,12 +132,18 @@ async def create_resource_from_intelligence(
 async def confirm_resource_match(request: Request, db: Session = Depends(get_db)):
     user_id, _ = _writer(request)
     form = await request.form()
-    match = GoldenLoopService(db).confirm_match(
+    service = GoldenLoopService(db)
+    match = service.confirm_match(
         demand_resource_id=int(form.get("demand_resource_id") or 0),
         supply_resource_id=int(form.get("supply_resource_id") or 0),
         actor_user_id=user_id,
         note=str(form.get("note") or ""),
     )
+    if str(form.get("decision") or "confirm") == "reject":
+        match = service.set_match_intention(
+            int(match["id"]), actor_user_id=user_id, intention="not_interested",
+            reason_code="conditions_not_met", note=str(form.get("note") or "暂不匹配"),
+        )
     return RedirectResponse(f"/matches/{match['id']}", status_code=303)
 
 

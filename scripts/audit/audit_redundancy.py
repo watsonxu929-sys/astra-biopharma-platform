@@ -192,8 +192,8 @@ def audit_official_entrypoints() -> List[Dict[str, Any]]:
         {"name": "静态资源根目录", "path": "app/static/", "caller": "app.main", "official": True},
         {"name": "正式启动脚本", "path": "run_windows.bat", "caller": "用户双击", "official": True},
         {"name": "数据库路径解析", "path": "app/settings.py", "caller": "全局", "official": True},
-        {"name": "迁移入口", "path": "scripts/migrations/", "caller": "migrate_all_windows.bat", "official": True},
-        {"name": "验证入口", "path": "scripts/verify_p0_baseline.py", "caller": "verify_all_windows.bat", "official": True},
+        {"name": "迁移入口", "path": "scripts/migrations/", "caller": "scripts/windows/migrate_all_windows.bat", "official": True},
+        {"name": "验证入口", "path": "scripts/verify_p0_baseline.py", "caller": "scripts/windows/verify_all_windows.bat", "official": True},
         {"name": "pytest入口", "path": "tests/", "caller": "python -m pytest", "official": True},
     ]
     

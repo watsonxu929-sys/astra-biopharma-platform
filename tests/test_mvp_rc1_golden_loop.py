@@ -43,7 +43,7 @@ def test_mvp_rc1_three_golden_cases_are_persistent_idempotent_and_cleaned(
 
 def test_rc1_web_runtime_defaults_are_safe() -> None:
     config = (ROOT / "app" / "core" / "config.py").read_text(encoding="utf-8")
-    start_web = (ROOT / "start_web_windows.bat").read_text(encoding="utf-8")
+    start_web = (ROOT / "scripts" / "windows" / "start_web_windows.bat").read_text(encoding="utf-8")
     assert 'app_reload: bool = False' in config
     assert 'scheduler_enabled: bool = False' in config
     assert 'worker_enabled: bool = False' in config
@@ -53,8 +53,8 @@ def test_rc1_web_runtime_defaults_are_safe() -> None:
 
 
 def test_rc1_lifecycle_entrypoints_are_explicit() -> None:
-    web = (ROOT / "web_service_windows.bat").read_text(encoding="utf-8")
-    worker = (ROOT / "collection_worker_windows.bat").read_text(encoding="utf-8")
+    web = (ROOT / "scripts" / "windows" / "web_service_windows.bat").read_text(encoding="utf-8")
+    worker = (ROOT / "scripts" / "windows" / "collection_worker_windows.bat").read_text(encoding="utf-8")
     for source in (web, worker):
         for action in ("start", "stop", "status"):
             assert f'if /i "%~1"=="{action}"' in source

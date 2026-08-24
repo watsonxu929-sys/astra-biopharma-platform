@@ -32,7 +32,7 @@ def test_legacy_product_entries_redirect_without_new_business_pages() -> None:
     expected = {
         legacy_resource_demand: "/resources?direction=demand",
         legacy_resource_supply: "/resources?direction=supply",
-        legacy_resource_matching: "/resources?message=matching_pending",
+        legacy_resource_matching: "/resources",
         legacy_dashboard_alias: "/platform",
     }
     for endpoint, location in expected.items():

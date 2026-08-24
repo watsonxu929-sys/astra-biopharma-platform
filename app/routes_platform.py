@@ -384,9 +384,22 @@ def person_card(request: Request, person_id: int, history: bool = False, db: Ses
     except Exception:
         pass
     
+    intelligence = db.execute(text("""
+        SELECT i.id,i.title FROM core_intelligence_subject_links l
+        JOIN v06_intelligence_items i ON i.id=l.intelligence_item_id
+        WHERE l.subject_type='person' AND l.subject_id=:person_id ORDER BY i.id DESC LIMIT 10
+    """), {"person_id": int(person_id)}).mappings().all()
+    resources = db.execute(text("SELECT id,title,direction FROM v06_market_resources WHERE owner_person_id=:person_id ORDER BY id DESC LIMIT 10"), {"person_id": int(person_id)}).mappings().all()
+    opportunities = db.execute(text("SELECT id,title,status,outcome_status FROM v06_opportunities WHERE target_person_id=:person_id ORDER BY id DESC LIMIT 10"), {"person_id": int(person_id)}).mappings().all()
+    follow_ups = db.execute(text("""
+        SELECT f.id,f.content,f.next_action,f.followed_at,o.id AS opportunity_id,o.title AS opportunity_title
+        FROM v06_follow_ups f JOIN v06_opportunities o ON o.id=f.opportunity_id
+        WHERE o.target_person_id=:person_id ORDER BY f.followed_at DESC LIMIT 5
+    """), {"person_id": int(person_id)}).mappings().all()
+    business_trace = {"intelligence": intelligence, "resources": resources, "opportunities": opportunities, "follow_ups": follow_ups}
     return render(request, "platform/person_card.html",
         person=person, person_data=person_data, is_favorited=fav, is_following=following,
-        user_id=user_id, person_relationships=person_relationships,
+        user_id=user_id, person_relationships=person_relationships, business_trace=business_trace,
         evidence_list=evidence_list, RELATION_TYPE_LABELS=RELATION_TYPE_LABELS)
 
 
@@ -461,13 +474,27 @@ def intelligence_center(
 
 
 @router.get("/intelligence/{item_id:int}", response_class=HTMLResponse)
-def intelligence_detail(item_id: int, request: Request, db: Session = Depends(get_db)):
+def intelligence_detail(
+    item_id: int, request: Request, subject_q: str = Query(""),
+    message: str = Query(""), db: Session = Depends(get_db),
+):
     item = UnifiedIntelligenceService(db).detail(item_id)
     evidence = IntelligenceProductService().trace(item_id)["evidence"]
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "intelligence", item_id) if user_id is not None else False
     trace = GoldenLoopService(db).trace(item_id)
-    return render(request, "platform/intelligence_detail.html", item=item, evidence=evidence, is_favorited=fav, user_id=user_id, trace=trace)
+    query = subject_q.strip()
+    pattern = f"%{query}%"
+    people = db.execute(text("SELECT id,name FROM people WHERE COALESCE(is_active,1)=1 AND (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
+    organizations = db.execute(text("SELECT id,standard_name FROM organizations WHERE COALESCE(is_active,1)=1 AND (:q='' OR standard_name LIKE :pattern) ORDER BY standard_name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
+    projects = db.execute(text("SELECT id,name FROM projects WHERE (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
+    role = get_user_role(request)
+    return render(
+        request, "platform/intelligence_detail.html", item=item, evidence=evidence,
+        is_favorited=fav, user_id=user_id, trace=trace, subject_q=query,
+        people=people, organizations=organizations, projects=projects,
+        can_write=role in {"operator", "reviewer", "admin"}, message=message,
+    )
 
 
 @router.get("/intelligence/subscriptions", response_class=HTMLResponse)
@@ -513,7 +540,7 @@ def legacy_resource_supply():
 
 @router.get("/resources/matching", include_in_schema=False)
 def legacy_resource_matching():
-    return RedirectResponse("/resources?message=matching_pending", status_code=303)
+    return RedirectResponse("/resources", status_code=303)
 
 
 @router.get("/resources", response_class=HTMLResponse)
@@ -534,6 +561,28 @@ def resource_market(
         q=q or None,
         industry_direction=industry_direction or None, region=region or None, status=status, page=page)
     resource_type_options = [v for v in db.scalars(select(MarketResource.resource_type).where(MarketResource.status == "published", MarketResource.resource_type.is_not(None), MarketResource.resource_type != "").distinct().order_by(MarketResource.resource_type)).all() if v]
+    item_ids = [int(item.id) for item in result["items"]]
+    organization_ids = {int(item.organization_id) for item in result["items"] if item.organization_id}
+    person_ids = {int(item.owner_person_id) for item in result["items"] if item.owner_person_id}
+    organization_names = {int(row.id): row.standard_name for row in db.scalars(select(Organization).where(Organization.id.in_(organization_ids))).all()} if organization_ids else {}
+    person_names = {int(row.id): row.name for row in db.scalars(select(Person).where(Person.id.in_(person_ids))).all()} if person_ids else {}
+    candidate_counts: dict[int, int] = {}
+    if item_ids:
+        identifiers = ",".join(str(value) for value in item_ids)
+        rows = db.execute(text(f"""
+            SELECT resource_id,COUNT(*) AS candidate_count FROM (
+              SELECT demand_resource_id AS resource_id FROM p4_resource_match_candidates
+              WHERE demand_resource_id IN ({identifiers}) AND status<>'rejected'
+              UNION ALL
+              SELECT supply_resource_id AS resource_id FROM p4_resource_match_candidates
+              WHERE supply_resource_id IN ({identifiers}) AND status<>'rejected'
+            ) GROUP BY resource_id
+        """)).mappings().all()
+        candidate_counts = {int(row["resource_id"]): int(row["candidate_count"]) for row in rows}
+    for item in result["items"]:
+        item.owner_label = organization_names.get(int(item.organization_id)) if item.organization_id else None
+        item.owner_label = item.owner_label or (person_names.get(int(item.owner_person_id)) if item.owner_person_id else None) or "主体信息待补充"
+        item.candidate_count = candidate_counts.get(int(item.id), 0)
     return render(request, "platform/resources.html",
         items=result["items"], total=result["total"], page=result["page"],
         status=status or "published",
@@ -552,13 +601,29 @@ def resource_detail(resource_id: int, request: Request, db: Session = Depends(ge
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "resource", resource_id) if user_id is not None else False
     matches = match_resources(db, resource_id, limit=6)
+    role = get_user_role(request)
     return render(request, "platform/resource_detail.html",
-        resource=resource, golden_resource=golden_resource, trace=trace, is_favorited=fav, matches=matches, user_id=user_id)
+        resource=resource, golden_resource=golden_resource, trace=trace, is_favorited=fav,
+        matches=matches, user_id=user_id, can_write=role in {"operator", "reviewer", "admin"})
 
 
 @router.get("/resources/new", response_class=HTMLResponse)
-def new_resource(request: Request):
-    return render(request, "platform/resource_form.html", resource=None, mode="new")
+def new_resource(
+    request: Request, direction: str = Query("supply"), owner_type: str = Query(""),
+    owner_id: int | None = Query(None), db: Session = Depends(get_db),
+):
+    direction = direction if direction in {"demand", "supply"} else "supply"
+    owner_label = ""
+    if owner_id and owner_type == "organization":
+        owner = db.get(Organization, int(owner_id))
+        owner_label = owner.standard_name if owner else ""
+    elif owner_id and owner_type == "person":
+        owner = db.get(Person, int(owner_id))
+        owner_label = owner.name if owner else ""
+    if owner_id and not owner_label:
+        raise HTTPException(404, "主体不存在")
+    return render(request, "platform/resource_form.html", resource=None, mode="new",
+        direction=direction, owner_type=owner_type, owner_id=owner_id, owner_label=owner_label)
 
 
 @router.post("/resources/new")
@@ -579,6 +644,9 @@ async def create_resource(request: Request, db: Session = Depends(get_db)):
         "cooperation_mode": form.get("cooperation_mode"),
         "budget_note": form.get("budget_note"),
         "contact_visibility": form.get("contact_visibility", "connected"),
+        "owner_person_id": int(form.get("owner_person_id")) if form.get("owner_person_id") else None,
+        "organization_id": int(form.get("organization_id")) if form.get("organization_id") else None,
+        "valid_until": form.get("valid_until"),
         "status": "published",
     })
     return RedirectResponse(f"/resources/{resource.id}", 303)

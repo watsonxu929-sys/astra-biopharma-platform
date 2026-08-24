@@ -48,6 +48,16 @@
     </div>
     {% endif %}
 
+    <div class="dashboard-card"><h3>业务进展</h3>
+      {% for item in business_trace.intelligence %}<p><a href="/intelligence/{{ item.id }}">相关情报：{{ item.title }}</a></p>{% endfor %}
+      {% for item in business_trace.resources %}<p><a href="/resources/{{ item.id }}">{{ '需求' if item.direction == 'demand' else '供给' }}：{{ item.title }}</a></p>{% endfor %}
+      {% for item in business_trace.opportunities %}<p><a href="/opportunities/{{ item.id }}">合作机会：{{ item.title }}</a></p>{% endfor %}
+      {% for item in business_trace.follow_ups %}<p>最近跟进：<a href="/opportunities/{{ item.opportunity_id }}">{{ item.opportunity_title }}</a> · {{ item.content }}</p>{% endfor %}
+      {% if not business_trace.intelligence and not business_trace.resources and not business_trace.opportunities %}<p class="text-muted">该人物尚无相关情报、资源或合作机会。</p>{% endif %}
+      <p><strong>下一步：</strong>从当前人物创建供需，或查看已确认关系后推进合作。</p>
+      <p><a class="btn btn-sm" href="/resources/new?direction=demand&owner_type=person&owner_id={{ person.id }}">创建需求</a> <a class="btn btn-sm" href="/resources/new?direction=supply&owner_type=person&owner_id={{ person.id }}">创建供给</a> <a class="btn btn-sm" href="/opportunities">查看合作机会</a></p>
+    </div>
+
     {% if person_relationships %}
     <div class="dashboard-card">
       <h3>当前关系</h3>

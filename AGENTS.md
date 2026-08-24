@@ -42,13 +42,11 @@
 ## 常用命令
 
 ```bat
-setup_windows.bat
-migrate_all_windows.bat
-verify_all_windows.bat
+scripts\windows\setup_windows.bat
+scripts\windows\migrate_all_windows.bat
+scripts\windows\verify_all_windows.bat
 run_windows.bat
-project_tools_windows.bat
-backup_windows.bat
-run_monitoring_once_windows.bat
+scripts\windows\backup_windows.bat
 ```
 
 历史迁移、验证、演示、诊断和维护入口保留在 `tools/windows/archive/`、`tools/windows/demo/`、`tools/windows/diagnostics/`、`tools/windows/maintenance/` 和 `tools/windows/reports/`。Python 迁移、验证、导入、备份和监测脚本保留在 `scripts/`。
@@ -65,9 +63,9 @@ run_monitoring_once_windows.bat
 
 ## Canonical project directory
 
-- This repository is the sole formal project directory; its absolute path is recorded in `PROJECT_DIRECTORY_INVENTORY.md`.
+- This repository is the sole formal project directory; its absolute path is recorded in `docs/audit/MVP_R4_BASELINE.md`.
 - Normal development must use Git branches in this repository, not copied project directories.
 - High-risk worktrees may exist only under the parent `.worktrees` directory and must be cleaned after the task.
 - `C:\tmp` must never be used as a formal worktree or formal project directory.
 - Old project, rescue, recovery, and reference directories must not become runtime dependencies; disposition requires the inventory and user approval.
-- The sole formal database location and isolated-test rules are defined in `DATA_LOCATION.md`.
+- The sole formal database location and isolated-test rules are recorded in `docs/audit/MVP_R4_BASELINE.md`.

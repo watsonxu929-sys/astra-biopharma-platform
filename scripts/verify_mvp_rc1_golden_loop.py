@@ -44,6 +44,7 @@ def main() -> int:
     from sqlalchemy import text
     from app.database import SessionLocal, engine
     from app.services.golden_loop_service import GoldenLoopService
+    from app.services.unified_resource_service import UnifiedResourceService
 
     marker = f"MVP-RC1-ACCEPT-{uuid.uuid4().hex[:10].upper()}"
     before_fk = _fk_rows(database)
@@ -169,6 +170,12 @@ def main() -> int:
                 },
             )
             created["resources"].extend([int(demand["id"]), int(supply["id"])])
+            suggested = UnifiedResourceService(db).match(int(demand["id"]), limit=10)
+            assert int(supply["id"]) in {int(item["resource"].id) for item in suggested}
+            results.setdefault("candidate_generation", {})[case] = {
+                "generated": True,
+                "explained": any(item["reasons"] for item in suggested if int(item["resource"].id) == int(supply["id"])),
+            }
             match = service.confirm_match(
                 demand_resource_id=int(demand["id"]),
                 supply_resource_id=int(supply["id"]),

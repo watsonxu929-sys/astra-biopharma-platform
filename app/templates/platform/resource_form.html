@@ -1,13 +1,14 @@
 {% extends "platform/base.html" %}
-{% set active_nav = "collaboration" %}
-{% set active_subnav = "collaboration.resources" %}
-{% block platform_title %}????{% endblock %}
+{% set active_nav = "resources" %}
+{% block platform_title %}发布资源{% endblock %}
 {% block platform_content %}
 <div class="platform-content" style="max-width:600px;margin:0 auto;padding:24px 32px;">
 <h1 class="page-title">发布资源</h1>
+{% if owner_label %}<div class="platform-card"><strong>归属主体：</strong>{{ owner_label }}<p class="text-muted">主体信息将从当前页面自动继承，无需填写内部编号。</p></div>{% endif %}
 <form method="post" action="/resources/new" class="platform-form">
+{% if owner_type == 'person' %}<input type="hidden" name="owner_person_id" value="{{ owner_id }}">{% elif owner_type == 'organization' %}<input type="hidden" name="organization_id" value="{{ owner_id }}">{% endif %}
 <div class="form-group"><label>标题 *</label><input name="title" required></div>
-<div class="form-group"><label>类型 *</label><select name="direction" required><option value="supply">供给</option><option value="demand">需求</option></select></div>
+<div class="form-group"><label>类型 *</label><select name="direction" required><option value="supply" {% if direction == 'supply' %}selected{% endif %}>供给</option><option value="demand" {% if direction == 'demand' %}selected{% endif %}>需求</option></select></div>
 <div class="form-group"><label>资源类型 *</label><select name="resource_type" required>
 <option value="">请选择</option>
 <option>技术成果</option><option>CRO服务</option><option>CDMO服务</option><option>检测服务</option><option>注册服务</option>
@@ -22,6 +23,7 @@
 <div class="form-group"><label>标签</label><input name="tags" placeholder="多个用分号分隔"></div>
 <div class="form-group"><label>合作方式</label><input name="cooperation_mode"></div>
 <div class="form-group"><label>预算/价格说明</label><input name="budget_note"></div>
+<div class="form-group"><label>有效期</label><input name="valid_until" type="date"></div>
 <div class="form-group"><label>联系方式可见级别</label><select name="contact_visibility">
 <option value="connected">已接受联系的用户</option><option value="members">有效会员</option><option value="public">公开</option></select></div>
 <button type="submit" class="btn btn-primary">发布资源</button></form>

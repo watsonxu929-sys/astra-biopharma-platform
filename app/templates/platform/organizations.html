@@ -1,5 +1,6 @@
 {% extends "platform/base.html" %}
-{% block platform_title %}????{% endblock %}
+{% set active_nav = "network" %}
+{% block platform_title %}企业与机构{% endblock %}
 {% block platform_content %}
 <h1 class="page-title">机构发现</h1>
   <p class="page-subtitle">浏览生物医药产业相关的企业和机构</p>
@@ -8,7 +9,7 @@
   <div class="person-cards">
     {% for o in orgs %}
     <div class="person-card">
-      <div class="person-name"><a href="/organizations/{{ o.id }}">{{ o.standard_name }}</a></div>
+      <div class="person-name"><a href="/network/entities/organization/{{ o.external_id }}">{{ o.standard_name }}</a></div>
       <div class="person-role">{{ o.org_type or '' }}</div>
       <div class="person-org">{{ o.region or '' }}</div>
       <div class="person-tags">{% if o.industry_tags %}{% for tag in (o.industry_tags or '').split(';')[:4] %}<span class="tag tag-blue">{{ tag.strip() }}</span>{% endfor %}{% endif %}</div>
