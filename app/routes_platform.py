@@ -487,7 +487,7 @@ def intelligence_detail(
     event_insight, subject_candidates = golden.event_insight(item_id), golden.subject_candidates(item_id)
     query = subject_q.strip()
     pattern = f"%{query}%"
-    people = db.execute(text("SELECT id,name FROM people WHERE COALESCE(is_active,1)=1 AND (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
+    people = db.execute(text("SELECT id,name FROM people WHERE COALESCE(is_active,1)=1 AND instr(name,'�')=0 AND (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
     organizations = db.execute(text("SELECT id,standard_name FROM organizations WHERE COALESCE(is_active,1)=1 AND (:q='' OR standard_name LIKE :pattern) ORDER BY standard_name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
     projects = db.execute(text("SELECT id,name FROM projects WHERE (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
     role = get_user_role(request)

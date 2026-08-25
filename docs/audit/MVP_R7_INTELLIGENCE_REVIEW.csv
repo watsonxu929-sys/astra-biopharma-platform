@@ -1,0 +1,12 @@
+intelligence_id,title,status,source,relevant,event_type_correct,subject_candidate_correct,value_class,actionable,should_resource,should_opportunity,subject_review,review_note
+24,"New leadership team appointments","pending_processing","EMA News RSS","YES","NOT_YET_CLASSIFIED","NO","INFORMATION","NO","NO","NO","D","正文明确出现 Ivo Claassen 和 Melanie Carr，但历史抽取未形成谨慎的人物候选"
+25,"CHMP meeting highlights 20-23 July 2026","pending_processing","EMA News RSS","YES","NOT_YET_CLASSIFIED","NOT_EVALUATED","WATCH","NO","NO","NO","A","监管会议内容有产业价值，尚未完成正式处理，不强行创建主体或业务机会"
+26,"CVMP meeting highlights 14-16 July 2026","pending_processing","EMA News RSS","NO","NOT_YET_CLASSIFIED","NOT_APPLICABLE","INFORMATION","NO","NO","NO","A","兽药委员会内容超出当前人用生物医药运营重点"
+27,"EMA and EISMEA boost cooperation","pending_processing","EMA News RSS","YES","NOT_YET_CLASSIFIED","NO","WATCH","NO","NO","NO","E","存在明确机构，但当前候选未覆盖；第三方公共合作不等于我们的商务机会"
+28,"Emer Cooke speech at European Parliament","pending_processing","EMA News RSS","YES","NOT_YET_CLASSIFIED","NOT_APPLICABLE","INFORMATION","NO","NO","NO","A","公开演讲值得参考，但讲者不是需要据此新建的业务主体"
+29,"CHMP meeting highlights 20-23 July 2026","published","EMA News RSS","YES","YES","YES","WATCH","NO","NO","NO","B","LIBTherapeutics 是有上下文证据的新企业候选，必须人工创建或忽略"
+30,"New leadership team appointments","published","EMA News RSS","YES","YES","NO","INFORMATION","NO","NO","NO","D","人事事件正确，但 Ivo Claassen 和 Melanie Carr 候选漏识别"
+31,"EMA fast tracks pancreatic cancer medicine review","published","EMA News RSS","YES","YES","NOT_APPLICABLE","WATCH","NO","NO","NO","A","现有证据不足以确认企业或人物，不制造主体"
+32,"PRAC meeting highlights 6-9 July 2026","published","EMA News RSS","YES","NO","NO","WATCH","NO","NO","NO","D","风险安全会议被历史规则归为审批；伪企业标题候选已从用户入口过滤"
+33,"Q-BAY 金山项目动态","published","Q-BAY公开项目动态","YES","YES","YES","ACTIONABLE","YES","YES_ALREADY_EXISTS","NO","CONFIRMED","来源登记主体 Q-BAY 已确认，并已有真实 Resource 45；无事实支持新建 Opportunity"
+34,"上海生物医药外资高能级项目政策通知","published","上海生物医药外资项目政策","YES","YES","NOT_APPLICABLE","WATCH","NO","NO","NO","A","政策事件分类正确；正文候选经人工审核拒绝，不复制为正式主体字段"

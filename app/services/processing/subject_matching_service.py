@@ -28,22 +28,43 @@ def match_subject(conn: sqlite3.Connection, subject_type: str, label: str, subje
     normalized = normalize_label(label)
     if not normalized:
         return {"status": "new_subject", "method": "empty_label", "score": 0, "matches": [], "ambiguity_count": 0}
+    exact_where = f"lower(replace({label_col}, ' ', ''))=?"
+    exact_params: tuple[str, ...] = (normalized,)
+    exact_select = f"{id_col}, {label_col}"
+    if subject_type == "organization":
+        exact_where = " OR ".join(
+            f"lower(replace(COALESCE({column},''), ' ', ''))=?"
+            for column in ("standard_name", "name", "short_name")
+        )
+        exact_params = (normalized, normalized, normalized)
+        exact_select = (
+            f"{id_col}, {label_col}, "
+            "CASE WHEN lower(replace(COALESCE(standard_name,''),' ',''))=? THEN 'standard_name' "
+            "WHEN lower(replace(COALESCE(name,''),' ',''))=? THEN 'name' ELSE 'short_name' END AS matched_via"
+        )
+        exact_params = (normalized, normalized, *exact_params)
     rows = [
         dict(row)
         for row in conn.execute(
-            f"SELECT {id_col}, {label_col} FROM {table} WHERE is_active=1 AND lower(replace({label_col}, ' ', ''))=? ORDER BY id DESC LIMIT 8",
-            (normalized,),
+            f"SELECT {exact_select} FROM {table} WHERE is_active=1 AND ({exact_where}) ORDER BY id DESC LIMIT 8",
+            exact_params,
         ).fetchall()
     ]
     if len(rows) == 1:
-        return {"status": "confirmed", "method": "exact_name", "score": 92 if subject_type != "person" else 86, "matches": rows, "ambiguity_count": 0}
+        method = "exact_alias" if rows[0].get("matched_via") in {"name", "short_name"} else "exact_name"
+        return {"status": "confirmed", "method": method, "score": 92 if subject_type != "person" else 86, "matches": rows, "ambiguity_count": 0}
     if len(rows) > 1:
         return {"status": "ambiguous", "method": "same_name_multiple", "score": 64, "matches": rows, "ambiguity_count": len(rows)}
+    like_where = f"{label_col} LIKE ?"
+    like_params: tuple[str, ...] = (f"%{label[:30]}%",)
+    if subject_type == "organization":
+        like_where = " OR ".join(f"COALESCE({column},'') LIKE ?" for column in ("standard_name", "name", "short_name"))
+        like_params = (f"%{label[:30]}%",) * 3
     like_rows = [
         dict(row)
         for row in conn.execute(
-            f"SELECT {id_col}, {label_col} FROM {table} WHERE is_active=1 AND {label_col} LIKE ? ORDER BY id DESC LIMIT 5",
-            (f"%{label[:30]}%",),
+            f"SELECT {id_col}, {label_col} FROM {table} WHERE is_active=1 AND ({like_where}) ORDER BY id DESC LIMIT 5",
+            like_params,
         ).fetchall()
     ]
     if like_rows:

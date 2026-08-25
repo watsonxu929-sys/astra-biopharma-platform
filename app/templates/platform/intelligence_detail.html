@@ -29,8 +29,10 @@
   </section>
 
   <section class="platform-card"><h2>为什么值得关注</h2>
-    <p><span class="badge badge-info">{{ event_insight.event_label }}</span> <strong>重要度 {{ event_insight.importance }}/5</strong></p>
-    <p>{{ event_insight.importance_reason }}</p>
+    <p><span class="badge badge-info">{{ event_insight.value_label }}</span> <strong>重要度 {{ event_insight.importance }}/5</strong></p>
+    <p><strong>{{ event_insight.industry_event_label }}：</strong>{{ event_insight.event_label }} · <strong>业务机会：</strong>{{ event_insight.business_opportunity_label }}</p>
+    <p>{{ event_insight.value_reason }}</p>
+    <p class="text-muted">{{ event_insight.importance_reason }}</p>
     <h3>建议下一步</h3>
     <ul>
       {% for action in event_insight.actions %}<li>{{ action }}</li>{% endfor %}
@@ -47,9 +49,18 @@
     <div class="platform-grid platform-grid-2" style="margin-top:16px;">
       {% for candidate in subject_candidates %}
       <article class="platform-card" style="margin:0;">
-        <p><strong>可能涉及：{{ candidate.subject_label }}</strong></p>
+        <p><strong>{{ '发现新主体候选' if candidate.candidate_kind == 'new' else '可能涉及' }}：{{ candidate.subject_label }}</strong></p>
         <p><span class="badge">置信度：{{ candidate.confidence }}</span> <span class="text-muted">{{ candidate.reason }}</span></p>
+        {% if candidate.evidence_excerpt %}<p class="text-muted">{{ candidate.evidence_excerpt }}</p>{% endif %}
         <div class="header-actions">
+          {% if candidate.candidate_kind == 'new' %}
+          <a class="btn btn-primary btn-sm" href="{{ candidate.review_url }}">核对证据并决定是否新建</a>
+          <form method="post" action="/processing/candidates/{{ candidate.candidate_id }}/review">
+            <input type="hidden" name="decision" value="rejected">
+            <input type="hidden" name="note" value="情报详情中人工忽略：不是需要建立的正式主体">
+            <button class="btn btn-outline btn-sm" type="submit">忽略候选</button>
+          </form>
+          {% else %}
           <form method="post" action="/golden-loop/intelligence/{{ item.id }}/subjects">
             <input type="hidden" name="subject_type" value="{{ candidate.subject_type }}">
             <input type="hidden" name="subject_id" value="{{ candidate.subject_id }}">
@@ -60,6 +71,7 @@
             <input type="hidden" name="subject_id" value="{{ candidate.subject_id }}">
             <button class="btn btn-outline btn-sm" type="submit">忽略</button>
           </form>
+          {% endif %}
         </div>
       </article>
       {% endfor %}
@@ -111,6 +123,17 @@
     {% for opportunity in trace.opportunities %}<p><a href="/opportunities/{{ opportunity.id }}">合作机会：{{ opportunity.title }}</a></p>{% endfor %}
     {% for relationship in trace.relationships %}<p><a href="/network/relationships/{{ relationship.id }}">已沉淀合作关系</a></p>{% endfor %}
     {% if not trace.resources and not trace.matches and not trace.opportunities %}<p class="text-muted">还没有后续业务记录。创建一条需求或供给后，系统会开始寻找可能合作方。</p>{% endif %}
+  </section>
+
+  <section class="platform-card"><h2>关联上下文</h2>
+    {% set context_labels = {'intelligence':'其他情报','resources':'其他资源','opportunities':'其他合作机会','follow_ups':'相关跟进','relationships':'正式关系'} %}
+    {% set ns = namespace(has_context=false) %}
+    {% for group, rows in trace.related_context.items() %}
+      {% if rows %}{% set ns.has_context = true %}<h3>{{ context_labels.get(group, group) }}</h3>
+        {% for row in rows %}<p><a href="{{ row.url }}">{{ row.label }}</a>{% if row.detail %} <span class="text-muted">· {{ row.detail }}</span>{% endif %}</p>{% endfor %}
+      {% endif %}
+    {% endfor %}
+    {% if not ns.has_context %}<p class="text-muted">当前主体尚无其他可追溯业务记录；不会把产业事件自动当作业务机会。</p>{% endif %}
   </section>
 
   {% endif %}

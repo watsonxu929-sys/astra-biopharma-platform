@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.services.canonical_relationship_service import CanonicalRelationshipService
 from app.services.intelligence_product_service import EVENT_PROFILES
 from app.services.unified_opportunity_service import UnifiedOpportunityService
+from app.services.processing.entity_extraction_service import _is_bad_heading
 from app.services.unified_resource_service import UnifiedResourceService
 
 
@@ -291,11 +292,38 @@ class GoldenLoopService:
             ("其他", 1, "规则未识别出明确事件类型，需要人工结合公开证据判断。"),
         )
         importance = max(1, min(5, int(item.get("importance") or default_importance)))
+        resource_count = int(self.db.execute(text(
+            "SELECT COUNT(*) FROM v06_market_resources WHERE source_intelligence_id=:id AND status<>'archived'"
+        ), {"id": int(intelligence_id)}).scalar() or 0)
+        opportunity_count = int(self.db.execute(text(
+            "SELECT COUNT(*) FROM v06_opportunities WHERE source_intelligence_id=:id"
+        ), {"id": int(intelligence_id)}).scalar() or 0)
+        subject_count = int(self.db.execute(text(
+            "SELECT COUNT(*) FROM core_intelligence_subject_links WHERE intelligence_item_id=:id"
+        ), {"id": int(intelligence_id)}).scalar() or 0)
+        if opportunity_count or resource_count:
+            value_class = "ACTIONABLE"
+            value_label = "可行动"
+            value_reason = "已经形成经用户确认的资源或合作机会，可以沿现有业务记录继续推进。"
+        elif (importance >= 3 or event_type in {"approval", "clinical", "financing", "cooperation", "merger", "policy", "expansion"}) and (item.get("source_url") or subject_count):
+            value_class = "WATCH"
+            value_label = "持续关注"
+            value_reason = "公开事实具有产业影响，但尚无经用户确认的资源或合作机会。"
+        else:
+            value_class = "INFORMATION"
+            value_label = "信息参考"
+            value_reason = "当前事实用于了解动态，证据还不足以进入资源或商机推进。"
         return {
             "event_type": event_type,
             "event_label": label,
             "importance": importance,
             "importance_reason": reason,
+            "value_class": value_class,
+            "value_label": value_label,
+            "value_reason": value_reason,
+            "industry_event_label": "产业事件",
+            "business_opportunity": bool(opportunity_count),
+            "business_opportunity_label": "已形成业务机会" if opportunity_count else "尚未形成业务机会",
             "actions": EVENT_ACTIONS.get(event_type, EVENT_ACTIONS["other"]),
         }
 
@@ -303,7 +331,8 @@ class GoldenLoopService:
         self._published_intelligence(intelligence_id)
         matched = self._many(
             """
-            SELECT sm.candidate_subject_type AS subject_type,
+            SELECT c.id AS candidate_id,c.evidence_excerpt,c.source_url,
+                   sm.candidate_subject_type AS subject_type,
                    sm.matched_subject_id AS external_id,
                    sm.matched_subject_label AS extracted_label,
                    sm.match_method,sm.match_score
@@ -323,7 +352,8 @@ class GoldenLoopService:
         matched.extend(
             self._many(
                 """
-                SELECT ci.subject_type_candidate AS subject_type,
+                SELECT NULL AS candidate_id,NULL AS evidence_excerpt,s.url AS source_url,
+                       ci.subject_type_candidate AS subject_type,
                        ci.subject_id_candidate AS external_id,
                        s.name AS extracted_label,
                        'source_registry' AS match_method,100 AS match_score
@@ -372,17 +402,128 @@ class GoldenLoopService:
                 continue
             seen.add(key)
             score = max(0, min(100, int(row.get("match_score") or 0)))
+            match_method = str(row.get("match_method") or "")
+            candidate_reason = {
+                "source_registry": "该公开来源已登记为此正式主体，由用户确认后建立关联",
+                "exact_alias": "提取名称与正式主体的现有简称或登记名称一致",
+                "exact_name": "标题或正文中的名称与正式主体名称一致",
+                "contains_name": "提取名称与正式主体存在包含关系，需要人工核对是否为同一主体",
+            }.get(match_method, "存在可解释的名称匹配，需要人工确认")
             candidates.append(
                 {
+                    "candidate_kind": "existing",
+                    "candidate_id": row.get("candidate_id"),
                     "subject_type": subject_type,
                     "subject_id": int(subject["id"]),
                     "subject_label": subject["label"],
                     "confidence": "高" if score >= 85 else "中",
                     "score": score,
-                    "reason": "名称与现有正式主体精确一致" if score >= 85 else "名称包含关系或存在同名，需要人工确认",
+                    "reason": candidate_reason,
                 }
             )
+        if not linked:
+            discoveries = self._many(
+                """
+                SELECT c.id AS candidate_id,c.candidate_type AS subject_type,
+                       COALESCE(NULLIF(c.subject_label,''),c.normalized_value) AS extracted_label,
+                       c.evidence_excerpt,c.source_url
+                FROM p2_intelligence_product_candidates pc
+                JOIN v05g_extraction_candidates origin ON origin.id=pc.candidate_id
+                JOIN v05g_extraction_candidates c ON c.collection_item_id=origin.collection_item_id
+                JOIN v05g_subject_match_candidates sm ON sm.extraction_candidate_id=c.id
+                WHERE pc.product_id=:item_id
+                  AND c.candidate_type IN ('organization','person')
+                  AND sm.status='new_subject'
+                  AND c.review_status IN ('pending','needs_review')
+                ORDER BY c.confidence_score DESC,c.id
+                """,
+                {"item_id": int(intelligence_id)},
+            )
+            for row in discoveries:
+                label = str(row.get("extracted_label") or "").strip()
+                if len(label) < 3 or _is_bad_heading(label):
+                    continue
+                candidates.append(
+                    {
+                        "candidate_kind": "new",
+                        "candidate_id": int(row["candidate_id"]),
+                        "subject_type": str(row["subject_type"]),
+                        "subject_label": label,
+                        "confidence": "待核对",
+                        "score": 0,
+                        "reason": "公开正文中出现该名称，但正式主体库没有匹配；需核对证据后决定新建或忽略",
+                        "evidence_excerpt": str(row.get("evidence_excerpt") or "")[:280],
+                        "source_url": row.get("source_url"),
+                        "review_url": f"/processing/candidates/{int(row['candidate_id'])}",
+                    }
+                )
+                if len(candidates) >= 8:
+                    break
         return candidates[:8]
+
+
+    def related_context(
+        self, intelligence_id: int, *, subjects: list[dict[str, Any]] | None = None
+    ) -> dict[str, list[dict[str, Any]]]:
+        subjects = subjects if subjects is not None else self.subjects(intelligence_id)
+        groups: dict[str, list[dict[str, Any]]] = {
+            "intelligence": [], "resources": [], "opportunities": [],
+            "follow_ups": [], "relationships": [],
+        }
+        seen = {key: set() for key in groups}
+
+        def add(group: str, row: dict[str, Any], *, label: str, url: str, detail: str = "") -> None:
+            record_id = int(row["id"])
+            if record_id in seen[group]:
+                return
+            seen[group].add(record_id)
+            groups[group].append({"id": record_id, "label": label, "url": url, "detail": detail})
+
+        for subject in subjects:
+            subject_type, subject_id = str(subject["subject_type"]), int(subject["subject_id"])
+            params = {"item_id": int(intelligence_id), "subject_type": subject_type, "subject_id": subject_id}
+            for row in self._many(
+                """SELECT i.id,i.title,i.intel_type FROM v06_intelligence_items i
+                   JOIN core_intelligence_subject_links l ON l.intelligence_item_id=i.id
+                   WHERE i.status='published' AND i.id<>:item_id
+                     AND l.subject_type=:subject_type AND l.subject_id=:subject_id
+                   ORDER BY i.id DESC LIMIT 8""", params,
+            ):
+                add("intelligence", row, label=row["title"], url=f"/intelligence/{row['id']}", detail=str(row.get("intel_type") or ""))
+
+            if subject_type == "organization":
+                resource_sql = "SELECT id,title,direction FROM v06_market_resources WHERE status<>'archived' AND organization_id=:subject_id AND COALESCE(source_intelligence_id,0)<>:item_id ORDER BY id DESC LIMIT 8"
+                opportunity_sql = """SELECT id,title,stage FROM v06_opportunities
+                    WHERE COALESCE(source_intelligence_id,0)<>:item_id AND
+                    (organization_id=:subject_id OR demand_organization_id=:subject_id
+                     OR supply_organization_id=:subject_id OR target_organization_id=:subject_id)
+                    ORDER BY id DESC LIMIT 8"""
+            elif subject_type == "person":
+                resource_sql = "SELECT id,title,direction FROM v06_market_resources WHERE status<>'archived' AND owner_person_id=:subject_id AND COALESCE(source_intelligence_id,0)<>:item_id ORDER BY id DESC LIMIT 8"
+                opportunity_sql = "SELECT id,title,stage FROM v06_opportunities WHERE target_person_id=:subject_id AND COALESCE(source_intelligence_id,0)<>:item_id ORDER BY id DESC LIMIT 8"
+            elif subject_type == "project":
+                resource_sql = "SELECT id,title,direction FROM v06_market_resources WHERE status<>'archived' AND project_id=:subject_id AND COALESCE(source_intelligence_id,0)<>:item_id ORDER BY id DESC LIMIT 8"
+                opportunity_sql = "SELECT id,title,stage FROM v06_opportunities WHERE 1=0"
+            else:
+                continue
+            for row in self._many(resource_sql, params):
+                add("resources", row, label=row["title"], url=f"/resources/{row['id']}", detail="需求" if row.get("direction") == "demand" else "供给")
+            for row in self._many(opportunity_sql, params):
+                add("opportunities", row, label=row["title"], url=f"/opportunities/{row['id']}", detail=str(row.get("stage") or ""))
+            for row in self._many(
+                """SELECT id,relationship_type FROM p3_canonical_relationships
+                   WHERE (subject_type=:subject_type AND subject_id=:subject_id)
+                      OR (object_type=:subject_type AND object_id=:subject_id)
+                   ORDER BY id DESC LIMIT 8""", params,
+            ):
+                add("relationships", row, label="正式产业关系", url=f"/network/relationships/{row['id']}", detail=str(row.get("relationship_type") or ""))
+
+        opportunity_ids = [row["id"] for row in groups["opportunities"]]
+        if opportunity_ids:
+            marks = ",".join(str(int(value)) for value in opportunity_ids)
+            for row in self._many(f"SELECT id,opportunity_id,content,followed_at FROM v06_follow_ups WHERE opportunity_id IN ({marks}) ORDER BY id DESC LIMIT 8", {}):
+                add("follow_ups", row, label=str(row.get("content") or "跟进记录")[:100], url=f"/opportunities/{row['opportunity_id']}", detail=str(row.get("followed_at") or ""))
+        return groups
 
     def ignore_subject_candidate(
         self, intelligence_id: int, *, subject_type: str, subject_id: int, actor_user_id: int
@@ -941,6 +1082,7 @@ class GoldenLoopService:
             "follow_ups": follow_ups,
             "relationships": relationships,
             "guidance": guidance,
+            "related_context": self.related_context(intelligence_id, subjects=subjects),
         }
 
     def workbench(self) -> dict[str, Any]:
@@ -950,6 +1092,8 @@ class GoldenLoopService:
         return {
             "home_metrics": {
                 "today_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items WHERE status='published' AND date(COALESCE(published_at,created_at))=date('now','localtime')"),
+                "high_value_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items WHERE status='published' AND COALESCE(is_demo,0)=0 AND importance>=4 AND date(COALESCE(created_at,published_at))>=date('now','-30 days')"),
+                "actionable_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND COALESCE(i.is_demo,0)=0 AND (EXISTS (SELECT 1 FROM v06_market_resources r WHERE r.source_intelligence_id=i.id AND r.status<>'archived') OR EXISTS (SELECT 1 FROM v06_opportunities o WHERE o.source_intelligence_id=i.id))"),
                 "pending_subjects": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND NOT EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=i.id)"),
                 "pending_judgement": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=i.id) AND NOT EXISTS (SELECT 1 FROM v06_market_resources r WHERE r.source_intelligence_id=i.id AND r.status<>'archived')"),
                 "active_resources": count("SELECT COUNT(*) FROM v06_market_resources WHERE status='published'"),

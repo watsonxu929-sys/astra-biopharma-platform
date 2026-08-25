@@ -5,6 +5,10 @@ import re
 ORG_SUFFIX = r"(?:公司|集团|基金|园区|医院|大学|学院|研究院|实验室|协会|中心|Biotech|Bio|Pharma|Therapeutics|Inc\.?|Ltd\.?)"
 ORG_RE = re.compile(rf"([\u4e00-\u9fa5A-Za-z0-9（）()·.\-& ]{{2,60}}{ORG_SUFFIX})")
 PERSON_ROLE_RE = re.compile(r"([\u4e00-\u9fa5]{2,4})\s*(?:，|,|：|:|\||-|—)?\s*(创始人|联合创始人|董事长|总经理|CEO|CTO|CSO|CFO|教授|博士|主任|负责人|合伙人|总监)")
+PERSON_EN_ACTION_RE = re.compile(
+    r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+(?:has\s+been\s+|was\s+|is\s+)?"
+    r"(appointed|assigned|named|joined|joins|retires|retired)\b"
+)
 PROJECT_RE = re.compile(r"([A-Z]{2,}[A-Z0-9-]{1,30}|[\u4e00-\u9fa5A-Za-z0-9-]{2,40}(?:项目|平台|产品|药物|疗法|管线))")
 AMOUNT_RE = re.compile(r"((?:数)?\d+(?:\.\d+)?\s*(?:万|亿|million|billion)?\s*(?:美元|人民币|元|USD|RMB)?)")
 ROUND_RE = re.compile(r"([A-D]\+?轮|天使轮|Pre-A轮|IPO|并购|战略融资)")
@@ -75,6 +79,14 @@ def _people(text: str, source: dict, page_type: str) -> list[dict]:
         rows.append(_candidate("person", "person", "name", name, name, "person_role", score, source, subject_label=name, payload={"role": role}))
         if len(rows) >= MAX_CANDIDATES_PER_TYPE["person"]:
             break
+    for match in PERSON_EN_ACTION_RE.finditer(text):
+        name, action = match.group(1).strip(), match.group(2).strip()
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        rows.append(_candidate("person", "person", "name", name, name, "person_role_en", 76, source, subject_label=name, payload={"role": action}))
+        if len(rows) >= MAX_CANDIDATES_PER_TYPE["person"]:
+            break
     return rows
 
 def _projects(text: str, source: dict, page_type: str) -> list[dict]:
@@ -103,11 +115,15 @@ def _events(text: str, source: dict) -> list[dict]:
         "product_launch": ["上市", "发布", "推出", "launch", "release"],
         "tech_progress": ["突破", "进展", "研究发现", "技术", "研发", "breakthrough"],
         "corporate": ["成立", "更名", "重组", "退市", "入选", "榜单", "corporate"],
-        "policy": ["政策", "通知", "办法", "规定", "regulation", "policy"],
+        "policy": ["政策", "通知", "办法", "措施", "规定", "regulation", "policy"],
         "conference": ["会议", "论坛", "峰会", "研讨会", "conference", "summit"],
         "recruitment": ["任命", "聘任", "离职", "人事", "appointment", "resignation"],
     }
     priority_order = ["approval", "clinical", "financing", "merger", "cooperation", "product_launch", "tech_progress", "corporate", "policy", "conference", "recruitment"]
+    source_title = str(source.get("source_title") or "").lower()
+    policy_title_markers = ("政策", "通知", "办法", "措施", "规定", "policy", "regulation")
+    if any(marker in source_title for marker in policy_title_markers):
+        priority_order = ["policy", *[value for value in priority_order if value != "policy"]]
     lowered = text.lower()
     for event_type in priority_order:
         keywords = event_keywords.get(event_type, [])
@@ -119,7 +135,7 @@ def _events(text: str, source: dict) -> list[dict]:
                 payload["amount"] = amount.group(1).strip()
             if round_match:
                 payload["round"] = round_match.group(1).strip()
-            score = 82 if event_type in {"approval", "financing", "clinical"} else 72
+            score = 90 if event_type == "policy" and any(marker in source_title for marker in policy_title_markers) else (82 if event_type in {"approval", "financing", "clinical"} else 72)
             rows.append(_candidate("event", "event", "event", EVENT_TYPE_MAP.get(event_type, event_type), EVENT_TYPE_MAP.get(event_type, event_type), f"event_{event_type}", score, source, payload=payload))
             break
     return rows

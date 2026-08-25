@@ -75,11 +75,11 @@ class IntelligenceProductService:
             if current["status"] != "published" and requested_status == "published":
                 raise ValueError("approved_candidate_publication_required")
             values = {key: fields.get(key, current[key]) for key in (
-                "title", "summary", "content", "intel_type", "companies", "industry_directions", "tags",
+                "title", "summary", "content", "intel_type", "companies", "people_involved", "industry_directions", "tags",
                 "source_url", "visibility", "credibility", "importance")}
             values.update({"status": requested_status, "updated_at": now(), "id": product_id})
             conn.execute("""UPDATE v06_intelligence_items SET title=:title,summary=:summary,content=:content,
-                intel_type=:intel_type,companies=:companies,industry_directions=:industry_directions,tags=:tags,
+                intel_type=:intel_type,companies=:companies,people_involved=:people_involved,industry_directions=:industry_directions,tags=:tags,
                 source_url=:source_url,visibility=:visibility,credibility=:credibility,importance=:importance,
                 status=:status,updated_at=:updated_at WHERE id=:id""", values)
             conn.execute("INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,after_json,created_at) VALUES ('intelligence_product',?,'updated',?,?,?)",
@@ -178,6 +178,7 @@ class IntelligenceProductService:
                     SELECT candidate_type,subject_label,normalized_value
                     FROM v05g_extraction_candidates
                     WHERE collection_item_id=? AND candidate_type IN ('organization','person')
+                      AND COALESCE(NULLIF(pipeline_review_status,''),review_status) IN ('approved','applied')
                     ORDER BY confidence_score DESC,id
                     """,
                     (context["collection_item_id"],),

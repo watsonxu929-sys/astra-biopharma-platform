@@ -42,6 +42,9 @@
 
   {% for label, value, url in [
     ('今日新增', home_metrics.today_intelligence, '/intelligence?time_range=today'),
+    ('高价值情报', home_metrics.high_value_intelligence, '/intelligence?time_range=30d'),
+    ('可行动情报', home_metrics.actionable_intelligence, '/intelligence?workflow=actionable'),
+    ('待匹配资源', home_metrics.pending_matches, '/resources'),
     ('待判断', home_metrics.pending_judgement, '/intelligence?workflow=pending_resource'),
     ('待关联主体', home_metrics.pending_subjects, '/intelligence?workflow=pending_subject'),
     ('有效需求', home_metrics.active_demands, '/resources?direction=demand&status=published'),
