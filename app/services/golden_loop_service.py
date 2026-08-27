@@ -274,12 +274,115 @@ class GoldenLoopService:
             )
             row["subject_label"] = subject["label"] if subject else "主体已归档"
             if subject:
+                row["subject_external_id"] = subject["external_id"]
                 row["subject_url"] = (
                     f"/network/people/{subject['id']}"
                     if row["subject_type"] == "person"
                     else f"/network/entities/{row['subject_type']}/{subject['external_id']}"
                 )
         return rows
+
+    def subject_priority(self, subject_type: str, subject_id: int) -> dict[str, Any]:
+        config = SUBJECT_TABLES.get(subject_type)
+        if not config:
+            return {"is_priority": False, "priority": None, "reason": "主体类型不参与优先监测"}
+        table, label_column = config
+        subject = self._one(
+            f'SELECT id,external_id,"{label_column}" AS label FROM "{table}" WHERE id=:id',
+            {"id": int(subject_id)},
+        )
+        if not subject:
+            return {"is_priority": False, "priority": None, "reason": "正式主体不存在"}
+        params = {"id": int(subject_id), "external_id": subject["external_id"]}
+        if subject_type == "organization":
+            membership_count = int(self.db.execute(text("""
+                SELECT COUNT(*) FROM (
+                    SELECT m.id FROM v04f_club_memberships m
+                    WHERE m.organization_id=:id AND m.status IN ('active','pending')
+                    UNION
+                    SELECT m.id FROM organization_membership_links l
+                    JOIN v04f_club_memberships m ON m.id=l.membership_id
+                    WHERE l.organization_id=:id AND l.status='active'
+                      AND m.status IN ('active','pending')
+                )
+            """), params).scalar() or 0)
+            resource_count = int(self.db.execute(text(
+                "SELECT COUNT(*) FROM v06_market_resources WHERE organization_id=:id AND status<>'archived'"
+            ), params).scalar() or 0)
+            explicit_watch_count = int(self.db.execute(text("""
+                SELECT (SELECT COUNT(*) FROM v06_favorites WHERE target_type='organization' AND target_id=:id)
+                     + (SELECT COUNT(*) FROM v06_follows WHERE target_type='organization' AND target_id=:id)
+                     + (SELECT COUNT(*) FROM v06_organization_tags WHERE organization_id=:id)
+            """), params).scalar() or 0)
+            source_count = int(self.db.execute(text("""
+                SELECT COUNT(*) FROM v04g_monitoring_sources
+                WHERE subject_type='organization'
+                  AND (subject_id=:external_id OR subject_id=CAST(:id AS TEXT))
+            """), params).scalar() or 0)
+        else:
+            membership_count = int(self.db.execute(text(
+                "SELECT COUNT(*) FROM v04f_club_memberships WHERE person_id=:id AND status IN ('active','pending')"
+            ), params).scalar() or 0) if subject_type == "person" else 0
+            resource_count = 0
+            explicit_watch_count = int(self.db.execute(text("""
+                SELECT (SELECT COUNT(*) FROM v06_favorites WHERE target_type=:subject_type AND target_id=:id)
+                     + (SELECT COUNT(*) FROM v06_follows WHERE target_type=:subject_type AND target_id=:id)
+            """), {**params, "subject_type": subject_type}).scalar() or 0)
+            source_count = 0
+        relationship_count = int(self.db.execute(text("""
+            SELECT COUNT(*) FROM p3_canonical_relationships
+            WHERE review_status='approved' AND is_current=1 AND
+              ((subject_type=:subject_type AND subject_id=:external_id)
+               OR (object_type=:subject_type AND object_id=:external_id))
+        """), {**params, "subject_type": subject_type}).scalar() or 0)
+        if subject_type == "organization":
+            opportunity_sql = """SELECT COUNT(*) FROM v06_opportunities WHERE COALESCE(is_demo,0)=0 AND
+                (organization_id=:id OR target_organization_id=:id
+                 OR demand_organization_id=:id OR supply_organization_id=:id)"""
+        elif subject_type == "person":
+            opportunity_sql = "SELECT COUNT(*) FROM v06_opportunities WHERE COALESCE(is_demo,0)=0 AND (target_person_id=:id OR initiator_id=:id)"
+        else:
+            opportunity_sql = "SELECT 0"
+        opportunity_count = int(self.db.execute(text(opportunity_sql), params).scalar() or 0)
+        intelligence_count = int(self.db.execute(text("""
+            SELECT COUNT(*) FROM core_intelligence_subject_links
+            WHERE subject_type=:subject_type AND subject_id=:id
+        """), {**params, "subject_type": subject_type}).scalar() or 0)
+        if membership_count:
+            priority, reason = "P1", "Q-BAY会员主体"
+        elif subject_type == "organization" and resource_count:
+            priority, reason = "P2", "已有Canonical Resource"
+        elif relationship_count:
+            priority, reason = "P3", "已有已审核Canonical Relationship"
+        elif opportunity_count:
+            priority, reason = "P4", "已有非演示Opportunity历史"
+        elif explicit_watch_count:
+            priority, reason = "P5", "管理员已关注、收藏或标记"
+        else:
+            priority, reason = None, "不在当前Priority Subject Universe"
+        return {
+            "is_priority": bool(priority), "priority": priority, "reason": reason,
+            "subject_type": subject_type, "subject_id": int(subject_id),
+            "subject_label": subject["label"], "resource_count": resource_count,
+            "relationship_count": relationship_count, "opportunity_count": opportunity_count,
+            "intelligence_count": intelligence_count, "source_count": source_count,
+            "qbay_context": "Q-BAY会员" if membership_count else (
+                "Q-BAY生态主体" if "Q-BAY" in str(subject["label"]) else "无直接会员记录"
+            ),
+        }
+
+    def priority_context(self, subjects: list[dict[str, Any]]) -> dict[str, Any]:
+        rows = [
+            self.subject_priority(str(row["subject_type"]), int(row["subject_id"]))
+            for row in subjects
+        ]
+        priority_rows = [row for row in rows if row.get("is_priority")]
+        priority_rows.sort(key=lambda row: int(str(row["priority"])[1:]))
+        return {
+            "is_priority": bool(priority_rows),
+            "priority": priority_rows[0]["priority"] if priority_rows else None,
+            "subjects": priority_rows,
+        }
 
     def event_insight(self, intelligence_id: int) -> dict[str, Any]:
         item = self._published_intelligence(intelligence_id)
@@ -408,7 +511,10 @@ class GoldenLoopService:
                 "exact_alias": "提取名称与正式主体的现有简称或登记名称一致",
                 "exact_name": "标题或正文中的名称与正式主体名称一致",
                 "contains_name": "提取名称与正式主体存在包含关系，需要人工核对是否为同一主体",
+                "normalized_alias": "名称仅存在公司后缀、空格或标点差异，与正式主体唯一一致",
+                "rapidfuzz_candidate": "名称高度相似但并非精确一致，必须人工确认",
             }.get(match_method, "存在可解释的名称匹配，需要人工确认")
+            priority = self.subject_priority(subject_type, int(subject["id"]))
             candidates.append(
                 {
                     "candidate_kind": "existing",
@@ -419,6 +525,8 @@ class GoldenLoopService:
                     "confidence": "高" if score >= 85 else "中",
                     "score": score,
                     "reason": candidate_reason,
+                    "priority": priority.get("priority"),
+                    "priority_reason": priority.get("reason"),
                 }
             )
         if not linked:
@@ -481,7 +589,10 @@ class GoldenLoopService:
 
         for subject in subjects:
             subject_type, subject_id = str(subject["subject_type"]), int(subject["subject_id"])
-            params = {"item_id": int(intelligence_id), "subject_type": subject_type, "subject_id": subject_id}
+            params = {
+                "item_id": int(intelligence_id), "subject_type": subject_type,
+                "subject_id": subject_id, "external_id": str(subject.get("subject_external_id") or ""),
+            }
             for row in self._many(
                 """SELECT i.id,i.title,i.intel_type FROM v06_intelligence_items i
                    JOIN core_intelligence_subject_links l ON l.intelligence_item_id=i.id
@@ -511,12 +622,33 @@ class GoldenLoopService:
             for row in self._many(opportunity_sql, params):
                 add("opportunities", row, label=row["title"], url=f"/opportunities/{row['id']}", detail=str(row.get("stage") or ""))
             for row in self._many(
-                """SELECT id,relationship_type FROM p3_canonical_relationships
-                   WHERE (subject_type=:subject_type AND subject_id=:subject_id)
-                      OR (object_type=:subject_type AND object_id=:subject_id)
-                   ORDER BY id DESC LIMIT 8""", params,
+                """SELECT r.id,r.relationship_type,r.subject_type,r.subject_id,r.object_type,r.object_id,
+                          (SELECT COUNT(*) FROM p3_relationship_evidence e WHERE e.relationship_id=r.id) AS evidence_count
+                   FROM p3_canonical_relationships r
+                   WHERE r.review_status='approved' AND r.is_current=1 AND
+                        ((r.subject_type=:subject_type AND r.subject_id=:external_id)
+                      OR (r.object_type=:subject_type AND r.object_id=:external_id))
+                   ORDER BY r.id DESC LIMIT 8""", params,
             ):
-                add("relationships", row, label="正式产业关系", url=f"/network/relationships/{row['id']}", detail=str(row.get("relationship_type") or ""))
+                if row["subject_type"] == subject_type and str(row["subject_id"]) == params["external_id"]:
+                    other_type, other_id = str(row["object_type"]), str(row["object_id"])
+                else:
+                    other_type, other_id = str(row["subject_type"]), str(row["subject_id"])
+                other_label = other_id
+                other_config = SUBJECT_TABLES.get(other_type)
+                if other_config:
+                    other_table, other_column = other_config
+                    other = self._one(
+                        f'SELECT "{other_column}" AS label FROM "{other_table}" WHERE external_id=:external_id',
+                        {"external_id": other_id},
+                    )
+                    if other:
+                        other_label = str(other["label"])
+                add(
+                    "relationships", row, label=f"与{other_label}的正式关系",
+                    url=f"/network/relationships/{row['id']}",
+                    detail=f"{row.get('relationship_type') or '关系'} · 证据 {int(row.get('evidence_count') or 0)}",
+                )
 
         opportunity_ids = [row["id"] for row in groups["opportunities"]]
         if opportunity_ids:
@@ -524,6 +656,172 @@ class GoldenLoopService:
             for row in self._many(f"SELECT id,opportunity_id,content,followed_at FROM v06_follow_ups WHERE opportunity_id IN ({marks}) ORDER BY id DESC LIMIT 8", {}):
                 add("follow_ups", row, label=str(row.get("content") or "跟进记录")[:100], url=f"/opportunities/{row['opportunity_id']}", detail=str(row.get("followed_at") or ""))
         return groups
+
+    def opportunity_discovery(
+        self,
+        intelligence_id: int,
+        *,
+        trace: dict[str, Any] | None = None,
+        has_subject_candidate: bool = False,
+    ) -> dict[str, Any]:
+        item = self._published_intelligence(intelligence_id)
+        trace = trace if trace is not None else self.trace(intelligence_id)
+        subjects = list(trace.get("subjects") or [])
+        related = dict(trace.get("related_context") or {})
+        priority = self.priority_context(subjects)
+        direct_resources = list(trace.get("resources") or [])
+        related_resources = list(related.get("resources") or [])
+        relationships = list(related.get("relationships") or [])
+        existing_opportunity = self._one(
+            """SELECT id,title FROM v06_opportunities
+               WHERE source_intelligence_id=:id AND COALESCE(is_demo,0)=0 ORDER BY id LIMIT 1""",
+            {"id": int(intelligence_id)},
+        )
+        event_type = str(item.get("event_type") or "").strip().lower()
+        text_value = " ".join(
+            str(item.get(field) or "") for field in ("title", "summary", "content")
+        ).casefold()
+        unresolved_terms = (
+            "寻求", "征集", "招募合作", "采购需求", "合作需求", "资源需求", "需求尚未", "合作伙伴", "招商需求",
+            "seeking", "looking for", "request for", "invites proposals", "partner wanted",
+        )
+        unresolved_need = next((term for term in unresolved_terms if term in text_value), None)
+        if direct_resources:
+            directions = {str(row.get("direction") or "") for row in direct_resources}
+            resource_signal = "POSSIBLE_DEMAND" if "demand" in directions else "POSSIBLE_SUPPLY"
+            resource_reason = "该情报已有用户确认的Canonical Resource，可作为后续判断上下文。"
+        else:
+            expansion_terms = ("新建", "建设", "扩建", "研发中心", "生产基地", "落地", "expand", "new facility")
+            expansion_hit = next((term for term in expansion_terms if term in text_value), None)
+            if event_type == "expansion" and expansion_hit:
+                resource_signal = "POSSIBLE_DEMAND"
+                resource_reason = f"公开信息出现“{expansion_hit}”扩张事实，可能涉及空间、设备或产业服务需求。"
+            else:
+                resource_signal = "NO_RESOURCE_SIGNAL"
+                resource_reason = "公开信息没有足够具体的需求或供给事实。"
+        signal_disclaimer = (
+            "公开信息尚未确认具体采购、合作或供给意向；该提示不会自动创建Resource。"
+            if resource_signal != "NO_RESOURCE_SIGNAL"
+            else "不因事件类型、融资或已发生合作自动推断资源需求。"
+        )
+        if existing_opportunity:
+            value_level, value_label = "LEVEL_3_OUR_OPPORTUNITY", "我们的机会"
+            value_reason = "已经存在人工确认并可追溯到本情报的非演示Opportunity。"
+            next_action, next_action_url = "查看Opportunity", f"/opportunities/{existing_opportunity['id']}"
+        elif priority.get("is_priority") or resource_signal != "NO_RESOURCE_SIGNAL" or related_resources or relationships:
+            value_level, value_label = "LEVEL_2_ACTIONABLE_SIGNAL", "可行动信号"
+            value_reason = "命中优先主体或现有业务上下文，值得执行一个人工核对动作。"
+            if related_resources or direct_resources:
+                resource = (related_resources or direct_resources)[0]
+                next_action, next_action_url = "查看Resource并检查Match", f"/resources/{resource['id']}"
+            elif relationships:
+                next_action, next_action_url = "查看Relationship并确认联系人", relationships[0]["url"]
+            elif subjects:
+                next_action, next_action_url = "查看主体并决定是否加入关注", subjects[0].get("subject_url")
+            else:
+                next_action, next_action_url = "确认主体", None
+        else:
+            value_level, value_label = "LEVEL_1_INDUSTRY_INFORMATION", "行业信息"
+            value_reason = "值得知道，但没有当前可核验的业务动作或我们可调用的连接能力。"
+            if has_subject_candidate:
+                next_action, next_action_url = "确认主体", None
+            else:
+                next_action, next_action_url = "暂不处理", None
+        time_valid = bool(self.db.execute(text("""
+            SELECT CASE WHEN date(COALESCE(occurred_at,published_at,created_at))
+                              >= date('now','-365 days') THEN 1 ELSE 0 END
+            FROM v06_intelligence_items WHERE id=:id
+        """), {"id": int(intelligence_id)}).scalar() or 0)
+        capability_context = bool(direct_resources or related_resources or relationships)
+        qualification = {
+            "subject_confirmed": bool(subjects),
+            "unresolved_need": bool(unresolved_need),
+            "unresolved_need_evidence": unresolved_need,
+            "capability_context": capability_context,
+            "next_action_specific": next_action != "暂不处理",
+            "time_valid": time_valid,
+        }
+        qualification["eligible"] = bool(
+            all(qualification[key] for key in (
+                "subject_confirmed", "unresolved_need", "capability_context",
+                "next_action_specific", "time_valid",
+            )) and not existing_opportunity
+        )
+        if existing_opportunity:
+            opportunity_reason = "已存在人工确认的Opportunity，不重复创建。"
+        elif qualification["eligible"]:
+            opportunity_reason = "五项准入条件齐备，可由Operator在正式UI人工确认。"
+        else:
+            missing_labels = {
+                "subject_confirmed": "明确主体", "unresolved_need": "未解决需求/合作信号",
+                "capability_context": "可调用Resource或Relationship", "next_action_specific": "具体下一步",
+                "time_valid": "时间有效性",
+            }
+            missing = [label for key, label in missing_labels.items() if not qualification[key]]
+            opportunity_reason = "暂不构成我们的机会；缺少" + "、".join(missing) + "。"
+        return {
+            "priority": priority,
+            "value_level": value_level,
+            "value_label": value_label,
+            "value_reason": value_reason,
+            "resource_signal": resource_signal,
+            "resource_reason": resource_reason,
+            "resource_disclaimer": signal_disclaimer,
+            "next_action": next_action,
+            "next_action_url": next_action_url,
+            "qualification": qualification,
+            "opportunity_reason": opportunity_reason,
+            "existing_resource_count": len(direct_resources) + len(related_resources),
+            "relationship_count": len(relationships),
+            "industry_event_not_opportunity": not bool(existing_opportunity),
+        }
+
+    def priority_feed(self, limit: int = 4) -> list[dict[str, Any]]:
+        rows = self._many(
+            """SELECT id,title,intel_type,importance,published_at,created_at
+               FROM v06_intelligence_items
+               WHERE status='published' AND COALESCE(is_demo,0)=0
+               ORDER BY COALESCE(published_at,created_at) DESC LIMIT 30""",
+            {},
+        )
+        for row in rows:
+            subjects = self.subjects(int(row["id"]))
+            priority = self.priority_context(subjects)
+            candidates = self.subject_candidates(int(row["id"])) if not subjects else []
+            candidate_priority = next(
+                (candidate.get("priority") for candidate in candidates if candidate.get("priority")),
+                None,
+            )
+            resource_count = int(self.db.execute(text(
+                "SELECT COUNT(*) FROM v06_market_resources WHERE source_intelligence_id=:id AND status<>'archived'"
+            ), {"id": int(row["id"])}).scalar() or 0)
+            opportunity_count = int(self.db.execute(text(
+                "SELECT COUNT(*) FROM v06_opportunities WHERE source_intelligence_id=:id AND COALESCE(is_demo,0)=0"
+            ), {"id": int(row["id"])}).scalar() or 0)
+            if opportunity_count:
+                score, reason = 100, "已有待推进Opportunity"
+            elif priority.get("is_priority") and resource_count:
+                score, reason = 90, "Priority Subject + 可行动上下文"
+            elif priority.get("is_priority"):
+                score, reason = 80, "Priority Subject"
+            elif candidate_priority:
+                score, reason = 70, "待确认Priority Subject"
+            elif resource_count:
+                score, reason = 60, "已有Resource Signal"
+            elif int(row.get("importance") or 0) >= 4:
+                score, reason = 40, "高价值行业情报"
+            else:
+                score, reason = 10, "普通行业情报"
+            row["priority_score"], row["priority_reason"] = score, reason
+        rows.sort(
+            key=lambda row: (
+                int(row["priority_score"]),
+                str(row.get("published_at") or row.get("created_at") or ""),
+                int(row["id"]),
+            ),
+            reverse=True,
+        )
+        return rows[:max(1, min(int(limit), 20))]
 
     def ignore_subject_candidate(
         self, intelligence_id: int, *, subject_type: str, subject_id: int, actor_user_id: int

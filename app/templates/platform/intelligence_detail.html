@@ -29,15 +29,29 @@
   </section>
 
   <section class="platform-card"><h2>为什么值得关注</h2>
-    <p><span class="badge badge-info">{{ event_insight.value_label }}</span> <strong>重要度 {{ event_insight.importance }}/5</strong></p>
+    <p><span class="badge badge-info">{{ opportunity_context.value_label }}</span> <strong>重要度 {{ event_insight.importance }}/5</strong></p>
     <p><strong>{{ event_insight.industry_event_label }}：</strong>{{ event_insight.event_label }} · <strong>业务机会：</strong>{{ event_insight.business_opportunity_label }}</p>
-    <p>{{ event_insight.value_reason }}</p>
+    <p>{{ opportunity_context.value_reason }}</p>
     <p class="text-muted">{{ event_insight.importance_reason }}</p>
+    {% if opportunity_context.priority.is_priority %}
+      <h3>Priority Subject</h3>
+      {% for subject in opportunity_context.priority.subjects %}
+      <p><span class="badge">{{ subject.priority }}</span> <strong>{{ subject.subject_label }}</strong> · {{ subject.reason }} · {{ subject.qbay_context }}</p>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">当前未命中 Priority Subject；不会因新闻热度自动升级为业务机会。</p>
+    {% endif %}
+    <h3>Resource Signal</h3>
+    <p><span class="badge">{{ opportunity_context.resource_signal }}</span> {{ opportunity_context.resource_reason }}</p>
+    <p class="text-muted">{{ opportunity_context.resource_disclaimer }}</p>
+    <p>系统已有相关资源 {{ opportunity_context.existing_resource_count }} 项 · 已审核关系 {{ opportunity_context.relationship_count }} 条。</p>
     <h3>建议下一步</h3>
-    <ul>
-      {% for action in event_insight.actions %}<li>{{ action }}</li>{% endfor %}
-    </ul>
-    <p class="text-muted">事件类型和建议由确定性规则生成，最终业务判断由用户完成。</p>
+    {% if opportunity_context.next_action_url %}
+      <p><a class="btn btn-outline btn-sm" href="{{ opportunity_context.next_action_url }}">{{ opportunity_context.next_action }}</a></p>
+    {% else %}
+      <p><strong>{{ opportunity_context.next_action }}</strong></p>
+    {% endif %}
+    <p class="text-muted">上述判断由确定性规则与Canonical上下文生成，最终选择由用户完成。</p>
   </section>
 
   <section class="platform-card"><h2>涉及谁</h2>
@@ -50,7 +64,7 @@
       {% for candidate in subject_candidates %}
       <article class="platform-card" style="margin:0;">
         <p><strong>{{ '发现新主体候选' if candidate.candidate_kind == 'new' else '可能涉及' }}：{{ candidate.subject_label }}</strong></p>
-        <p><span class="badge">置信度：{{ candidate.confidence }}</span> <span class="text-muted">{{ candidate.reason }}</span></p>
+        <p><span class="badge">置信度：{{ candidate.confidence }}</span>{% if candidate.priority %} <span class="badge badge-info">Priority {{ candidate.priority }}</span>{% endif %} <span class="text-muted">{{ candidate.reason }}</span></p>
         {% if candidate.evidence_excerpt %}<p class="text-muted">{{ candidate.evidence_excerpt }}</p>{% endif %}
         <div class="header-actions">
           {% if candidate.candidate_kind == 'new' %}
@@ -93,7 +107,7 @@
   </section>
 
   <section class="platform-card"><h2>我能做什么</h2>
-    {% if trace.subjects %}
+    {% if trace.subjects and opportunity_context.resource_signal != 'NO_RESOURCE_SIGNAL' %}
     <div class="platform-grid platform-grid-2">
       {% for direction, label, prefix in [('demand','创建需求','需求｜'),('supply','创建供给','供给｜')] %}
       <details class="platform-card" style="margin:0;"><summary><strong>{{ label }}</strong></summary>
@@ -104,7 +118,7 @@
             {% for subject in trace.subjects if subject.subject_type == 'organization' %}<option value="{{ subject.subject_id }}">{{ subject.subject_label }}</option>{% else %}<option value="">使用已关联人物/项目</option>{% endfor %}
           </select></label>
           <label>资源类别<input name="resource_type" value="产业合作" required></label>
-          <label>实际{{ '需求' if direction == 'demand' else '供给' }}内容<textarea name="summary" required>{{ item.summary or '' }}</textarea></label>
+          <label>经人工核实的{{ '需求' if direction == 'demand' else '供给' }}内容<textarea name="summary" required></textarea></label>
           <label>合作方式<input name="cooperation_mode" placeholder="联合开发、渠道合作、技术许可等"></label>
           <label>有效期<input name="valid_until" type="date"></label>
           <button class="btn btn-primary" type="submit">{{ label }}</button>
@@ -112,8 +126,23 @@
       </details>
       {% endfor %}
     </div>
-    {% else %}<p class="text-muted">先关联人物或企业，即可直接创建需求和供给，无需重新填写情报或主体编号。</p>{% endif %}
-    <p style="margin-top:16px;"><a class="btn btn-outline" href="{% if trace.resources %}/resources/{{ trace.resources[0].id }}{% else %}/resources{% endif %}">创建合作机会</a> <span class="text-muted">确认供需匹配后，系统会自动带入双方和来源信息。</span></p>
+    {% elif trace.subjects %}
+      <p class="text-muted">当前没有足够事实支持新建Resource；请先查看主体、已有资源和公开证据。</p>
+    {% else %}
+      <p class="text-muted">先确认人物或企业；未确认主体前不能进入Resource或Opportunity判断。</p>
+    {% endif %}
+    <h3>Opportunity Qualification</h3>
+    <p>{{ opportunity_context.opportunity_reason }}</p>
+    <ul>
+      <li>明确主体：{{ '满足' if opportunity_context.qualification.subject_confirmed else '缺少' }}</li>
+      <li>未解决需求/合作信号：{{ '满足' if opportunity_context.qualification.unresolved_need else '缺少' }}</li>
+      <li>可调用Resource或Relationship：{{ '满足' if opportunity_context.qualification.capability_context else '缺少' }}</li>
+      <li>具体下一步：{{ '满足' if opportunity_context.qualification.next_action_specific else '缺少' }}</li>
+      <li>时间有效性：{{ '满足' if opportunity_context.qualification.time_valid else '缺少' }}</li>
+    </ul>
+    {% if opportunity_context.qualification.eligible %}
+      <p><a class="btn btn-primary" href="{% if trace.resources %}/resources/{{ trace.resources[0].id }}{% else %}/resources{% endif %}">检查Match并人工创建Opportunity</a></p>
+    {% endif %}
   </section>
 
   <section class="platform-card"><h2>业务进展</h2>

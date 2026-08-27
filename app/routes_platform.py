@@ -197,7 +197,8 @@ def platform_home(request: Request, db: Session = Depends(get_db)):
     recent_people = list(db.scalars(
         select(Person).where(Person.is_active == True).order_by(desc(Person.created_at)).limit(4)
     ).all())
-    feed = personalized_feed(db, user_id, limit=4)
+    golden = GoldenLoopService(db)
+    feed = golden.priority_feed(limit=4)
     supplies = list(db.scalars(
         select(MarketResource).where(MarketResource.status == "published", MarketResource.direction == "supply").order_by(desc(MarketResource.created_at)).limit(4)
     ).all())
@@ -211,7 +212,7 @@ def platform_home(request: Request, db: Session = Depends(get_db)):
     workspace = get_workspace_for_role(request, db, user_id)
     tasks = list_user_tasks(db, user_id) if user_id else []
 
-    home_metrics = GoldenLoopService(db).workbench()["home_metrics"]
+    home_metrics = golden.workbench()["home_metrics"]
     return render(request, "platform/home.html",
         rec_people=rec_people, recent_people=recent_people,
         feed=feed, supplies=supplies, demands=demands,
@@ -485,6 +486,9 @@ def intelligence_detail(
     golden = GoldenLoopService(db)
     trace = golden.trace(item_id)
     event_insight, subject_candidates = golden.event_insight(item_id), golden.subject_candidates(item_id)
+    opportunity_context = golden.opportunity_discovery(
+        item_id, trace=trace, has_subject_candidate=bool(subject_candidates),
+    )
     query = subject_q.strip()
     pattern = f"%{query}%"
     people = db.execute(text("SELECT id,name FROM people WHERE COALESCE(is_active,1)=1 AND instr(name,'�')=0 AND (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
@@ -496,6 +500,7 @@ def intelligence_detail(
         is_favorited=fav, user_id=user_id, trace=trace, subject_q=query,
         people=people, organizations=organizations, projects=projects,
         event_insight=event_insight, subject_candidates=subject_candidates,
+        opportunity_context=opportunity_context,
         can_write=role in {"operator", "reviewer", "admin"}, message=message,
     )
 

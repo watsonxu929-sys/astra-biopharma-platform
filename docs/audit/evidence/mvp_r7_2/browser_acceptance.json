@@ -1,0 +1,318 @@
+{
+  "acceptance_mode": "project Playwright real Chromium; in-app control tooling failed once",
+  "chromium_version": "151.0.7922.34",
+  "viewports": [
+    "1366x768",
+    "1600x900"
+  ],
+  "pages": [
+    {
+      "name": "workbench",
+      "path": "/platform",
+      "url": "http://127.0.0.1:8765/platform",
+      "status": 200,
+      "title": "产业协作工作台",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 857
+    },
+    {
+      "name": "intelligence-list",
+      "path": "/intelligence",
+      "url": "http://127.0.0.1:8765/intelligence",
+      "status": 200,
+      "title": "情报",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 2838
+    },
+    {
+      "name": "priority-intelligence",
+      "path": "/intelligence/33",
+      "url": "http://127.0.0.1:8765/intelligence/33",
+      "status": 200,
+      "title": "QBAY（上海）张江药谷孵化器_上海千人物业有限公司",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 2637
+    },
+    {
+      "name": "subject-candidate",
+      "path": "/intelligence/29",
+      "url": "http://127.0.0.1:8765/intelligence/29",
+      "status": 200,
+      "title": "Meeting highlights from the Committee for Medicinal Products for Human Use (CHMP) 20-23 July 2026 | European Medicines Agency (EMA)",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 3493
+    },
+    {
+      "name": "organization-context",
+      "path": "/network/entities/organization/ORG-20260626-000001",
+      "url": "http://127.0.0.1:8765/network/entities/organization/ORG-20260626-000001",
+      "status": 200,
+      "title": "主体治理与产业关系网络",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 453
+    },
+    {
+      "name": "resource-list",
+      "path": "/resources",
+      "url": "http://127.0.0.1:8765/resources",
+      "status": 200,
+      "title": "资源",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 2409
+    },
+    {
+      "name": "resource-context",
+      "path": "/resources/45",
+      "url": "http://127.0.0.1:8765/resources/45",
+      "status": 200,
+      "title": "供给｜Q-BAY张江药谷孵化空间与公共实验平台",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 1315
+    },
+    {
+      "name": "opportunity-list",
+      "path": "/opportunities",
+      "url": "http://127.0.0.1:8765/opportunities",
+      "status": 200,
+      "title": "合作机会",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 942
+    },
+    {
+      "name": "opportunity-detail",
+      "path": "/opportunities/2",
+      "url": "http://127.0.0.1:8765/opportunities/2",
+      "status": 200,
+      "title": "明德生物与凯达CRO临床合作",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 423
+    },
+    {
+      "name": "qbay",
+      "path": "/club",
+      "url": "http://127.0.0.1:8765/club",
+      "status": 200,
+      "title": "Q-BAY俱乐部",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 355
+    },
+    {
+      "name": "source-management",
+      "path": "/collection/sources",
+      "url": "http://127.0.0.1:8765/collection/sources",
+      "status": 200,
+      "title": "信息采集中心",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 1841
+    },
+    {
+      "name": "global-search",
+      "path": "/search?q=Q-BAY",
+      "url": "http://127.0.0.1:8765/search?q=Q-BAY",
+      "status": 200,
+      "title": "搜索结果",
+      "overflow": false,
+      "metrics": {
+        "sw": 1366,
+        "cw": 1366,
+        "bw": 1366,
+        "vw": 1366
+      },
+      "missing": [],
+      "undefined_null": false,
+      "text_length": 275
+    }
+  ],
+  "wide_checks": [
+    {
+      "path": "/platform",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    },
+    {
+      "path": "/intelligence",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    },
+    {
+      "path": "/intelligence/33",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    },
+    {
+      "path": "/network/entities/organization/ORG-20260626-000001",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    },
+    {
+      "path": "/resources/45",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    },
+    {
+      "path": "/opportunities",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    },
+    {
+      "path": "/club",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    },
+    {
+      "path": "/collection/sources",
+      "status": 200,
+      "overflow": false,
+      "metrics": {
+        "sw": 1600,
+        "cw": 1600,
+        "bw": 1600
+      }
+    }
+  ],
+  "unexpected_errors": {
+    "console": [],
+    "page": [],
+    "http": [],
+    "request": []
+  },
+  "expected_permission_probe": {
+    "viewer_write_status": 403,
+    "expected": 403
+  },
+  "summary": {
+    "pages": 12,
+    "non_200": 0,
+    "missing": 0,
+    "overflow": 0,
+    "console_error": 0,
+    "page_error": 0,
+    "http_404_500": 0,
+    "http_error": 0,
+    "network_failure": 0,
+    "visible_undefined_null": 0
+  }
+}

@@ -16,7 +16,7 @@
   <div class="dashboard-grid-2">
     <section class="platform-card">
       <div class="platform-card-header"><h3>最新重要情报</h3><a class="btn btn-sm" href="/intelligence">查看情报</a></div>
-      {% for item in (feed|default([]))[:4] %}<p><a href="/intelligence/{{ item.id if item.id is defined else item.item.id }}">{{ item.title if item.title is defined else item.item.title }}</a></p>{% else %}<p class="text-muted">暂无已发布情报，可进入情报页查看全部内容。</p>{% endfor %}
+      {% for item in (feed|default([]))[:4] %}<p><a href="/intelligence/{{ item.id if item.id is defined else item.item.id }}">{{ item.title if item.title is defined else item.item.title }}</a>{% if item.priority_reason is defined %} <span class="text-muted">· {{ item.priority_reason }}</span>{% endif %}</p>{% else %}<p class="text-muted">暂无已发布情报，可进入情报页查看全部内容。</p>{% endfor %}
     </section>
     <section class="platform-card">
       <div class="platform-card-header"><h3>待跟进合作机会</h3><a class="btn btn-sm" href="/opportunities">查看机会</a></div>
