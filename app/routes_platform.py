@@ -558,6 +558,7 @@ def resource_market(
     db: Session = Depends(get_db),
     status: str = Query("published"),
     message: str = Query(""),
+    error: str = Query(""),
 ):
     result = list_market_resources(db,
         direction=direction or None, resource_type=resource_type or None,
@@ -592,13 +593,17 @@ def resource_market(
         direction=direction, resource_type=resource_type, q=q,
         industry_direction=industry_direction, region=region,
         resource_type_options=resource_type_options,
-        message=message,
+        message=message, error=error,
+        can_write=get_user_role(request) in {"operator", "reviewer", "admin"},
     )
 
 
 @router.get("/resources/{resource_id:int}", response_class=HTMLResponse)
-def resource_detail(resource_id: int, request: Request, db: Session = Depends(get_db)):
-    resource = UnifiedResourceService(db).detail(resource_id)
+def resource_detail(resource_id: int, request: Request, message: str = Query(""),
+                    error: str = Query(""), db: Session = Depends(get_db)):
+    resource_service = UnifiedResourceService(db)
+    resource = resource_service.detail(resource_id)
+    references = resource_service.reference_counts(resource_id)
     trace = GoldenLoopService(db).resource_trace(resource_id)
     golden_resource = trace["resource"]
     user_id = get_current_user_id(request)
@@ -607,7 +612,8 @@ def resource_detail(resource_id: int, request: Request, db: Session = Depends(ge
     role = get_user_role(request)
     return render(request, "platform/resource_detail.html",
         resource=resource, golden_resource=golden_resource, trace=trace, is_favorited=fav,
-        matches=matches, user_id=user_id, can_write=role in {"operator", "reviewer", "admin"})
+        matches=matches, user_id=user_id, can_write=role in {"operator", "reviewer", "admin"},
+        message=message, error=error, references=references)
 
 
 @router.get("/resources/new", response_class=HTMLResponse)
@@ -653,6 +659,76 @@ async def create_resource(request: Request, db: Session = Depends(get_db)):
         "status": "published",
     })
     return RedirectResponse(f"/resources/{resource.id}", 303)
+
+
+@router.get("/resources/{resource_id:int}/edit", response_class=HTMLResponse)
+def edit_resource(resource_id: int, request: Request, db: Session = Depends(get_db)):
+    resource = UnifiedResourceService(db).detail(resource_id)
+    user_id = get_current_user_id(request)
+    if resource.publisher_id != user_id and not is_platform_admin(request):
+        raise HTTPException(403, "无权修改该资源")
+    owner_type = "organization" if resource.organization_id else ("person" if resource.owner_person_id else "")
+    owner_id = resource.organization_id or resource.owner_person_id
+    return render(request, "platform/resource_form.html", resource=resource, mode="edit",
+        direction=resource.direction, owner_type=owner_type, owner_id=owner_id, owner_label="")
+
+
+@router.post("/resources/{resource_id:int}/edit")
+async def save_resource(resource_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    UnifiedResourceService(db).update(resource_id, actor_user_id=user_id, is_admin=is_platform_admin(request), fields={
+        "title": form.get("title", ""), "direction": form.get("direction", "supply"),
+        "resource_type": form.get("resource_type", "其他"), "summary": form.get("summary"),
+        "description": form.get("description"), "region": form.get("region"),
+        "industry_direction": form.get("industry_direction"), "tags": form.get("tags"),
+        "cooperation_mode": form.get("cooperation_mode"), "budget_note": form.get("budget_note"),
+        "contact_visibility": form.get("contact_visibility", "connected"),
+        "valid_until": form.get("valid_until"), "status": form.get("status", "published"),
+        "owner_person_id": form.get("owner_person_id"), "organization_id": form.get("organization_id"),
+        "visibility": form.get("visibility", "organization"),
+    })
+    return RedirectResponse(f"/resources/{resource_id}?message=资源已更新", 303)
+
+
+@router.post("/resources/{resource_id:int}/close")
+def close_resource(resource_id: int, request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    UnifiedResourceService(db).close(resource_id, actor_user_id=user_id, is_admin=is_platform_admin(request))
+    return RedirectResponse(f"/resources/{resource_id}?message=资源已关闭并归档", 303)
+
+
+@router.post("/resources/{resource_id:int}/delete")
+def delete_resource(resource_id: int, request: Request, confirm: str = Form(""), db: Session = Depends(get_db)):
+    if confirm != "1":
+        raise HTTPException(400, "请确认删除")
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    try:
+        UnifiedResourceService(db).delete_safe(resource_id, actor_user_id=user_id, is_admin=is_platform_admin(request))
+    except HTTPException as exc:
+        if exc.status_code == 409:
+            return RedirectResponse(f"/resources/{resource_id}?error=资源已有下游业务记录，请改用关闭归档", 303)
+        raise
+    return RedirectResponse("/resources?message=资源已删除", 303)
+
+
+@router.post("/resources/bulk-delete")
+async def bulk_delete_resources(request: Request, db: Session = Depends(get_db)):
+    user_id = get_current_user_id(request)
+    if user_id is None:
+        raise HTTPException(403)
+    form = await request.form()
+    ids = [int(value) for value in form.getlist("resource_ids") if str(value).isdigit()]
+    result = UnifiedResourceService(db).bulk_delete(ids, actor_user_id=user_id, is_admin=is_platform_admin(request))
+    protected = "、".join(map(str, result["protected"])) or "无"
+    message = f"批量处理完成：删除{len(result['deleted'])}项；未删除{len(result['protected'])}项（受保护ID：{protected}）"
+    return RedirectResponse(f"/resources?status=all&message={message}", 303)
 
 
 @router.post("/resources/{resource_id}/status")

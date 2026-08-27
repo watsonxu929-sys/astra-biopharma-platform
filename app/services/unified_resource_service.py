@@ -160,6 +160,86 @@ class UnifiedResourceService:
             self.db.refresh(resource)
         return resource
 
+    def update(self, resource_id: int, *, actor_user_id: int, fields: dict[str, Any],
+               is_admin: bool = False, commit: bool = True) -> MarketResource:
+        resource = self.detail(resource_id)
+        if resource.publisher_id != actor_user_id and not is_admin:
+            raise HTTPException(status_code=403, detail={"code": "RESOURCE_FORBIDDEN", "message": "无权修改该资源", "details": {}})
+        direction = str(fields.get("direction") or resource.direction)
+        if direction not in {"supply", "demand"}:
+            raise HTTPException(status_code=400, detail={"code": "INVALID_RESOURCE_DIRECTION", "message": "资源方向无效", "details": {}})
+        title = str(fields.get("title") or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail={"code": "RESOURCE_TITLE_REQUIRED", "message": "资源标题不能为空", "details": {}})
+        valid_until = fields.get("valid_until")
+        if isinstance(valid_until, str):
+            valid_until = datetime.fromisoformat(valid_until.strip()) if valid_until.strip() else None
+        resource.title = title
+        resource.direction = direction
+        resource.resource_type = str(fields.get("resource_type") or fields.get("category") or "其他")
+        resource.category = fields.get("category") or fields.get("resource_type")
+        for key in ("summary", "description", "region", "industry_direction", "tags", "cooperation_mode", "budget_note", "contact_visibility"):
+            if key in fields:
+                setattr(resource, key, fields.get(key) or None)
+        status = str(fields.get("status") or resource.status)
+        if status not in RESOURCE_STATUSES:
+            raise HTTPException(status_code=400, detail={"code": "INVALID_RESOURCE_STATUS", "message": "资源状态无效", "details": {}})
+        resource.status = status
+        for field, attr in (("owner_person_id", "owner_person_id"), ("organization_id", "organization_id")):
+            if field in fields:
+                value = fields.get(field)
+                setattr(resource, attr, int(value) if value else None)
+        resource.visibility = fields.get("visibility") or resource.visibility
+        resource.valid_until = valid_until
+        resource.updated_at = datetime.now()
+        if commit:
+            self.db.commit()
+            self.db.refresh(resource)
+        return resource
+
+    def reference_counts(self, resource_id: int) -> dict[str, int]:
+        params = {"resource_id": int(resource_id), "resource_text": str(resource_id)}
+        matches = self.db.execute(text("""SELECT COUNT(*) FROM p4_resource_match_candidates
+            WHERE demand_resource_id=:resource_id OR supply_resource_id=:resource_id"""), params).scalar() or 0
+        opportunities = self.db.execute(text("""SELECT COUNT(*) FROM v06_opportunities
+            WHERE related_resource_id=:resource_id OR source_demand_resource_id=:resource_id
+               OR source_supply_resource_id=:resource_id"""), params).scalar() or 0
+        relationships = self.db.execute(text("""SELECT COUNT(*) FROM p3_canonical_relationships WHERE
+            (subject_type IN ('resource','market_resource') AND CAST(subject_id AS TEXT)=:resource_text) OR
+            (object_type IN ('resource','market_resource') AND CAST(object_id AS TEXT)=:resource_text)"""), params).scalar() or 0
+        return {"matches": int(matches), "opportunities": int(opportunities), "relationships": int(relationships)}
+
+    def delete_safe(self, resource_id: int, *, actor_user_id: int, is_admin: bool = False,
+                    commit: bool = True) -> dict[str, Any]:
+        resource = self.detail(resource_id)
+        if resource.publisher_id != actor_user_id and not is_admin:
+            raise HTTPException(status_code=403, detail={"code": "RESOURCE_FORBIDDEN", "message": "无权删除该资源", "details": {}})
+        references = self.reference_counts(resource_id)
+        if any(references.values()):
+            raise HTTPException(status_code=409, detail={"code": "RESOURCE_DELETE_PROTECTED", "message": "资源已进入匹配或商机链路，只能关闭归档", "details": references})
+        self.db.delete(resource)
+        if commit:
+            self.db.commit()
+        return {"deleted": True, "resource_id": int(resource_id), "references": references}
+
+    def close(self, resource_id: int, *, actor_user_id: int, is_admin: bool = False) -> MarketResource:
+        return self.update_status(resource_id, actor_user_id=actor_user_id, status="archived", is_admin=is_admin)
+
+    def bulk_delete(self, resource_ids: list[int], *, actor_user_id: int, is_admin: bool = False) -> dict[str, Any]:
+        result: dict[str, Any] = {"deleted": [], "protected": [], "missing": []}
+        for resource_id in dict.fromkeys(int(value) for value in resource_ids):
+            try:
+                self.delete_safe(resource_id, actor_user_id=actor_user_id, is_admin=is_admin)
+                result["deleted"].append(resource_id)
+            except HTTPException as exc:
+                if exc.status_code == 404:
+                    result["missing"].append(resource_id)
+                elif exc.status_code == 409:
+                    result["protected"].append(resource_id)
+                else:
+                    raise
+        return result
+
     def find_duplicates(self, fields: dict[str, Any], limit: int = 20) -> list[MarketResource]:
         title = str(fields.get("title") or "").strip()
         direction = str(fields.get("direction") or "supply")

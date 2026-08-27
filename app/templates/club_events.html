@@ -2,7 +2,7 @@
 {% block title %}活动{% endblock %}
 {% block content %}
 {% set sec = request.scope.get('security_context', {}) %}
-{% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
+{% set is_operator = sec.get('can_manage_club', False) %}
 {% set tab = request.query_params.get('tab', 'list') %}
 
 <section class="page-head action-head">
@@ -11,7 +11,9 @@
     <h1>活动</h1>
     <p>{{ "创建活动、管理报名和签到。" if is_operator else "查看活动、报名和提交反馈。" }}</p>
   </div>
+  {% if is_operator %}<a class="btn btn-primary" href="/club/events?tab=manage">发起活动</a>{% endif %}
 </section>
+{% if request.query_params.get('message') %}<div class="success-box">{{ request.query_params.get('message') }}</div>{% endif %}
 
 <nav class="sub-tabs">
   <a href="/club/events?tab=list" class="tab {% if tab == 'list' %}active{% endif %}">活动列表</a>
@@ -33,7 +35,7 @@
     {% endif %}
   </div>
   {% else %}
-  <div class="empty-state"><p>暂无活动。</p></div>
+  <div class="empty-state"><p>{{ "暂无活动。" if is_operator else "暂无可报名活动。" }}</p>{% if is_operator %}<a class="btn btn-primary" href="/club/events?tab=manage">发起第一个活动</a>{% endif %}</div>
   {% endfor %}
 </div>
 {% elif tab == 'my' %}
@@ -73,12 +75,13 @@
     <label>线上链接<input name="online_link"></label>
     <label>容量<input name="capacity" type="number" min="0" value="0"></label>
     <label>报名截止<input name="registration_deadline" type="date"></label>
+    <label>报名开始<input name="registration_start" type="datetime-local"></label>
     <label>组织方<input name="organizer" value="Q-BAY"></label>
     <label>负责人<input name="owner"></label>
     <label>可见范围<select name="visibility"><option value="internal">内部</option><option value="controlled">受控开放</option><option value="public">公开</option></select></label>
     <label class="checkbox-line"><input type="checkbox" name="member_only" value="1"> 仅会员可报名</label>
     <label class="grid-span">活动说明<textarea name="description"></textarea></label>
-    <button class="btn btn-primary" type="submit">创建活动</button>
+    <button class="btn btn-primary" type="submit">保存草稿</button>
   </form>
 </section>
 {% endif %}

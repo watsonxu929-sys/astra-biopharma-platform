@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import csv
 import html
 import json
+import io
 import logging
 import re
 import secrets
@@ -113,6 +115,13 @@ def _decorate_source(row: dict[str, Any], conn: sqlite3.Connection) -> dict[str,
     item_count = int(conn.execute("SELECT COUNT(*) FROM v05f_collection_items WHERE monitoring_source_id=?", (row["id"],)).fetchone()[0] or 0)
     row["collected_item_count"] = item_count
     row["source_status_label"] = "已暂停" if row.get("auto_paused") else ("已启用" if row.get("is_enabled") else "已停用")
+    row["domain"] = urlparse(str(row.get("url") or "")).netloc
+    row["discovery"] = {}
+    if row.get("health_status") == "candidate" and row.get("compliance_note"):
+        try:
+            row["discovery"] = json.loads(str(row["compliance_note"]))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
     if latest:
         data = dict(latest)
         row["latest_job"] = data
@@ -457,22 +466,21 @@ def create_collection_source(
     compliance_note: str = "",
     max_links: int = 20,
     crawl_detail_pages: bool = False,
+    check_frequency: str = "manual",
+    is_enabled: bool = True,
     db_path: str | Path | None = None,
 ) -> dict[str, Any]:
     ensure_schema(db_path)
     source_type = source_type if source_type in SOURCE_TYPES else "webpage"
     collection_mode = collection_mode if collection_mode in COLLECTION_MODES else "auto"
     fetch_mode = "manual" if source_type == "manual_url_list" else "web"
+    check_frequency = check_frequency if check_frequency in {"manual", "daily", "weekly", "monthly"} else "manual"
+    url = normalize_url(url) if url.startswith(("http://", "https://")) else url.strip()
     ts = now()
     with db_connection(db_path) as conn:
-        existing = conn.execute(
-            """
-            SELECT * FROM v04g_monitoring_sources
-            WHERE url=? AND COALESCE(subject_type,'')=COALESCE(?, '')
-              AND COALESCE(subject_id,'')=COALESCE(?, '') AND deactivated_at IS NULL
-            """,
-            (url, subject_type or None, subject_id or None),
-        ).fetchone()
+        existing = next((row for row in conn.execute(
+            "SELECT * FROM v04g_monitoring_sources WHERE deactivated_at IS NULL"
+        ) if _source_identity(row["url"]) == _source_identity(url)), None)
         if existing:
             row_id = existing["id"]
         else:
@@ -481,9 +489,10 @@ def create_collection_source(
                 INSERT INTO v04g_monitoring_sources(
                     source_no, name, source_type, url, subject_type, subject_id, check_frequency,
                     is_enabled, owner, fetch_mode, note, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'manual', 1, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (_next_no(conn, "MON"), name[:200], source_type, url[:2000], subject_type or None, subject_id or None, owner[:100] or None, fetch_mode, compliance_note[:2000] or None, ts, ts),
+                (_next_no(conn, "MON"), name[:200], source_type, url[:2000], subject_type or None, subject_id or None,
+                 check_frequency, int(bool(is_enabled)), owner[:100] or None, fetch_mode, compliance_note[:2000] or None, ts, ts),
             )
             row_id = cur.lastrowid
         conn.execute(
@@ -500,7 +509,7 @@ def create_collection_source(
 
 def list_sources(db_path: str | Path | None = None, page: int = 1, page_size: int = 20, status: str = "", q: str = "") -> tuple[list[dict[str, Any]], int]:
     ensure_schema(db_path)
-    clauses = ["deactivated_at IS NULL"]
+    clauses = ["deactivated_at IS NULL", "COALESCE(health_status,'')<>'candidate'"] if not status else ["deactivated_at IS NULL"]
     params: list[Any] = []
     if status == "enabled":
         clauses.append("is_enabled=1")
@@ -508,6 +517,10 @@ def list_sources(db_path: str | Path | None = None, page: int = 1, page_size: in
         clauses.append("consecutive_failures>0")
     elif status == "paused":
         clauses.append("auto_paused=1")
+    elif status == "candidate":
+        clauses.append("is_enabled=0 AND health_status='candidate'")
+    elif status == "disabled":
+        clauses.append("is_enabled=0 AND COALESCE(health_status,'')<>'candidate'")
     if q:
         clauses.append("(name LIKE ? OR url LIKE ? OR source_no LIKE ?)")
         params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
@@ -519,7 +532,8 @@ def list_sources(db_path: str | Path | None = None, page: int = 1, page_size: in
             f"""
             SELECT id, source_no, name, source_type, url, subject_type, subject_id, is_enabled,
                    owner, collection_source_type, collection_mode, robots_status, auto_paused,
-                   last_checked_at, last_success_at, last_error_at, last_pause_reason, consecutive_failures
+                   health_status, check_frequency, last_checked_at, last_success_at, last_error_at,
+                   last_pause_reason, consecutive_failures, compliance_note, note
             FROM v04g_monitoring_sources WHERE {where}
             ORDER BY id DESC LIMIT ? OFFSET ?
             """,
@@ -529,6 +543,253 @@ def list_sources(db_path: str | Path | None = None, page: int = 1, page_size: in
     return rows, total
 
 
+def source_detail(source_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
+    ensure_schema(db_path)
+    with db_connection(db_path) as conn:
+        row = conn.execute("SELECT * FROM v04g_monitoring_sources WHERE id=?", (source_id,)).fetchone()
+        if not row:
+            raise ValueError("source_not_found")
+        data = _decorate_source(dict(row), conn)
+        data["intelligence_count"] = int(conn.execute("""
+            SELECT COUNT(*) FROM v06_intelligence_items x
+            WHERE x.source_record_type='collection_item' AND EXISTS (
+              SELECT 1 FROM v05f_collection_items i
+              WHERE i.id=CAST(x.source_record_id AS INTEGER) AND i.monitoring_source_id=?
+            )
+        """, (source_id,)).fetchone()[0] or 0)
+        return data
+
+
+def update_collection_source(source_id: int, fields: dict[str, Any], db_path: str | Path | None = None) -> dict[str, Any]:
+    ensure_schema(db_path)
+    name, url = str(fields.get("name") or "").strip(), str(fields.get("url") or "").strip()
+    if not name or not url:
+        raise ValueError("name_and_url_required")
+    url = normalize_url(url) if url.startswith(("http://", "https://")) else url
+    source_type = str(fields.get("source_type") or "webpage")
+    mode = str(fields.get("collection_mode") or "auto")
+    frequency = str(fields.get("check_frequency") or "manual")
+    if source_type not in SOURCE_TYPES or mode not in COLLECTION_MODES or frequency not in {"manual", "daily", "weekly", "monthly"}:
+        raise ValueError("invalid_source_settings")
+    with db_connection(db_path) as conn:
+        row = conn.execute("SELECT id FROM v04g_monitoring_sources WHERE id=? AND deactivated_at IS NULL", (source_id,)).fetchone()
+        if not row:
+            raise ValueError("source_not_found")
+        if conn.execute("SELECT 1 FROM v04g_monitoring_sources WHERE url=? AND deactivated_at IS NULL AND id<>?", (url, source_id)).fetchone():
+            raise ValueError("source_url_exists")
+        conn.execute("""
+            UPDATE v04g_monitoring_sources SET name=?,url=?,source_type=?,collection_source_type=?,content_kind=?,
+              collection_mode=?,check_frequency=?,subject_type=?,subject_id=?,updated_at=? WHERE id=?
+        """, (name[:200], url[:2000], source_type, source_type, source_type, mode, frequency,
+              fields.get("subject_type") or None, fields.get("subject_id") or None, now(), source_id))
+    return source_detail(source_id, db_path)
+
+
+def set_source_enabled(source_id: int, enabled: bool, db_path: str | Path | None = None) -> dict[str, Any]:
+    ensure_schema(db_path)
+    with db_connection(db_path) as conn:
+        if not conn.execute("SELECT 1 FROM v04g_monitoring_sources WHERE id=? AND deactivated_at IS NULL", (source_id,)).fetchone():
+            raise ValueError("source_not_found")
+        conn.execute("""
+            UPDATE v04g_monitoring_sources SET is_enabled=?,auto_paused=0,last_pause_reason=NULL,
+              health_status=CASE WHEN ?=1 THEN 'healthy' ELSE 'disabled' END,updated_at=? WHERE id=?
+        """, (int(enabled), int(enabled), now(), source_id))
+    return source_detail(source_id, db_path)
+
+
+def delete_or_retire_source(source_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
+    detail = source_detail(source_id, db_path)
+    with db_connection(db_path) as conn:
+        if detail["collected_item_count"] or detail["intelligence_count"]:
+            ts = now()
+            conn.execute("""
+                UPDATE v04g_monitoring_sources SET is_enabled=0,auto_paused=1,health_status='retired',
+                  deactivated_at=?,last_pause_reason='管理员退役，历史保留',updated_at=? WHERE id=?
+            """, (ts, ts, source_id))
+            return {"action": "retired", "history_preserved": True, **detail}
+        conn.execute("DELETE FROM v04g_monitoring_sources WHERE id=?", (source_id,))
+        return {"action": "deleted", "history_preserved": False, **detail}
+
+
+def test_source_url(url: str) -> dict[str, Any]:
+    url = str(url or "").strip()
+    if not url.startswith(("http://", "https://", "inline:")):
+        return {"ok": False, "status": "INVALID_URL", "url": url}
+    try:
+        body, status, content_type, headers = _http_get(url, timeout=8, retries=0)
+    except RuntimeError:
+        return {"ok": False, "status": "FETCH_FAILED", "url": url}
+    feed = feedparser.parse(body) if ("xml" in content_type or "rss" in content_type or "atom" in content_type) else None
+    soup = BeautifulSoup(body, "html.parser")
+    feed_link = soup.find("link", rel=lambda value: value and "alternate" in value,
+                          attrs={"type": re.compile(r"rss|atom", re.I)})
+    text_value, extractor = extract_main_text(body)
+    canonical_link = soup.find("link", rel=lambda value: value and "canonical" in value,
+                               href=True)
+    recent = [str(entry.get("title") or "").strip() for entry in (feed.entries[:3] if feed else []) if entry.get("title")]
+    if not recent:
+        recent = [node.get_text(" ", strip=True) for node in soup.select("h1,h2,h3")[:3]]
+    return {
+        "ok": True, "status": "READY", "url": normalize_url(url) if not url.startswith("inline:") else url,
+        "http_status": status, "is_rss": bool(feed and feed.entries),
+        "rss_url": urljoin(url, feed_link.get("href")) if feed_link else "",
+        "is_html": bool(soup.find()), "needs_playwright": len(text_value) < 120 and len(soup.find_all("script")) >= 5,
+        "extractable": len(text_value) >= 80, "extractor": extractor, "recent_titles": recent,
+        "content_type": content_type, "canonical_url": urljoin(url, canonical_link.get("href"))
+        if canonical_link else headers.get("content-location", ""),
+    }
+
+
+def _source_identity(url: str) -> str:
+    value = normalize_url(url)
+    parsed = urlparse(value)
+    host = parsed.netloc.lower().removeprefix("www.")
+    return f"{host}{parsed.path.rstrip('/') or '/'}?{parsed.query}".rstrip("?")
+
+
+def preview_source_import(text_value: str, db_path: str | Path | None = None) -> list[dict[str, Any]]:
+    raw = str(text_value or "").strip()
+    if not raw:
+        return []
+    if "," in raw.splitlines()[0]:
+        parsed = list(csv.DictReader(io.StringIO(raw)))
+        rows = [(str(item.get("name") or "").strip(), str(item.get("url") or "").strip()) for item in parsed]
+    else:
+        rows = [(urlparse(line.strip()).netloc or line.strip(), line.strip()) for line in raw.splitlines() if line.strip()]
+    with db_connection(db_path) as conn:
+        existing = {_source_identity(row[0]) for row in conn.execute(
+            "SELECT url FROM v04g_monitoring_sources WHERE deactivated_at IS NULL"
+        )}
+    seen: set[str] = set()
+    preview = []
+    for name, url in rows[:100]:
+        if not url.startswith(("http://", "https://", "inline:")):
+            preview.append({"name": name, "url": url, "kind": "NEW", "status": "INVALID_URL"})
+            continue
+        identity = _source_identity(url) if not url.startswith("inline:") else url
+        if identity in seen:
+            preview.append({"name": name, "url": url, "kind": "NEW", "status": "DUPLICATE_IN_FILE"})
+            continue
+        seen.add(identity)
+        if identity in existing:
+            preview.append({"name": name, "url": url, "kind": "EXISTS", "status": "EXISTS"})
+            continue
+        tested = test_source_url(url)
+        preview.append({"name": name or urlparse(url).netloc, "url": tested.get("url", url),
+                        "kind": "NEW", "status": tested["status"]})
+    return preview
+
+
+def save_source_import(rows: list[dict[str, Any]], owner: str, db_path: str | Path | None = None) -> dict[str, int]:
+    counts = {"created": 0, "exists": 0, "invalid": 0, "failed": 0}
+    for row in rows:
+        status = row.get("status")
+        if status == "READY":
+            created = create_collection_source(
+                name=str(row.get("name") or "导入来源"), source_type="webpage",
+                url=str(row["url"]), owner=owner, is_enabled=False, db_path=db_path,
+            )
+            with db_connection(db_path) as conn:
+                conn.execute("UPDATE v04g_monitoring_sources SET health_status='candidate',note='R7.1 BATCH IMPORT' WHERE id=?", (created["id"],))
+            counts["created"] += 1
+        elif status == "EXISTS":
+            counts["exists"] += 1
+        elif status == "INVALID_URL":
+            counts["invalid"] += 1
+        elif status == "FETCH_FAILED":
+            counts["failed"] += 1
+    return counts
+
+
+DISCOVERY_KEYWORDS = re.compile(
+    r"news|newsroom|media|press|press-release|investor|updates|blog|announcement|insights|新闻|动态|公告|媒体", re.I
+)
+
+
+def discover_source_candidates(
+    homepage_url: str, organization_id: int | None = None, organization_name: str = "",
+    owner: str = "", db_path: str | Path | None = None,
+) -> dict[str, Any]:
+    tested = test_source_url(homepage_url)
+    result = {
+        "domain": urlparse(homepage_url).netloc, "homepage_ok": tested["ok"], "rss": 0,
+        "sitemap": 0, "newsroom": 0, "created": 0, "duplicates": 0, "invalid": 0,
+        "candidates": [],
+    }
+    if not tested["ok"]:
+        result["invalid"] = 1
+        return result
+    body, _, _, _ = _http_get(homepage_url, timeout=8, retries=0)
+    soup = BeautifulSoup(body, "html.parser")
+    found: list[tuple[str, str, str, str]] = []
+    for node in soup.find_all("link", href=True):
+        if "alternate" in (node.get("rel") or []) and re.search(r"rss|atom", str(node.get("type") or ""), re.I):
+            found.append((str(node.get("title") or organization_name or "RSS"), urljoin(homepage_url, node["href"]), "rss", "官网RSS/Atom声明"))
+    for node in soup.find_all("a", href=True):
+        label = node.get_text(" ", strip=True)
+        if DISCOVERY_KEYWORDS.search(f"{label} {node['href']}"):
+            found.append((label or organization_name or "Newsroom", urljoin(homepage_url, node["href"]), "list_page", "官网导航发现"))
+    parsed = urlparse(homepage_url)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    for suffix in ("/feed", "/rss", "/rss.xml", "/feed.xml", "/atom.xml"):
+        found.append((f"{organization_name or parsed.netloc} Feed", base + suffix, "rss", "常见Feed地址验证"))
+    sitemap_urls = [base + "/sitemap.xml"]
+    try:
+        robots, _, _, _ = _http_get(base + "/robots.txt", timeout=5, retries=0)
+        sitemap_urls = [line.split(":", 1)[1].strip() for line in robots.splitlines()
+                        if line.lower().startswith("sitemap:")] or sitemap_urls
+    except RuntimeError:
+        pass
+    for sitemap_url in sitemap_urls[:2]:
+        try:
+            sitemap, _, _, _ = _http_get(sitemap_url, timeout=6, retries=0)
+            for loc in re.findall(r"<loc>(.*?)</loc>", sitemap, re.I | re.S):
+                if DISCOVERY_KEYWORDS.search(loc):
+                    found.append((organization_name or "Newsroom", html.unescape(loc.strip()), "list_page", "Sitemap发现"))
+        except RuntimeError:
+            continue
+    existing_rows, _ = list_sources(db_path=db_path, page_size=500, status="all")
+    existing = {_source_identity(row["url"]) for row in existing_rows}
+    seen: set[str] = set()
+    for name, url, source_type, method in found:
+        if not url.startswith(("http://", "https://")):
+            result["invalid"] += 1
+            continue
+        identity = _source_identity(url)
+        if identity in seen or identity in existing:
+            result["duplicates"] += 1
+            continue
+        check = test_source_url(url)
+        if not check["ok"]:
+            result["invalid"] += 1
+            continue
+        canonical_url = check.get("canonical_url") or check["url"]
+        canonical_identity = _source_identity(canonical_url)
+        if canonical_identity in seen or canonical_identity in existing:
+            result["duplicates"] += 1
+            continue
+        seen.update({identity, canonical_identity})
+        created = create_collection_source(
+            name=name[:200] or result["domain"], source_type="rss" if check.get("is_rss") else source_type,
+            url=canonical_url, collection_mode="rss" if check.get("is_rss") else "http",
+            subject_type="organization" if organization_id else "", subject_id=str(organization_id or ""),
+            owner=owner, compliance_note=json.dumps(
+                {"organization": organization_name, "method": method, "test": check}, ensure_ascii=False
+            )[:2000], is_enabled=False, db_path=db_path,
+        )
+        with db_connection(db_path) as conn:
+            conn.execute(
+                "UPDATE v04g_monitoring_sources SET health_status='candidate',note=? WHERE id=?",
+                (f"R7.1 DISCOVERED|{method}|{result['domain']}", created["id"]),
+            )
+        result["rss"] += int(check.get("is_rss", False))
+        result["sitemap"] += int(method == "Sitemap发现")
+        result["newsroom"] += int(method == "官网导航发现")
+        result["created"] += 1
+        result["candidates"].append({**created, "discovery_method": method, "test": check})
+        if result["created"] >= 8:
+            break
+    return result
 def create_job(source_id: int, trigger_type: str = "manual", operator: str = "", db_path: str | Path | None = None, *, force: bool = False) -> dict[str, Any]:
     ensure_schema(db_path)
     ts = now()

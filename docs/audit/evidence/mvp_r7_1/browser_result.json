@@ -1,0 +1,33 @@
+{
+  "task": "MVP-R7.1 admin operability and source discovery",
+  "status": "PASS",
+  "acceptance_channel": "project Playwright with installed Chromium",
+  "computer_use_channel": "TOOLING_BLOCKED after one Windows ACL failure; no product verdict was based on it",
+  "browser": "Chromium 151.0.7922.34",
+  "viewport": "1366x768",
+  "flows": {
+    "source_crud": "PASS",
+    "source_batch_preview": "PASS",
+    "source_discovery": "PASS",
+    "candidate_enable_ignore": "PASS",
+    "source_retire_history_preserved": "PASS (209 collection items before and after)",
+    "event_crud_publish_register_cancel": "PASS",
+    "event_safe_draft_delete": "PASS",
+    "registered_event_delete_protection": "PASS",
+    "resource_crud_safe_delete": "PASS",
+    "resource_protected_close": "PASS",
+    "resource_bulk_partial_success": "PASS",
+    "viewer_read_only_ui": "PASS",
+    "viewer_write_requests": "17/17 returned HTTP 403",
+    "restart_persistence": "PASS"
+  },
+  "errors": {
+    "unexpected_404_500": 0,
+    "console_error": 0,
+    "page_error": 0,
+    "horizontal_overflow": 0
+  },
+  "evidence_screenshots": 19,
+  "test_database_removed": true,
+  "temporary_accounts_removed": true
+}

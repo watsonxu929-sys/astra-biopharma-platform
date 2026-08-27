@@ -17,12 +17,14 @@
     <a class="btn btn-sm" href="/resources">全部</a>
     <a class="btn btn-sm" href="/resources?direction=demand">需求</a>
     <a class="btn btn-sm" href="/resources?direction=supply">供给</a>
-    <a class="btn btn-primary" href="/resources/new">+ 发布资源</a>
+    {% if can_write %}<a class="btn btn-primary" href="/resources/new">+ 发布资源</a>{% endif %}
   </div>
 </div>
 {% endblock %}
 {% block platform_content %}
 {% if message == 'matching_pending' %}<div class="warning-box">匹配能力尚未进入正式运营，请先管理需求与供给。</div>{% endif %}
+{% if message and message != 'matching_pending' %}<div class="success-box">{{ message }}</div>{% endif %}
+{% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
 
 <section class="filter-bar">
   <form method="get" action="/resources" class="filter-form">
@@ -54,9 +56,11 @@
 <section class="data-table-section">
   {% if items %}
   <div class="card-grid">
+  {% if can_write %}<form method="post" action="/resources/bulk-delete">{% endif %}
     {% for r in items %}
     <article class="resource-card">
       <div class="resource-card-header">
+        {% if can_write %}<label class="checkbox-line"><input type="checkbox" name="resource_ids" value="{{ r.id }}"> 选择</label>{% endif %}
         <span class="badge badge-{{ r.direction or 'default' }}">{{ r.direction|default('resource')|status_label }}</span>
         <span class="badge">{{ r.resource_type or '资源' }}</span>
       </div>
@@ -73,12 +77,13 @@
     </article>
     {% endfor %}
   </div>
+  {% if can_write %}<button class="btn btn-outline" type="submit">删除所选安全资源</button></form>{% endif %}
   {% else %}
   <div class="empty-state">
     <div class="empty-icon">🔗</div>
     <h3>暂无资源</h3>
     <p>当前筛选下没有资源，可清除条件或发布新的供给与需求。</p>
-    <a class="btn btn-sm" href="/resources/new">发布资源</a>
+    {% if can_write %}<a class="btn btn-sm" href="/resources/new">发布资源</a>{% endif %}
   </div>
   {% endif %}
 </section>

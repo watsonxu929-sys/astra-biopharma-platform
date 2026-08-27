@@ -1,31 +1,33 @@
 {% extends "platform/base.html" %}
 {% set active_nav = "resources" %}
-{% block platform_title %}发布资源{% endblock %}
+{% block platform_title %}{{ '编辑资源' if mode == 'edit' else '发布资源' }}{% endblock %}
 {% block platform_content %}
 <div class="platform-content" style="max-width:600px;margin:0 auto;padding:24px 32px;">
-<h1 class="page-title">发布资源</h1>
+<h1 class="page-title">{{ '编辑资源' if mode == 'edit' else '发布资源' }}</h1>
 {% if owner_label %}<div class="platform-card"><strong>归属主体：</strong>{{ owner_label }}<p class="text-muted">主体信息将从当前页面自动继承，无需填写内部编号。</p></div>{% endif %}
-<form method="post" action="/resources/new" class="platform-form">
-{% if owner_type == 'person' %}<input type="hidden" name="owner_person_id" value="{{ owner_id }}">{% elif owner_type == 'organization' %}<input type="hidden" name="organization_id" value="{{ owner_id }}">{% endif %}
-<div class="form-group"><label>标题 *</label><input name="title" required></div>
+<form method="post" action="{{ '/resources/' ~ resource.id ~ '/edit' if mode == 'edit' else '/resources/new' }}" class="platform-form">
+{% if mode == 'new' and owner_type == 'person' %}<input type="hidden" name="owner_person_id" value="{{ owner_id }}">{% elif mode == 'new' and owner_type == 'organization' %}<input type="hidden" name="organization_id" value="{{ owner_id }}">{% endif %}
+<div class="form-group"><label>标题 *</label><input name="title" value="{{ resource.title if resource else '' }}" required></div>
 <div class="form-group"><label>类型 *</label><select name="direction" required><option value="supply" {% if direction == 'supply' %}selected{% endif %}>供给</option><option value="demand" {% if direction == 'demand' %}selected{% endif %}>需求</option></select></div>
 <div class="form-group"><label>资源类型 *</label><select name="resource_type" required>
-<option value="">请选择</option>
+{% if resource and resource.resource_type %}<option value="{{ resource.resource_type }}" selected>{{ resource.resource_type }}</option>{% else %}<option value="">请选择</option>{% endif %}
 <option>技术成果</option><option>CRO服务</option><option>CDMO服务</option><option>检测服务</option><option>注册服务</option>
 <option>仪器设备</option><option>试剂耗材</option><option>实验室设计与工程</option><option>园区载体</option>
 <option>融资资源</option><option>投资项目</option><option>市场渠道</option><option>销售代理</option>
 <option>人才与职位</option><option>顾问服务</option><option>会议与媒体资源</option><option>其他</option>
 </select></div>
-<div class="form-group"><label>简介</label><textarea name="summary"></textarea></div>
-<div class="form-group"><label>详细说明</label><textarea name="description"></textarea></div>
-<div class="form-group"><label>产业方向</label><input name="industry_direction" placeholder="多个用分号分隔"></div>
-<div class="form-group"><label>地区</label><input name="region"></div>
-<div class="form-group"><label>标签</label><input name="tags" placeholder="多个用分号分隔"></div>
-<div class="form-group"><label>合作方式</label><input name="cooperation_mode"></div>
-<div class="form-group"><label>预算/价格说明</label><input name="budget_note"></div>
-<div class="form-group"><label>有效期</label><input name="valid_until" type="date"></div>
+<div class="form-group"><label>简介</label><textarea name="summary">{{ resource.summary if resource else '' }}</textarea></div>
+<div class="form-group"><label>详细说明</label><textarea name="description">{{ resource.description if resource else '' }}</textarea></div>
+<div class="form-group"><label>产业方向</label><input name="industry_direction" value="{{ resource.industry_direction if resource else '' }}" placeholder="多个用分号分隔"></div>
+<div class="form-group"><label>地区</label><input name="region" value="{{ resource.region if resource else '' }}"></div>
+<div class="form-group"><label>标签</label><input name="tags" value="{{ resource.tags if resource else '' }}" placeholder="多个用分号分隔"></div>
+<div class="form-group"><label>合作方式</label><input name="cooperation_mode" value="{{ resource.cooperation_mode if resource else '' }}"></div>
+<div class="form-group"><label>预算/价格说明</label><input name="budget_note" value="{{ resource.budget_note if resource else '' }}"></div>
+<div class="form-group"><label>有效期</label><input name="valid_until" type="date" value="{{ resource.valid_until.strftime('%Y-%m-%d') if resource and resource.valid_until else '' }}"></div>
+{% if mode == 'edit' %}<div class="form-group"><label>所属企业编号</label><input name="organization_id" type="number" min="1" value="{{ resource.organization_id or '' }}"></div><div class="form-group"><label>所属人物编号</label><input name="owner_person_id" type="number" min="1" value="{{ resource.owner_person_id or '' }}"></div><div class="form-group"><label>状态</label><select name="status">{% for value,label in [('draft','草稿'),('published','有效'),('paused','暂停'),('expired','过期'),('archived','已归档')] %}<option value="{{ value }}" {% if resource.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>{% endif %}
+<div class="form-group"><label>可见范围</label><select name="visibility"><option value="organization" {% if not resource or resource.visibility == 'organization' %}selected{% endif %}>机构内</option><option value="public" {% if resource and resource.visibility == 'public' %}selected{% endif %}>公开</option><option value="internal" {% if resource and resource.visibility == 'internal' %}selected{% endif %}>内部</option></select></div>
 <div class="form-group"><label>联系方式可见级别</label><select name="contact_visibility">
-<option value="connected">已接受联系的用户</option><option value="members">有效会员</option><option value="public">公开</option></select></div>
-<button type="submit" class="btn btn-primary">发布资源</button></form>
+<option value="connected" {% if not resource or resource.contact_visibility == 'connected' %}selected{% endif %}>已接受联系的用户</option><option value="members" {% if resource and resource.contact_visibility == 'members' %}selected{% endif %}>有效会员</option><option value="public" {% if resource and resource.contact_visibility == 'public' %}selected{% endif %}>公开</option></select></div>
+<button type="submit" class="btn btn-primary">{{ '保存修改' if mode == 'edit' else '发布资源' }}</button></form>
 </div>
 {% endblock %}

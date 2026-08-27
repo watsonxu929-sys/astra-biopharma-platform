@@ -326,6 +326,99 @@ class ClubEventService:
     def __init__(self, db_path: str | Path | None = None):
         self.db_path = _path(db_path)
 
+
+    def create_event(self, fields: dict[str, Any], *, actor: str, actor_user_id: int | None = None) -> dict[str, Any]:
+        visibility = str(fields.get("visibility") or "internal")
+        if visibility not in {"public", "controlled", "internal"}:
+            raise ClubOperationError(400, "INVALID_EVENT_VISIBILITY", "无效可见性")
+        name = str(fields.get("name") or "").strip()
+        if not name:
+            raise ClubOperationError(400, "EVENT_NAME_REQUIRED", "活动名称不能为空")
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            event_id = int(conn.execute("""SELECT MAX(value) + 1 FROM (
+                SELECT COALESCE(MAX(id),0) AS value FROM events UNION ALL
+                SELECT COALESCE(MAX(event_id),0) AS value FROM v05c_club_event_profiles
+            )""").fetchone()[0] or 1)
+            conn.execute("""
+                INSERT INTO events(
+                  id,external_id,event_date,name,event_type,fact_summary,visibility,verification_status,
+                  created_at,source_type,manually_confirmed,is_active,subject_manually_confirmed
+                ) VALUES (?,?,?,?,?,?,?,'已确认',?,'Q-BAY活动',1,1,1)
+            """, (event_id, _number("EVT"), fields.get("event_date") or None, name,
+                  fields.get("event_type") or "club", fields.get("description") or None, visibility, ts))
+            profile = conn.execute("""
+                INSERT INTO v05c_club_event_profiles(
+                  event_id,event_no,event_type,registration_status,capacity,registration_deadline,venue,online_link,
+                  organizer,owner,visibility,member_only,status,lifecycle_status,description,registration_start,
+                  created_at,updated_at
+                ) VALUES (?,?,?,'closed',?,?,?,?,?,?,?,?, 'draft','draft',?,?,?,?)
+            """, (event_id, _number("QBE"), fields.get("event_type") or "club",
+                  max(0, int(fields.get("capacity") or 0)), fields.get("registration_deadline") or None,
+                  fields.get("venue") or None, fields.get("online_link") or None,
+                  fields.get("organizer") or "Q-BAY", fields.get("owner") or actor, visibility,
+                  int(bool(fields.get("member_only"))), fields.get("description") or None,
+                  fields.get("registration_start") or None, ts, ts))
+            row = dict(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (profile.lastrowid,)).fetchone())
+            record_audit(conn, action="event.create", target_type="club_event", target_id=row["id"],
+                         actor=actor, actor_user_id=actor_user_id, after={"status": "draft", "name": name})
+            return row
+
+    def update_event(self, club_event_id: int, fields: dict[str, Any], *, actor: str,
+                     actor_user_id: int | None = None) -> dict[str, Any]:
+        ts = now_iso()
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            if not event:
+                raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
+            current = event.get("lifecycle_status") or event["status"]
+            if current in {"completed", "cancelled", "archived"}:
+                raise ClubOperationError(409, "EVENT_NOT_EDITABLE", "已结束、取消或归档活动不能编辑")
+            name = str(fields.get("name") or "").strip()
+            if not name:
+                raise ClubOperationError(400, "EVENT_NAME_REQUIRED", "活动名称不能为空")
+            conn.execute("""
+                UPDATE events SET name=?,event_date=?,event_type=?,fact_summary=?,visibility=?
+                WHERE id=?
+            """, (name, fields.get("event_date") or None, fields.get("event_type") or event["event_type"],
+                  fields.get("description") or None, fields.get("visibility") or event["visibility"], event["event_id"]))
+            conn.execute("""
+                UPDATE v05c_club_event_profiles SET event_type=?,capacity=?,registration_deadline=?,venue=?,
+                  online_link=?,organizer=?,owner=?,visibility=?,member_only=?,description=?,registration_start=?,
+                  updated_at=? WHERE id=?
+            """, (fields.get("event_type") or event["event_type"], max(0, int(fields.get("capacity") or 0)),
+                  fields.get("registration_deadline") or None, fields.get("venue") or None,
+                  fields.get("online_link") or None, fields.get("organizer") or None,
+                  fields.get("owner") or actor, fields.get("visibility") or "internal",
+                  int(bool(fields.get("member_only"))), fields.get("description") or None,
+                  fields.get("registration_start") or None, ts, club_event_id))
+            after = dict(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            record_audit(conn, action="event.update", target_type="club_event", target_id=club_event_id,
+                         actor=actor, actor_user_id=actor_user_id, before={"status": current},
+                         after={"status": current, "name": name})
+            return after
+
+    def delete_safe_draft(self, club_event_id: int, *, actor: str,
+                          actor_user_id: int | None = None) -> dict[str, Any]:
+        with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            if not event:
+                raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
+            status = event.get("lifecycle_status") or event["status"]
+            registrations = int(conn.execute(
+                "SELECT COUNT(*) FROM v05c_club_event_registrations WHERE club_event_id=?", (club_event_id,)
+            ).fetchone()[0])
+            if status != "draft" or registrations:
+                raise ClubOperationError(409, "EVENT_DELETE_PROTECTED", "仅无报名的草稿活动可以删除")
+            record_audit(conn, action="event.delete", target_type="club_event", target_id=club_event_id,
+                         actor=actor, actor_user_id=actor_user_id,
+                         before={"status": status, "event_id": event["event_id"]})
+            conn.execute("DELETE FROM v05c_club_event_profiles WHERE id=?", (club_event_id,))
+            conn.execute("DELETE FROM events WHERE id=?", (event["event_id"],))
+            return {"deleted": True, "club_event_id": club_event_id}
     def transition_event(
         self, club_event_id: int, *, action: str, actor: str, actor_user_id: int | None = None,
         note: str = "",

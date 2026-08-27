@@ -39,33 +39,6 @@ def ensure_schema(db_path: str | Path | None = None, *, allow_migration: bool = 
     return path
 
 
-def _next_no(conn: sqlite3.Connection, prefix: str) -> str:
-    stamp = datetime.now().strftime("%Y%m%d")
-    row = conn.execute(
-        """
-        INSERT INTO v05c_sequence_counters(seq_key, seq_date, seq_value, updated_at)
-        VALUES (?, ?, 1, ?)
-        ON CONFLICT(seq_key) DO UPDATE SET
-          seq_value=CASE WHEN seq_date=excluded.seq_date THEN seq_value+1 ELSE 1 END,
-          seq_date=excluded.seq_date,
-          updated_at=excluded.updated_at
-        RETURNING seq_value
-        """,
-        (prefix, stamp, now_iso()),
-    ).fetchone()
-    return f"{prefix}-{stamp}-{int(row['seq_value']):04d}"
-
-
-def _next_event_external_id(conn: sqlite3.Connection) -> str:
-    stamp = datetime.now().strftime("%Y%m%d")
-    stem = f"EVT-{stamp}-"
-    rows = conn.execute("SELECT external_id FROM events WHERE external_id LIKE ?", (f"{stem}%",)).fetchall()
-    maximum = 0
-    for row in rows:
-        tail = str(row[0] or "").replace(stem, "", 1)
-        if tail.isdigit():
-            maximum = max(maximum, int(tail))
-    return f"{stem}{maximum + 1:06d}"
 
 
 def _event_detail(conn: sqlite3.Connection, club_event_id: int) -> dict[str, Any]:
@@ -245,6 +218,7 @@ def create_event(
     online_link: str = Form(""),
     capacity: int = Form(0),
     registration_deadline: str = Form(""),
+    registration_start: str = Form(""),
     organizer: str = Form("Q-BAY"),
     owner: str = Form(""),
     visibility: str = Form("internal"),
@@ -252,48 +226,17 @@ def create_event(
     description: str = Form(""),
 ):
     ensure_schema()
-    if visibility not in {"public", "controlled", "internal"}:
-        raise HTTPException(400, "无效可见性")
-    ts = now_iso()
-    actor = current_username(request)
-    with db_connection() as conn:
-        event_external_id = _next_event_external_id(conn)
-        event_no = _next_no(conn, "QBE")
-        cur = conn.execute(
-            """
-            INSERT INTO events(
-              external_id,event_date,name,event_type,fact_summary,visibility,verification_status,
-              created_at,source_type,manually_confirmed,is_active,subject_manually_confirmed
-            )
-            VALUES (?,?,?,?,?,'internal','已确认',?,'v0.5C Q-BAY活动',1,1,1)
-            """,
-            (event_external_id, event_date or None, name.strip(), event_type, description or None, ts),
-        )
-        profile = conn.execute(
-            """
-            INSERT INTO v05c_club_event_profiles(
-              event_id,event_no,event_type,registration_status,capacity,registration_deadline,venue,online_link,
-              organizer,owner,visibility,member_only,status,description,created_at,updated_at
-            ) VALUES (?,?,?,'closed',?,?,?,?,?,?,?,?, 'draft',?,?,?)
-            """,
-            (
-                cur.lastrowid,
-                event_no,
-                event_type,
-                max(0, int(capacity or 0)),
-                registration_deadline or None,
-                venue or None,
-                online_link or None,
-                organizer or None,
-                owner or actor,
-                visibility,
-                1 if member_only else 0,
-                description or None,
-                ts,
-                ts,
-            ),
-        )
-    return RedirectResponse(f"/club/events/{profile.lastrowid}", status_code=303)
+    user = current_user(request) or {}
+    try:
+        profile = ClubEventService().create_event({
+            "name": name, "event_type": event_type, "event_date": event_date, "venue": venue,
+            "online_link": online_link, "capacity": capacity, "registration_start": registration_start,
+            "registration_deadline": registration_deadline, "organizer": organizer, "owner": owner,
+            "visibility": visibility, "member_only": bool(member_only), "description": description,
+        }, actor=current_username(request), actor_user_id=int(user["id"]) if user.get("id") else None)
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return RedirectResponse(f"/club/events/{profile['id']}?message=活动已保存", status_code=303)
 
 
 @router.get("/club/events/{club_event_id}", response_class=HTMLResponse)
@@ -309,9 +252,48 @@ def event_detail(request: Request, club_event_id: int, message: str = Query(""),
             "SELECT * FROM v05c_club_event_participation WHERE club_event_id=? ORDER BY check_in_time DESC, id DESC LIMIT 50",
             (club_event_id,),
         ).fetchall()]
-    return _render(request, "event_detail", event=event, registrations=registrations, participation=participation, message=message, error=error)
+    return _render(request, "event_detail", event=event, registrations=registrations, participation=participation,
+                   message=message, error=error, can_manage=can(request, "manage_club"))
 
 
+
+
+@router.get("/club/events/{club_event_id}/edit", response_class=HTMLResponse)
+def edit_event_page(request: Request, club_event_id: int):
+    with db_connection() as conn:
+        event = _event_detail(conn, club_event_id)
+    return _render(request, "event_form", event=event)
+
+
+@router.post("/club/events/{club_event_id}/edit")
+async def update_event(request: Request, club_event_id: int):
+    form = await request.form()
+    user = current_user(request) or {}
+    try:
+        ClubEventService().update_event(
+            club_event_id, dict(form), actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+        )
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return RedirectResponse(f"/club/events/{club_event_id}?message=活动已保存", status_code=303)
+
+
+@router.post("/club/events/{club_event_id}/delete")
+def delete_event(request: Request, club_event_id: int, confirm: str = Form("")):
+    if confirm != "1":
+        raise HTTPException(400, "请确认删除安全草稿")
+    user = current_user(request) or {}
+    try:
+        ClubEventService().delete_safe_draft(
+            club_event_id, actor=current_username(request),
+            actor_user_id=int(user["id"]) if user.get("id") else None,
+        )
+    except ClubOperationError as exc:
+        if exc.status_code == 409:
+            return RedirectResponse(f"/club/events/{club_event_id}?error=活动已有报名或已发布，不能删除；请取消或结束活动", status_code=303)
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return RedirectResponse("/club/events?message=草稿活动已删除", status_code=303)
 @router.post("/club/events/{club_event_id}/status")
 def change_event_status(request: Request, club_event_id: int, action: str = Form(...), note: str = Form("")):
     ensure_schema()
@@ -325,52 +307,28 @@ def change_event_status(request: Request, club_event_id: int, action: str = Form
         )
     except ClubOperationError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
-    return RedirectResponse(f"/club/events/{club_event_id}", status_code=303)
+    label = {"publish": "活动已发布", "cancel": "活动已取消", "complete": "活动已结束", "open": "报名已开放", "close": "报名已关闭"}.get(action, "活动状态已更新")
+    return RedirectResponse(f"/club/events/{club_event_id}?message={label}", status_code=303)
 
 
 @router.post("/club/events/{club_event_id}/copy")
 def copy_event(request: Request, club_event_id: int):
     ensure_schema()
-    actor = current_username(request)
-    ts = now_iso()
+    actor, user = current_username(request), current_user(request) or {}
     with db_connection() as conn:
         original = _event_detail(conn, club_event_id)
-        event_external_id = _next_event_external_id(conn)
-        event_no = _next_no(conn, "QBE")
-        cur = conn.execute(
-            """
-            INSERT INTO events(
-              external_id,event_date,name,event_type,fact_summary,visibility,verification_status,
-              created_at,source_type,manually_confirmed,is_active,subject_manually_confirmed
-            )
-            VALUES (?,?,?,?,?,'internal','待确认',?,'v0.5C Q-BAY活动复制',1,1,1)
-            """,
-            (event_external_id, None, f"{original['name']}（复制）", original["event_type"], original.get("description") or original.get("fact_summary"), ts),
-        )
-        new_profile = conn.execute(
-            """
-            INSERT INTO v05c_club_event_profiles(
-              event_id,event_no,event_type,registration_status,capacity,venue,online_link,organizer,owner,
-              visibility,member_only,status,description,created_at,updated_at
-            ) VALUES (?,?,?,'closed',?,?,?,?,?,?,?,'draft',?,?,?)
-            """,
-            (
-                cur.lastrowid,
-                event_no,
-                original["event_type"],
-                original["capacity"],
-                original.get("venue"),
-                original.get("online_link"),
-                original.get("organizer"),
-                actor,
-                original.get("visibility") or "internal",
-                int(original.get("member_only") or 0),
-                original.get("description") or original.get("fact_summary"),
-                ts,
-                ts,
-            ),
-        )
-    return RedirectResponse(f"/club/events/{new_profile.lastrowid}", status_code=303)
+    try:
+        copied = ClubEventService().create_event({
+            "name": f"{original['name']}（复制）", "event_type": original["event_type"],
+            "capacity": original["capacity"], "venue": original.get("venue"),
+            "online_link": original.get("online_link"), "organizer": original.get("organizer"),
+            "owner": actor, "visibility": original.get("visibility") or "internal",
+            "member_only": bool(original.get("member_only")),
+            "description": original.get("description") or original.get("fact_summary"),
+        }, actor=actor, actor_user_id=int(user["id"]) if user.get("id") else None)
+    except ClubOperationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from exc
+    return RedirectResponse(f"/club/events/{copied['id']}", status_code=303)
 
 
 @router.get("/club/events/{club_event_id}/register", response_class=HTMLResponse)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -12,11 +12,19 @@ from app.services.collection_service import (
     create_collection_source,
     create_job,
     dashboard,
+    delete_or_retire_source,
+    discover_source_candidates,
     list_items,
     list_jobs,
     list_sources,
     process_job,
+    preview_source_import,
     snapshot_detail,
+    save_source_import,
+    set_source_enabled,
+    source_detail,
+    test_source_url,
+    update_collection_source,
 )
 from app.services.collection_scheduler import (
     get_scheduler_info,
@@ -47,6 +55,30 @@ def collection_sources(request: Request, page: int = 1, q: str = "", status: str
         {"mode": "sources", "sources": rows, "total": total, "page": page, "q": q, "status": status, "message": message, "error": error},
     )
 
+@router.get("/collection/sources/new", response_class=HTMLResponse)
+def collection_source_new(request: Request):
+    return templates.TemplateResponse(
+        request, "v05f_collection.html",
+        {"mode": "source_form", "form_data": {"source_type": "webpage", "collection_mode": "auto",
+         "check_frequency": "weekly", "is_enabled": True}, "test_result": None},
+    )
+
+
+@router.post("/collection/sources/test", response_class=HTMLResponse)
+async def collection_test_source(request: Request):
+    form = await request.form()
+    data = {key: form.get(key, "") for key in (
+        "name", "url", "source_type", "collection_mode", "check_frequency", "subject_type", "subject_id"
+    )}
+    data["is_enabled"] = bool(form.get("is_enabled"))
+    result = test_source_url(str(data["url"]))
+    if result.get("ok"):
+        data["source_type"] = "rss" if result.get("is_rss") else ("dynamic_page" if result.get("needs_playwright") else "webpage")
+        data["collection_mode"] = "rss" if result.get("is_rss") else ("playwright" if result.get("needs_playwright") else "http")
+    return templates.TemplateResponse(
+        request, "v05f_collection.html",
+        {"mode": "source_form", "form_data": data, "test_result": result},
+    )
 
 @router.post("/collection/sources")
 def collection_create_source(
@@ -61,7 +93,12 @@ def collection_create_source(
     compliance_note: str = Form(""),
     max_links: int = Form(20),
     crawl_detail_pages: str = Form(""),
+    check_frequency: str = Form("weekly"),
+    is_enabled: str = Form(""),
+    tested: str = Form(""),
 ):
+    if tested != "1":
+        return RedirectResponse("/collection/sources/new?error=请先测试来源URL", status_code=303)
     try:
         row = create_collection_source(
             name=name,
@@ -75,17 +112,19 @@ def collection_create_source(
             compliance_note=compliance_note,
             max_links=max_links,
             crawl_detail_pages=bool(crawl_detail_pages),
+            check_frequency=check_frequency,
+            is_enabled=bool(is_enabled),
         )
     except Exception as exc:
         return RedirectResponse(f"/collection/sources?error={str(exc)[:200]}", status_code=303)
     return RedirectResponse(f"/collection/sources?message=来源已保存：{row['source_no']}", status_code=303)
 
 
-@router.get("/collection/sources/{source_id}", response_class=HTMLResponse)
+@router.get("/collection/sources/{source_id:int}", response_class=HTMLResponse)
 def collection_source_detail(request: Request, source_id: int):
-    rows, _ = list_sources(page=1, page_size=200)
-    source = next((row for row in rows if row["id"] == source_id), None)
-    if not source:
+    try:
+        source = source_detail(source_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="采集来源不存在")
     jobs, _ = list_jobs(page=1, page_size=50)
     items, _ = list_items(page=1, page_size=50)
@@ -100,8 +139,99 @@ def collection_source_detail(request: Request, source_id: int):
         },
     )
 
+@router.get("/collection/sources/{source_id:int}/edit", response_class=HTMLResponse)
+def collection_source_edit(request: Request, source_id: int):
+    try:
+        source = source_detail(source_id)
+    except ValueError as exc:
+        raise HTTPException(404, "采集来源不存在") from exc
+    return templates.TemplateResponse(
+        request, "v05f_collection.html",
+        {"mode": "source_form", "form_data": source, "source": source, "test_result": None},
+    )
 
-@router.post("/collection/sources/{source_id}/run")
+
+@router.post("/collection/sources/{source_id:int}/edit")
+async def collection_update_source(request: Request, source_id: int):
+    form = await request.form()
+    try:
+        update_collection_source(source_id, dict(form))
+    except ValueError as exc:
+        return RedirectResponse(f"/collection/sources/{source_id}?error={str(exc)}", status_code=303)
+    return RedirectResponse(f"/collection/sources/{source_id}?message=来源已更新", status_code=303)
+
+@router.post("/collection/sources/{source_id:int}/test", response_class=HTMLResponse)
+def collection_test_existing_source(request: Request, source_id: int):
+    source = source_detail(source_id)
+    return templates.TemplateResponse(
+        request, "v05f_collection.html",
+        {"mode": "source_detail", "source": source, "jobs": [], "items": [],
+         "test_result": test_source_url(source["url"])},
+    )
+
+@router.post("/collection/sources/{source_id:int}/enabled")
+def collection_toggle_source(source_id: int, enabled: str = Form("")):
+    row = set_source_enabled(source_id, bool(enabled))
+    message = "来源已启用" if row["is_enabled"] else "来源已停用"
+    return RedirectResponse(f"/collection/sources?message={message}", status_code=303)
+
+@router.post("/collection/sources/{source_id:int}/delete")
+def collection_delete_source(source_id: int, confirm: str = Form("")):
+    if confirm != "1":
+        raise HTTPException(400, "请确认删除或退役")
+    result = delete_or_retire_source(source_id)
+    message = "来源已退役，历史情报保留" if result["action"] == "retired" else "来源已删除"
+    return RedirectResponse(f"/collection/sources?message={message}", status_code=303)
+
+@router.get("/collection/sources/import", response_class=HTMLResponse)
+def collection_import_page(request: Request):
+    return templates.TemplateResponse(
+        request, "v05f_collection.html",
+        {"mode": "source_import", "preview": [], "source_text": ""},
+    )
+
+@router.post("/collection/sources/import/preview", response_class=HTMLResponse)
+async def collection_import_preview(
+    request: Request, source_text: str = Form(""), csv_file: UploadFile | None = File(None),
+):
+    raw = source_text
+    if csv_file and csv_file.filename:
+        raw = (await csv_file.read()).decode("utf-8-sig", errors="replace")
+    preview = preview_source_import(raw)
+    return templates.TemplateResponse(
+        request, "v05f_collection.html",
+        {"mode": "source_import", "preview": preview, "source_text": raw},
+    )
+
+@router.post("/collection/sources/import/confirm")
+def collection_import_confirm(request: Request, source_text: str = Form(...)):
+    preview = preview_source_import(source_text)
+    result = save_source_import(preview, current_username(request))
+    message = (
+        f"成功新增：{result['created']}；已存在：{result['exists']}；"
+        f"无效URL：{result['invalid']}；测试失败：{result['failed']}"
+    )
+    return RedirectResponse(f"/collection/sources?message={message}", status_code=303)
+
+@router.get("/collection/sources/discovery", response_class=HTMLResponse)
+def collection_discovery_page(request: Request):
+    return templates.TemplateResponse(
+        request, "v05f_collection.html", {"mode": "source_discovery", "discovery": None},
+    )
+
+@router.post("/collection/sources/discovery", response_class=HTMLResponse)
+def collection_discovery_run(
+    request: Request, homepage_url: str = Form(...), organization_id: int = Form(0),
+    organization_name: str = Form(""),
+):
+    result = discover_source_candidates(
+        homepage_url, organization_id or None, organization_name,
+        owner=current_username(request),
+    )
+    return templates.TemplateResponse(
+        request, "v05f_collection.html", {"mode": "source_discovery", "discovery": result},
+    )
+@router.post("/collection/sources/{source_id:int}/run")
 def collection_run_source(request: Request, source_id: int, force: str = Form("")):
     try:
         job = create_job(source_id, trigger_type="manual", operator=current_username(request), force=bool(force))
