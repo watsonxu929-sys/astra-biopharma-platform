@@ -119,7 +119,25 @@
   <p>别名：{% for alias in entity.aliases %}{{ alias.alias }}{% if not loop.last %}、{% endif %}{% else %}暂无{% endfor %}</p>
   <p>公开标识：{% for identifier in entity.external_identifiers %}{{ identifier.identifier_type }}={{ identifier.identifier_value }}{% if not loop.last %}；{% endif %}{% else %}暂无{% endfor %}</p>
 </section>
-<section class="dashboard-card"><h2>业务追溯</h2>
+{% if entity_type == 'organization' and monitoring %}
+{% if request.query_params.get('message') %}<div class="success-box">{{ request.query_params.get('message') }}</div>{% endif %}
+{% if request.query_params.get('error') %}<div class="warning-box">{{ request.query_params.get('error') }}</div>{% endif %}
+<section class="dashboard-card">
+  <h2>产业监测</h2>
+  <p><strong>监测状态：</strong>{{ {'COVERED_ACTIVE':'已建立官方监测','COVERED_CANDIDATE':'已有候选来源','MANUAL_DOMAIN_REQUIRED':'需要人工确认官网'}.get(monitoring.monitoring_status, monitoring.monitoring_status) }}</p>
+  {% if monitoring.active_sources %}<p>已覆盖 {{ monitoring.active_sources|length }} 个来源{% if monitoring.last_collection %}；最近更新：{{ monitoring.last_collection }}{% endif %}</p>{% else %}<p class="text-muted">尚未建立已启用的官方监测来源。</p>{% endif %}
+  {% if monitoring.official_domain %}<p>已确认官网：<a href="{{ monitoring.official_domain.identifier_value }}" target="_blank" rel="noopener">{{ monitoring.official_domain.identifier_value }}</a></p>{% endif %}
+  {% if monitoring.domain_candidate %}
+  <div class="warning-box"><strong>候选官网：</strong>{{ monitoring.domain_candidate.identifier_value }}<br>发现依据：{{ monitoring.domain_candidate.source or '管理员提交' }}<br>验证依据：{{ monitoring.domain_candidate.authority or '待人工核对' }}</div>
+  {% if can_manage_monitoring %}<div class="actions"><form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/domain-candidates/{{ monitoring.domain_candidate.id }}/review"><button class="btn btn-primary" name="decision" value="approved" type="submit">确认官网并发现来源</button></form><form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/domain-candidates/{{ monitoring.domain_candidate.id }}/review"><button class="btn btn-outline" name="decision" value="rejected" type="submit">忽略</button></form></div>{% endif %}
+  {% elif not monitoring.official_domain and can_manage_monitoring %}
+  <form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/domain-candidates" class="inline-form"><label>候选官网URL<input name="candidate_url" type="url" required placeholder="https://企业已核对官网/"></label><button class="btn btn-outline" type="submit">验证候选官网</button></form>
+  {% endif %}
+  {% if monitoring.sources %}<div class="relation-list">{% for source in monitoring.sources %}<div class="relation-item"><a href="/collection/sources/{{ source.id }}"><strong>{{ source.name }}</strong></a><span>{{ '已启用' if source.is_enabled else ('候选' if source.health_status == 'candidate' else '已停用') }}</span>{% set sample = ((source.discovery.get('test') or {}).get('recent_items') or []) %}{% if sample %}<span>样本：{{ sample[0].title }}{% if sample[0].published %} · {{ sample[0].published }}{% endif %}</span>{% endif %}</div>{% endfor %}</div>{% endif %}
+  {% if can_manage_monitoring %}<form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/discover"><button class="btn btn-primary" type="submit">发现官方来源</button></form>{% endif %}
+  {% if monitoring.latest_intelligence %}<p>最近关联情报：<a href="/intelligence/{{ monitoring.latest_intelligence.id }}">{{ monitoring.latest_intelligence.title }}</a></p>{% endif %}
+</section>
+{% endif %}<section class="dashboard-card"><h2>业务追溯</h2>
   {% for item in business_trace.intelligence %}<p><a href="/intelligence/{{ item.id }}">情报：{{ item.title }}</a></p>{% endfor %}
   {% for item in business_trace.resources %}<p><a href="/resources/{{ item.id }}">{{ '需求' if item.direction == 'demand' else '供给' }}：{{ item.title }}</a></p>{% endfor %}
   {% for item in business_trace.opportunities %}<p><a href="/opportunities/{{ item.id }}">合作机会：{{ item.title }}</a></p>{% endfor %}

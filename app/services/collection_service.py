@@ -626,15 +626,24 @@ def test_source_url(url: str) -> dict[str, Any]:
     text_value, extractor = extract_main_text(body)
     canonical_link = soup.find("link", rel=lambda value: value and "canonical" in value,
                                href=True)
-    recent = [str(entry.get("title") or "").strip() for entry in (feed.entries[:3] if feed else []) if entry.get("title")]
+    recent_items = [
+        {
+            "title": str(entry.get("title") or "").strip(),
+            "published": str(entry.get("published") or entry.get("updated") or "").strip(),
+        }
+        for entry in (feed.entries[:3] if feed else []) if entry.get("title")
+    ]
+    recent = [item["title"] for item in recent_items]
     if not recent:
         recent = [node.get_text(" ", strip=True) for node in soup.select("h1,h2,h3")[:3]]
+        recent_items = [{"title": title, "published": ""} for title in recent]
     return {
         "ok": True, "status": "READY", "url": normalize_url(url) if not url.startswith("inline:") else url,
         "http_status": status, "is_rss": bool(feed and feed.entries),
         "rss_url": urljoin(url, feed_link.get("href")) if feed_link else "",
         "is_html": bool(soup.find()), "needs_playwright": len(text_value) < 120 and len(soup.find_all("script")) >= 5,
-        "extractable": len(text_value) >= 80, "extractor": extractor, "recent_titles": recent,
+        "extractable": len(text_value) >= 80, "extractor": extractor,
+        "recent_titles": recent, "recent_items": recent_items,
         "content_type": content_type, "canonical_url": urljoin(url, canonical_link.get("href"))
         if canonical_link else headers.get("content-location", ""),
     }
@@ -705,9 +714,203 @@ DISCOVERY_KEYWORDS = re.compile(
     r"news|newsroom|media|press|press-release|investor|updates|blog|announcement|insights|新闻|动态|公告|媒体", re.I
 )
 
+THIRD_PARTY_DOMAINS = {
+    "wikipedia.org", "wikidata.org", "linkedin.com", "facebook.com", "x.com",
+    "twitter.com", "weibo.com", "qcc.com", "tianyancha.com", "crunchbase.com",
+    "36kr.com", "baidu.com", "zhihu.com", "liepin.com", "zhipin.com",
+}
+
+
+def _domain_root(url: str) -> str:
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}/"
+
+
+def _is_third_party_domain(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    return any(host == domain or host.endswith(f".{domain}") for domain in THIRD_PARTY_DOMAINS)
+
+
+def _brand_key(value: str) -> str:
+    value = re.sub(r"[\s\W_]+", "", str(value or "").casefold())
+    return re.sub(r"(?:有限责任公司|股份有限公司|有限公司|集团|公司)$", "", value)
+
+
+def validate_official_domain_candidate(url: str, organization_name: str) -> dict[str, Any]:
+    """Validate a possible official domain without promoting it to canonical truth."""
+    root = _domain_root(url)
+    if not root:
+        return {"ok": False, "status": "INVALID_URL", "candidate_url": str(url or "")}
+    if _is_third_party_domain(root):
+        return {"ok": False, "status": "THIRD_PARTY_DOMAIN", "candidate_url": root}
+    try:
+        body, status, _, _ = _http_get(root, timeout=8, retries=0)
+    except RuntimeError:
+        return {"ok": False, "status": "FETCH_FAILED", "candidate_url": root}
+    soup = BeautifulSoup(body, "html.parser")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    brand_nodes = [
+        soup.find("meta", attrs={"property": "og:site_name"}),
+        soup.find("meta", attrs={"name": "application-name"}),
+    ]
+    brand_text = " ".join(str(node.get("content") or "") for node in brand_nodes if node)
+    schema_names: list[str] = []
+    for node in soup.find_all("script", attrs={"type": "application/ld+json"})[:10]:
+        try:
+            payload = json.loads(node.get_text(" ", strip=True) or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        queue = payload if isinstance(payload, list) else [payload]
+        for item in queue:
+            if isinstance(item, dict) and str(item.get("@type") or "").lower() in {"organization", "corporation"}:
+                schema_names.append(str(item.get("name") or ""))
+    headings = " ".join(node.get_text(" ", strip=True) for node in soup.select("h1")[:3])
+    needle = _brand_key(organization_name)
+    title_key, brand_key = _brand_key(title), _brand_key(brand_text)
+    schema_keys = [_brand_key(name) for name in schema_names]
+    combined = _brand_key(" ".join([title, brand_text, headings, *schema_names]))
+    matched = bool(needle and len(needle) >= 3 and needle in combined)
+    evidence = []
+    if needle and needle in title_key:
+        evidence.append("页面标题与主体匹配")
+    if needle and needle in brand_key:
+        evidence.append("站点品牌标识与主体匹配")
+    if any(needle and needle in value for value in schema_keys):
+        evidence.append("Schema.org Organization与主体匹配")
+    if matched and not evidence:
+        evidence.append("首页明显品牌文字与主体匹配")
+    return {
+        "ok": matched, "status": "CANDIDATE_VERIFIED" if matched else "SUBJECT_MISMATCH",
+        "candidate_url": root, "http_status": status, "page_title": title,
+        "validation_basis": evidence, "third_party": False,
+    }
+
+
+def propose_official_domain_candidate(
+    organization_id: str, organization_name: str, url: str, discovery_basis: str,
+    actor: str, db_path: str | Path | None = None,
+) -> dict[str, Any]:
+    validation = validate_official_domain_candidate(url, organization_name)
+    if not validation["ok"]:
+        return {"created": False, "validation": validation}
+    root = str(validation["candidate_url"])
+    normalized = (urlparse(root).hostname or "").lower().removeprefix("www.")
+    with db_connection(db_path) as conn:
+        existing = conn.execute(
+            """SELECT * FROM p3_entity_external_identifiers
+               WHERE entity_type='organization' AND entity_id=? AND identifier_type='official_domain'
+                 AND normalized_value=? AND review_status IN ('pending','approved') ORDER BY id DESC LIMIT 1""",
+            (organization_id, normalized),
+        ).fetchone()
+        if existing:
+            return {"created": False, "candidate": dict(existing), "validation": validation}
+        stamp = now()
+        cur = conn.execute(
+            """INSERT INTO p3_entity_external_identifiers(
+               entity_type,entity_id,identifier_type,identifier_value,normalized_value,authority,
+               source,source_url,review_status,is_sensitive,is_pilot,created_by,created_at,updated_at
+               ) VALUES ('organization',?,'official_domain',?,?,?,?,?,'pending',0,0,?,?,?)""",
+            (organization_id, root, normalized, "; ".join(validation["validation_basis"]),
+             discovery_basis, root, actor, stamp, stamp),
+        )
+        candidate = dict(conn.execute(
+            "SELECT * FROM p3_entity_external_identifiers WHERE id=?", (cur.lastrowid,)
+        ).fetchone())
+    return {"created": True, "candidate": candidate, "validation": validation}
+
+
+def review_official_domain_candidate(
+    candidate_id: int, organization_id: str, decision: str, actor: str,
+    db_path: str | Path | None = None,
+) -> dict[str, Any]:
+    if decision not in {"approved", "rejected"}:
+        raise ValueError("invalid_domain_decision")
+    with db_connection(db_path) as conn:
+        row = conn.execute(
+            """SELECT * FROM p3_entity_external_identifiers
+               WHERE id=? AND entity_type='organization' AND entity_id=? AND identifier_type='official_domain'
+                 AND review_status='pending'""", (candidate_id, organization_id),
+        ).fetchone()
+        if not row:
+            raise ValueError("domain_candidate_not_found")
+        stamp = now()
+        conn.execute(
+            "UPDATE p3_entity_external_identifiers SET review_status=?,reviewed_by=?,reviewed_at=?,updated_at=? WHERE id=?",
+            (decision, actor, stamp, stamp, candidate_id),
+        )
+        return dict(conn.execute(
+            "SELECT * FROM p3_entity_external_identifiers WHERE id=?", (candidate_id,)
+        ).fetchone())
+
+
+def organization_monitoring_context(
+    organization_id: str, db_path: str | Path | None = None,
+) -> dict[str, Any]:
+    with db_connection(db_path) as conn:
+        organization = conn.execute(
+            "SELECT id,external_id,COALESCE(NULLIF(name,''),standard_name) AS name,source_url FROM organizations WHERE external_id=?",
+            (organization_id,),
+        ).fetchone()
+        if not organization:
+            raise ValueError("organization_not_found")
+        internal_id = str(organization["id"])
+        sources = [dict(row) for row in conn.execute(
+            """SELECT * FROM v04g_monitoring_sources
+               WHERE deactivated_at IS NULL AND subject_type='organization' AND subject_id IN (?,?)
+               ORDER BY is_enabled DESC,id DESC""", (organization_id, internal_id),
+        )]
+        sources = [_decorate_source(row, conn) for row in sources]
+        domains = [dict(row) for row in conn.execute(
+            """SELECT * FROM p3_entity_external_identifiers
+               WHERE entity_type='organization' AND entity_id=? AND identifier_type='official_domain'
+               ORDER BY CASE review_status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,id DESC""",
+            (organization_id,),
+        )]
+        latest_intelligence = conn.execute(
+            """SELECT i.id,i.title FROM core_intelligence_subject_links l
+               JOIN v06_intelligence_items i ON i.id=l.intelligence_item_id
+               WHERE l.subject_type='organization' AND l.subject_id=? ORDER BY i.id DESC LIMIT 1""",
+            (int(organization["id"]),),
+        ).fetchone()
+        evidence_urls = [str(organization["source_url"])] if organization["source_url"] else []
+        evidence_urls.extend(str(row[0]) for row in conn.execute(
+            """SELECT DISTINCT i.source_url FROM core_intelligence_subject_links l
+               JOIN v06_intelligence_items i ON i.id=l.intelligence_item_id
+               WHERE l.subject_type='organization' AND l.subject_id=? AND i.source_url IS NOT NULL""",
+            (int(organization["id"]),),
+        ))
+    active = [source for source in sources if source.get("is_enabled")]
+    candidates = [source for source in sources if source.get("health_status") == "candidate"]
+    approved_domain = next((row for row in domains if row["review_status"] == "approved"), None)
+    pending_domain = next((row for row in domains if row["review_status"] == "pending"), None)
+    status = "COVERED_ACTIVE" if active else ("COVERED_CANDIDATE" if candidates else "MANUAL_DOMAIN_REQUIRED")
+    return {
+        "organization": dict(organization), "sources": sources, "active_sources": active,
+        "candidate_sources": candidates, "official_domain": approved_domain,
+        "domain_candidate": pending_domain, "evidence_urls": list(dict.fromkeys(evidence_urls)),
+        "monitoring_status": status,
+        "last_collection": max((str(source.get("last_success_at") or "") for source in sources), default=""),
+        "latest_intelligence": dict(latest_intelligence) if latest_intelligence else None,
+    }
+
+
+def _discovery_priority(item: tuple[str, str, str, str]) -> tuple[int, str]:
+    text = f"{item[0]} {item[1]} {item[3]}".lower()
+    if re.search(r"newsroom|press|media|news-release|rss|atom|新闻", text):
+        return 1, text
+    if re.search(r"investor|announcement|投资者|公告", text):
+        return 2, text
+    if re.search(r"product|r&d|research|updates|研发|产品|动态", text):
+        return 3, text
+    if re.search(r"blog|insight", text):
+        return 4, text
+    return 5, text
+
 
 def discover_source_candidates(
-    homepage_url: str, organization_id: int | None = None, organization_name: str = "",
+    homepage_url: str, organization_id: int | str | None = None, organization_name: str = "",
     owner: str = "", db_path: str | Path | None = None,
 ) -> dict[str, Any]:
     tested = test_source_url(homepage_url)
@@ -751,7 +954,7 @@ def discover_source_candidates(
     existing_rows, _ = list_sources(db_path=db_path, page_size=500, status="all")
     existing = {_source_identity(row["url"]) for row in existing_rows}
     seen: set[str] = set()
-    for name, url, source_type, method in found:
+    for name, url, source_type, method in sorted(found, key=_discovery_priority):
         if not url.startswith(("http://", "https://")):
             result["invalid"] += 1
             continue
@@ -769,13 +972,23 @@ def discover_source_candidates(
             result["duplicates"] += 1
             continue
         seen.update({identity, canonical_identity})
+        persisted_test = {
+            "status": check.get("status"), "url": check.get("url"),
+            "http_status": check.get("http_status"), "is_rss": bool(check.get("is_rss")),
+            "needs_playwright": bool(check.get("needs_playwright")),
+            "extractable": bool(check.get("extractable")), "extractor": check.get("extractor"),
+            "recent_items": [
+                {"title": str(item.get("title") or "")[:240], "published": str(item.get("published") or "")[:100]}
+                for item in (check.get("recent_items") or [])[:3]
+            ],
+        }
         created = create_collection_source(
             name=name[:200] or result["domain"], source_type="rss" if check.get("is_rss") else source_type,
             url=canonical_url, collection_mode="rss" if check.get("is_rss") else "http",
             subject_type="organization" if organization_id else "", subject_id=str(organization_id or ""),
             owner=owner, compliance_note=json.dumps(
-                {"organization": organization_name, "method": method, "test": check}, ensure_ascii=False
-            )[:2000], is_enabled=False, db_path=db_path,
+                {"organization": organization_name, "method": method, "test": persisted_test}, ensure_ascii=False
+            ), is_enabled=False, db_path=db_path,
         )
         with db_connection(db_path) as conn:
             conn.execute(
@@ -790,6 +1003,8 @@ def discover_source_candidates(
         if result["created"] >= 8:
             break
     return result
+
+
 def create_job(source_id: int, trigger_type: str = "manual", operator: str = "", db_path: str | Path | None = None, *, force: bool = False) -> dict[str, Any]:
     ensure_schema(db_path)
     ts = now()

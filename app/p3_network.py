@@ -23,6 +23,13 @@ from app.services.entity_governance_service import (
     list_resolution_candidates,
 )
 
+from app.services.collection_service import (
+    discover_source_candidates,
+    organization_monitoring_context,
+    propose_official_domain_candidate,
+    review_official_domain_candidate,
+)
+
 router = APIRouter(tags=["P3 entity relationship network"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 
@@ -140,8 +147,101 @@ def entity_page(request: Request, entity_type: str, entity_id: str, history: boo
     include_private = _can_access_governance(request)
     relationships = CanonicalRelationshipService().entity_relationships(entity_type, entity["resolved_id"], history=history, include_private=include_private)
     business_trace = _business_trace(entity_type, int(entity["id"]))
-    return _render(request, "entity", entity_type=entity_type, entity=entity, relationships=relationships, business_trace=business_trace, history=history)
+    monitoring = organization_monitoring_context(entity["resolved_id"]) if entity_type == "organization" else None
+    return _render(
+        request, "entity", entity_type=entity_type, entity=entity, relationships=relationships,
+        business_trace=business_trace, monitoring=monitoring, can_manage_monitoring=include_private,
+        history=history,
+    )
 
+
+@router.post("/network/entities/organization/{entity_id}/monitoring/discover")
+def discover_organization_sources(request: Request, entity_id: str):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="来源发现权限不足")
+    entity = EntityRegistryService().get("organization", entity_id)
+    if not entity:
+        raise HTTPException(status_code=404, detail="主体不存在")
+    context = organization_monitoring_context(entity["resolved_id"])
+    homepage = ""
+    if context["official_domain"]:
+        homepage = str(context["official_domain"]["identifier_value"])
+    elif context["active_sources"]:
+        homepage = str(context["active_sources"][0]["url"])
+    if not homepage:
+        for evidence_url in context["evidence_urls"]:
+            proposal = propose_official_domain_candidate(
+                entity["resolved_id"], entity["canonical_label"], evidence_url,
+                "Canonical档案或已关联情报中的公开链接", current_username(request),
+            )
+            if proposal.get("validation", {}).get("ok"):
+                return RedirectResponse(
+                    f"/network/entities/organization/{entity['resolved_id']}?message=已生成可解释的官网候选，请人工确认",
+                    status_code=303,
+                )
+        return RedirectResponse(
+            f"/network/entities/organization/{entity['resolved_id']}?error=未找到可靠官网证据，请人工提供候选URL",
+            status_code=303,
+        )
+    result = discover_source_candidates(
+        homepage, entity["resolved_id"], entity["canonical_label"],
+        owner=current_username(request),
+    )
+    return RedirectResponse(
+        f"/network/entities/organization/{entity['resolved_id']}?message=来源发现完成：新增{result['created']}，重复{result['duplicates']}，无效{result['invalid']}",
+        status_code=303,
+    )
+
+
+@router.post("/network/entities/organization/{entity_id}/monitoring/domain-candidates")
+def propose_organization_domain(request: Request, entity_id: str, candidate_url: str = Form(...)):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="官网候选权限不足")
+    entity = EntityRegistryService().get("organization", entity_id)
+    if not entity:
+        raise HTTPException(status_code=404, detail="主体不存在")
+    result = propose_official_domain_candidate(
+        entity["resolved_id"], entity["canonical_label"], candidate_url,
+        "管理员从Organization详情提交", current_username(request),
+    )
+    if not result.get("validation", {}).get("ok"):
+        status = result.get("validation", {}).get("status", "VALIDATION_FAILED")
+        return RedirectResponse(
+            f"/network/entities/organization/{entity['resolved_id']}?error=官网候选未通过验证：{status}",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/network/entities/organization/{entity['resolved_id']}?message=官网候选已保存，等待人工确认",
+        status_code=303,
+    )
+
+
+@router.post("/network/entities/organization/{entity_id}/monitoring/domain-candidates/{candidate_id}/review")
+def review_organization_domain(
+    request: Request, entity_id: str, candidate_id: int, decision: str = Form(...),
+):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="官网候选审核权限不足")
+    entity = EntityRegistryService().get("organization", entity_id)
+    if not entity:
+        raise HTTPException(status_code=404, detail="主体不存在")
+    try:
+        candidate = review_official_domain_candidate(candidate_id, entity["resolved_id"], decision, current_username(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if candidate["entity_id"] != entity["resolved_id"]:
+        raise HTTPException(status_code=400, detail="官网候选与主体不匹配")
+    if decision == "approved":
+        result = discover_source_candidates(
+            candidate["identifier_value"], entity["resolved_id"], entity["canonical_label"],
+            owner=current_username(request),
+        )
+        message = f"官网已确认；来源候选新增{result['created']}，重复{result['duplicates']}"
+    else:
+        message = "官网候选已忽略，不会进入正式主体事实"
+    return RedirectResponse(
+        f"/network/entities/organization/{entity['resolved_id']}?message={message}", status_code=303,
+    )
 
 @router.get("/network/products/{product_id}", response_class=HTMLResponse)
 def product_page(request: Request, product_id: str):

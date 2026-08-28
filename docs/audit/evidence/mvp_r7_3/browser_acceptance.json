@@ -1,0 +1,63 @@
+{
+  "status": "PASS",
+  "browser": "151.0.7922.34",
+  "pages": [
+    {
+      "name": "01_organization_active",
+      "path": "/network/entities/organization/ORG-20260626-000001",
+      "title": "主体治理与产业关系网络",
+      "overflow": false
+    },
+    {
+      "name": "04_source_candidate",
+      "path": "/collection/sources/20",
+      "title": "信息采集中心",
+      "overflow": false
+    },
+    {
+      "name": "05_source_management",
+      "path": "/collection/sources?status=candidate",
+      "title": "信息采集中心",
+      "overflow": false
+    },
+    {
+      "name": "06_priority_monitoring",
+      "path": "/network/entities/organization/ORG-20260626-000001",
+      "title": "主体治理与产业关系网络",
+      "overflow": false
+    },
+    {
+      "name": "07_intelligence",
+      "path": "/intelligence",
+      "title": "情报",
+      "overflow": false
+    },
+    {
+      "name": "08_qbay",
+      "path": "/club/events",
+      "title": "活动",
+      "overflow": false
+    },
+    {
+      "name": "09_viewer_monitoring",
+      "path": "/network/entities/organization/ORG-20260626-000001",
+      "title": "主体治理与产业关系网络",
+      "overflow": false
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "network_failures": [],
+  "http_errors": [],
+  "overflow": [],
+  "viewer_write_status": 403,
+  "flow": [
+    "Priority Monitoring状态可见",
+    "官网候选含发现依据和验证依据",
+    "确认官网后自动复用Source Discovery",
+    "Candidate展示真实样本、发布时间和采集方式",
+    "Admin启用Candidate成功",
+    "刷新后官网和监测状态持久化",
+    "viewer关键写入口后端403"
+  ]
+}

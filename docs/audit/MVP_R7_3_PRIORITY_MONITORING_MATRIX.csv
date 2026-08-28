@@ -1,0 +1,14 @@
+subject,official_domain,domain_status,source_count,active_source_count,candidate_source_count,last_collection,latest_intelligence,monitoring_status,reason
+Q-BAY（上海）生物医药孵化器,https://www.qianrenwuye.com/,SOURCE_DOMAIN_CONFIRMED,1,1,0,2026-08-28T09:49:34,33,COVERED_ACTIVE,已有验证通过且绑定Canonical Organization的ACTIVE Source
+Q-BAY赫利克斯菁英俱乐部,,MANUAL_DOMAIN_REQUIRED,0,0,0,,,MANUAL_DOMAIN_REQUIRED,无Canonical官网或官方链接证据
+杭州钱塘区和达高科相关平台,,ENTITY_DATA_INCOMPLETE,0,0,0,,,NOT_MONITORABLE,名称是相关平台泛称需先治理主体
+上市公司俱乐部,,ENTITY_DATA_INCOMPLETE,0,0,0,,,NOT_MONITORABLE,名称不唯一无法可靠解析官网
+上市公司俱乐部创投分会,,ENTITY_DATA_INCOMPLETE,0,0,0,,,NOT_MONITORABLE,分会名称无唯一正式主体依据
+世界顶尖科学家国际联合科学实验室（WLA Labs）相关历史网络,,ENTITY_DATA_INCOMPLETE,0,0,0,,,NOT_MONITORABLE,当前记录是历史网络描述
+并就相关话题受邀深圳中欧创新实验室、华创证券、丹纳赫行业交流、长三角创新中心,,ENTITY_DATA_INCOMPLETE,0,0,0,,,NOT_MONITORABLE,履历句子被误抽为Organization
+某细胞治疗生物科技公司,,ENTITY_DATA_INCOMPLETE,0,0,0,,,NOT_MONITORABLE,匿名主体禁止反推官网
+陈绵辉,,NOT_APPLICABLE,0,0,0,,,NOT_MONITORABLE,Person不采用企业官网Source监测
+陶伟龙,,NOT_APPLICABLE,0,0,0,,,NOT_MONITORABLE,Person不采用企业官网Source监测
+Admin,,NOT_APPLICABLE,0,0,0,,,NOT_MONITORABLE,系统角色不是公开监测主体
+许毛毛,,NOT_APPLICABLE,0,0,0,,,NOT_MONITORABLE,Person不采用企业官网Source监测
+链接官群体,,ENTITY_DATA_INCOMPLETE,0,0,0,,,NOT_MONITORABLE,群体角色不是可绑定官网的主体
