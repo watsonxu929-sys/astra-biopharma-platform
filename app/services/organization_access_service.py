@@ -113,6 +113,10 @@ def _organization_select(where_sql: str = "", order_sql: str = "ORDER BY o.id DE
             o.description,
             o.region,
             o.industry_tags,
+            o.resources,
+            o.needs,
+            o.visibility,
+            o.verification_status,
             o.created_at,
             o.updated_at,
             o.disabled_at,
@@ -145,6 +149,10 @@ def _summary(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
         "unified_social_credit_code": item.get("unified_social_credit_code"),
         "region": item.get("region"),
         "industry_tags": item.get("industry_tags"),
+        "resources": item.get("resources"),
+        "needs": item.get("needs"),
+        "visibility": item.get("visibility"),
+        "verification_status": item.get("verification_status"),
         "is_primary": bool(item.get("is_primary")),
         "link_status": item.get("link_status"),
         "joined_at": item.get("joined_at"),
@@ -299,7 +307,11 @@ def create_organization(payload: dict[str, Any], actor: dict[str, Any] | None = 
 
 
 def update_organization(organization_id: int, payload: dict[str, Any], actor: dict[str, Any] | None = None, db_path: str | Path | None = None) -> dict[str, Any]:
-    allowed = {"name", "short_name", "organization_type", "unified_social_credit_code", "status", "source", "description"}
+    allowed = {
+        "name", "short_name", "organization_type", "unified_social_credit_code", "status",
+        "source", "description", "region", "industry_tags", "resources", "needs",
+        "visibility", "verification_status",
+    }
     updates = {k: v for k, v in payload.items() if k in allowed}
     if not updates:
         raise OrganizationAccessError(422, "INVALID_ARGUMENT", "没有可更新字段")
@@ -317,7 +329,11 @@ def update_organization(organization_id: int, payload: dict[str, Any], actor: di
         if "name" in updates:
             sets.extend(["name=?", "standard_name=?"])
             values.extend([str(updates["name"]).strip(), str(updates["name"]).strip()])
-        for key in ["short_name", "organization_type", "unified_social_credit_code", "status", "source", "description"]:
+        for key in [
+            "short_name", "organization_type", "unified_social_credit_code", "status", "source",
+            "description", "region", "industry_tags", "resources", "needs", "visibility",
+            "verification_status",
+        ]:
             if key in updates:
                 sets.append(f"{key}=?")
                 values.append(str(updates[key]).strip() or None)
@@ -329,6 +345,7 @@ def update_organization(organization_id: int, payload: dict[str, Any], actor: di
                     values.append(1 if updates[key] == "active" else 0)
                     sets.append("disabled_at=?")
                     values.append(now_iso() if updates[key] != "active" else None)
+        sets.append("manually_confirmed=1")
         sets.append("updated_at=?")
         values.append(now_iso())
         values.append(organization_id)

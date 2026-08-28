@@ -169,10 +169,10 @@ def discover_organization_sources(request: Request, entity_id: str):
     elif context["active_sources"]:
         homepage = str(context["active_sources"][0]["url"])
     if not homepage:
-        for evidence_url in context["evidence_urls"]:
+        for evidence in context["website_evidence"]:
             proposal = propose_official_domain_candidate(
-                entity["resolved_id"], entity["canonical_label"], evidence_url,
-                "Canonical档案或已关联情报中的公开链接", current_username(request),
+                entity["resolved_id"], entity["canonical_label"], evidence["url"],
+                evidence["basis"], current_username(request),
             )
             if proposal.get("validation", {}).get("ok"):
                 return RedirectResponse(

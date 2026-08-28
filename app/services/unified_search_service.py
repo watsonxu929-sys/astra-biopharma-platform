@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, text
 from sqlalchemy.orm import Session
 
 from app.models import Organization, Person
@@ -21,7 +21,22 @@ class UnifiedSearchService:
         people = list(self.db.scalars(select(Person).where(Person.is_active == True, Person.name.contains(term)).limit(limit)).all())
         if people:
             groups.append({"type": "people", "label": "产业人物", "items": [{"canonical_id": f"person:{p.id}", "id": p.id, "title": p.name, "summary": f"{p.public_role or ''} | {p.organization_network or ''}", "url": f"/network/people/{p.id}"} for p in people]})
-        orgs = list(self.db.scalars(select(Organization).where(Organization.is_active == True, Organization.standard_name.contains(term)).limit(limit)).all())
+        alias_ids = list(self.db.execute(
+            text("""SELECT DISTINCT entity_id FROM p3_entity_aliases
+                    WHERE entity_type='organization' AND review_status='approved'
+                      AND normalized_alias LIKE :term"""),
+            {"term": f"%{''.join(term.lower().split())}%"},
+        ).scalars())
+        orgs = list(self.db.scalars(
+            select(Organization).where(
+                Organization.is_active == True,
+                or_(
+                    Organization.standard_name.contains(term),
+                    Organization.short_name.contains(term),
+                    Organization.external_id.in_(alias_ids) if alias_ids else False,
+                ),
+            ).limit(limit)
+        ).all())
         if orgs:
             groups.append({"type": "organizations", "label": "机构", "items": [{"canonical_id": f"organization:{o.id}", "id": o.id, "title": o.standard_name, "summary": f"{o.org_type or ''} | {o.region or ''}", "url": f"/organizations/{o.id}"} for o in orgs]})
         intel = list(self.db.scalars(select(IntelligenceItem).where(IntelligenceItem.status == "published", or_(IntelligenceItem.title.contains(term), IntelligenceItem.summary.contains(term))).limit(limit)).all())

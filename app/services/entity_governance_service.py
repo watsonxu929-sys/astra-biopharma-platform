@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from app.core.similarity import similarity_ratio
 from app.settings import resolved_db_path
 from app.v04c_review import db_connection
 
@@ -34,6 +35,51 @@ def normalize_identifier(kind: str, value: str) -> str:
         value = re.sub(r"^https?://", "", value).split("/", 1)[0].removeprefix("www.")
     return re.sub(r"\s+", "", value)
 
+
+def classify_identity(
+    entity_type: str, label: str, *, verification_status: str = "", has_monitoring_seed: bool = False,
+) -> dict[str, str]:
+    """Return a deterministic governance status without changing canonical master data."""
+    name = str(label or "").strip()
+    if entity_type == "person" and name in {"Admin", "链接官群体"}:
+        return {"status": "WRONG_ENTITY", "reason": "系统角色或群体角色不应作为自然人主体"}
+    if "并就相关话题受邀" in name:
+        return {"status": "WRONG_ENTITY", "reason": "履历句子被错误抽取为Organization"}
+    if re.search(r"(?:^某|未知|待补充|临时|主体信息待补充)", name):
+        return {"status": "INSUFFICIENT_DATA", "reason": "占位或匿名主体，无法确认正式身份"}
+    if any(token in name for token in ("相关平台", "相关历史网络")):
+        return {"status": "IDENTITY_AMBIGUOUS", "reason": "当前名称描述业务网络而非唯一法定主体"}
+    if name in {"上市公司俱乐部", "上市公司俱乐部创投分会"}:
+        return {"status": "IDENTITY_AMBIGUOUS", "reason": "名称无法唯一识别运营法人或正式机构"}
+    if entity_type == "organization" and has_monitoring_seed and "已确认" in verification_status:
+        return {"status": "IDENTITY_CONFIRMED", "reason": "正式名称已核验且存在确认监测入口"}
+    return {"status": "IDENTITY_PARTIAL", "reason": "主体有Canonical业务依据，但法定名称、别名或官网仍需管理员补全"}
+
+
+def organization_duplicate_candidates(
+    organization_id: str, db_path: str | Path | None = None, *, threshold: float = .72,
+) -> list[dict[str, Any]]:
+    """Read-only duplicate hints; never merge or create resolution records."""
+    path = Path(db_path) if db_path else resolved_db_path()
+    with db_connection(path) as conn:
+        target = _entity_row(conn, "organization", organization_id)
+        if not target:
+            raise ValueError("organization_not_found")
+        target_names = [str(target.get("canonical_label") or "")]
+        target_names.extend(str(row[0]) for row in conn.execute(
+            "SELECT alias FROM p3_entity_aliases WHERE entity_type='organization' AND entity_id=? AND review_status='approved'",
+            (organization_id,),
+        ))
+        rows = conn.execute(
+            "SELECT external_id,COALESCE(NULLIF(name,''),standard_name) AS label FROM organizations WHERE external_id<>? AND COALESCE(is_active,1)=1",
+            (organization_id,),
+        ).fetchall()
+    candidates = []
+    for row in rows:
+        score = max(similarity_ratio(normalize_name(name), normalize_name(str(row["label"]))) for name in target_names)
+        if score >= threshold:
+            candidates.append({"external_id": row["external_id"], "label": row["label"], "score": round(score * 100)})
+    return sorted(candidates, key=lambda item: (-item["score"], item["label"]))[:5]
 
 def _permissions(permissions: set[str] | None, required: str) -> None:
     if required not in (permissions or set()) and "manage_users" not in (permissions or set()):
@@ -122,10 +168,19 @@ class EntityRegistryService:
             entity_id = _active_redirect(conn, entity_type, entity_id) or entity_id
             if not _entity_row(conn, entity_type, entity_id):
                 raise ValueError("entity_not_found")
+            normalized = normalize_name(alias)
+            existing = conn.execute(
+                "SELECT * FROM p3_entity_aliases WHERE entity_type=? AND normalized_alias=? AND review_status='approved' ORDER BY id",
+                (entity_type, normalized),
+            ).fetchall()
+            if any(str(row["entity_id"]) != entity_id for row in existing):
+                raise ValueError("alias_conflict_with_other_entity")
+            if existing:
+                return dict(existing[0])
             cur = conn.execute(
                 """INSERT INTO p3_entity_aliases(entity_type,entity_id,alias,alias_type,normalized_alias,source,evidence_snapshot_id,review_status,is_pilot,pilot_batch_id,created_by,reviewed_by,reviewed_at,created_at,updated_at)
                    VALUES (?,?,?,?,?,?,?,'approved',?,?,?,?,?,?,?)""",
-                (entity_type, entity_id, alias.strip(), alias_type, normalize_name(alias), source,
+                (entity_type, entity_id, alias.strip(), alias_type, normalized, source,
                  evidence_snapshot_id, int(is_pilot), pilot_batch_id, actor, actor, ts, ts, ts),
             )
             return dict(conn.execute("SELECT * FROM p3_entity_aliases WHERE id=?", (cur.lastrowid,)).fetchone())

@@ -1,160 +1,81 @@
 {% extends "platform/base.html" %}
 {% block platform_breadcrumb %}
-<nav class="breadcrumb">
-  <a href="/platform">工作台</a>
-  <span class="sep">/</span>
-  <a href="/admin/platform">管理中心</a>
-  <span class="sep">/</span>
-  <span>机构库</span>
-</nav>
+<nav class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/admin/platform">管理中心</a><span class="sep">/</span><span>机构库</span></nav>
 {% endblock %}
 {% block platform_title %}机构库管理{% endblock %}
 {% block platform_page_header %}
 <div class="page-header">
   <div class="page-header-left">
-    <h1 class="page-title">机构库</h1>
-    <p class="page-desc">复用 organizations 主表，维护机构、关联人物和业务资料。</p>
+    <h1 class="page-title">{{ '官网批量补全' if website_import else ('机构主数据' if org else '机构库') }}</h1>
+    <p class="page-desc">复用 Canonical Organization、别名和公开标识，补全重点主体身份与监测种子；任何候选均需管理员确认。</p>
   </div>
   <div class="page-header-right">
-    <a class="btn btn-primary" href="/admin/organizations/new">+ 新增机构</a>
+    {% if not website_import and not org %}<a class="btn btn-primary" href="/admin/organizations/new">+ 新增机构</a>{% endif %}
+    <a class="btn btn-outline" href="/admin/organizations/website-import">官网批量补全</a>
     <a class="btn btn-outline" href="/admin/platform">返回管理中心</a>
   </div>
 </div>
 {% endblock %}
 {% block platform_content %}
-{# 筛选栏 #}
-<section class="filter-bar">
-  <form method="get" action="/admin/organizations" class="filter-form">
-    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索机构名称、地区、标签…" class="filter-input">
-    <select name="org_type" class="filter-select">
-      <option value="">全部类型</option>
-      <option value="企业" {% if filter_type=='企业' %}selected{% endif %}>企业</option>
-      <option value="高校" {% if filter_type=='高校' %}selected{% endif %}>高校</option>
-      <option value="科研院所" {% if filter_type=='科研院所' %}selected{% endif %}>科研院所</option>
-      <option value="医院" {% if filter_type=='医院' %}selected{% endif %}>医院</option>
-      <option value="投资机构" {% if filter_type=='投资机构' %}selected{% endif %}>投资机构</option>
-      <option value="政府部门" {% if filter_type=='政府部门' %}selected{% endif %}>政府部门</option>
-    </select>
-    <select name="status" class="filter-select">
-      <option value="">全部状态</option>
-      <option value="active" {% if filter_status=='active' %}selected{% endif %}>启用</option>
-      <option value="inactive" {% if filter_status=='inactive' %}selected{% endif %}>停用</option>
-    </select>
-    <button class="btn btn-sm" type="submit">筛选</button>
-    {% if q or filter_type or filter_status %}
-    <a class="btn btn-sm btn-outline" href="/admin/organizations">清除</a>
-    {% endif %}
+{% if request.query_params.get('message') %}<div class="success-box">{{ request.query_params.get('message') }}</div>{% endif %}
+{% if request.query_params.get('error') %}<div class="warning-box">{{ request.query_params.get('error') }}</div>{% endif %}
+
+{% if website_import %}
+<section class="form-section">
+  <h2>安全导入官网</h2>
+  <p class="text-muted">CSV列为 organization_id,website 或 organization_name,website。先预览实体匹配与冲突，再由管理员确认保存；最多100行。</p>
+  <form method="post" action="/admin/organizations/website-import/preview" enctype="multipart/form-data" class="platform-form">
+    <div class="form-group"><label class="form-label">CSV文件</label><input class="form-input" type="file" name="file" accept=".csv,text/csv"></div>
+    <div class="form-group form-full"><label class="form-label">或粘贴CSV</label><textarea class="form-textarea" name="source_text" rows="7" placeholder="organization_name,website&#10;示例机构,https://example.org/">{{ source_text or '' }}</textarea></div>
+    <button class="btn btn-primary" type="submit">预览匹配</button>
   </form>
 </section>
-
-{# 机构列表 #}
-<section class="data-table-section">
-  <div class="table-header">
-    <span class="table-count">共 <strong>{{ orgs|length }}</strong> 条</span>
-  </div>
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>机构名称</th>
-        <th>简称</th>
-        <th>类型</th>
-        <th>地区</th>
-        <th>关联人物</th>
-        <th>状态</th>
-        <th>更新时间</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in orgs %}
-      <tr>
-        <td><a class="link" href="/admin/organizations/{{ item.org.id }}">{{ item.org.standard_name }}</a></td>
-        <td>{{ item.org.common_name or '' }}</td>
-        <td>{{ item.org.org_type or '' }}</td>
-        <td>{{ item.org.region or '' }}</td>
-        <td>{{ item.people_count or 0 }}</td>
-        <td><span class="badge {% if item.org.is_active %}badge-active{% else %}badge-inactive{% endif %}">{{ '启用' if item.org.is_active else '停用' }}</span></td>
-        <td class="text-muted">{{ item.org.updated_at.strftime('%Y-%m-%d') if item.org.updated_at else '' }}</td>
-        <td class="table-actions">
-          <a class="action-link" href="/admin/organizations/{{ item.org.id }}">编辑</a>
-          <a class="action-link" href="/network/organizations?q={{ item.org.standard_name }}">前台查看</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="8" class="empty-state">
-          <div class="empty-icon">🏢</div>
-          <p>暂无机构数据</p>
-          <a class="btn btn-sm" href="/admin/organizations/new">新增机构</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
-
-{# 编辑/新增表单（弹窗或独立页） #}
-{% if show_form %}
-<section class="form-section mt-16">
-  <h2>{{ '编辑机构' if org else '新增机构' }}</h2>
-  <form method="post" action="{{ '/admin/organizations/' ~ org.id ~ '/update' if org else '/admin/organizations' }}" class="platform-form">
-    <div class="form-grid">
-      <div class="form-group">
-        <label class="form-label required">机构名称</label>
-        <input class="form-input" name="standard_name" required value="{{ org.standard_name if org else '' }}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">简称</label>
-        <input class="form-input" name="common_name" value="{{ org.common_name if org else '' }}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">类型</label>
-        <input class="form-input" name="org_type" value="{{ org.org_type if org else '' }}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">地区</label>
-        <input class="form-input" name="region" value="{{ org.region if org else '' }}">
-      </div>
-      <div class="form-group form-full">
-        <label class="form-label">产业标签</label>
-        <input class="form-input" name="industry_tags" value="{{ org.industry_tags if org else '' }}" placeholder="逗号分隔">
-      </div>
-      <div class="form-group form-full">
-        <label class="form-label">资源</label>
-        <textarea class="form-textarea" name="resources">{{ org.resources if org else '' }}</textarea>
-      </div>
-      <div class="form-group form-full">
-        <label class="form-label">需求</label>
-        <textarea class="form-textarea" name="needs">{{ org.needs if org else '' }}</textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">可见性</label>
-        <input class="form-input" name="visibility" value="{{ org.visibility if org else '内部' }}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">核验状态</label>
-        <input class="form-input" name="verification_status" value="{{ org.verification_status if org else '待核验' }}">
-      </div>
-    </div>
-    <div class="form-actions">
-      <label class="form-checkbox"><input type="checkbox" name="is_active" value="1" {% if not org or org.is_active %}checked{% endif %}> 启用</label>
-      <button class="btn btn-primary" type="submit">保存机构</button>
-      {% if org %}<a class="btn btn-outline" href="/admin/organizations">取消</a>{% endif %}
-    </div>
-  </form>
+{% if website_preview %}
+<section class="data-table-section mt-16"><h2>预览结果</h2>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>输入主体</th><th>匹配主体</th><th>官网</th><th>结果</th></tr></thead><tbody>
+    {% for row in website_preview %}<tr><td>{{ row.reference }}</td><td>{{ row.organization_name or '—' }}</td><td>{{ row.website }}</td><td><span class="badge">{{ {'READY':'可保存','EXISTS':'已存在','INVALID_URL':'URL无效','NOT_FOUND':'未匹配','AMBIGUOUS':'存在歧义'}.get(row.status,row.status) }}</span></td></tr>{% endfor %}
+  </tbody></table></div>
+  <form method="post" action="/admin/organizations/website-import/confirm"><textarea name="source_text" hidden>{{ source_text }}</textarea><button class="btn btn-primary" type="submit">确认保存可导入项</button><a class="btn btn-outline" href="/admin/organizations/website-import">取消</a></form>
 </section>
 {% endif %}
 
+{% elif not show_form %}
+<section class="filter-bar"><form method="get" action="/admin/organizations" class="filter-form">
+  <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索正式名称、简称、地区、标签…" class="filter-input">
+  <label class="form-checkbox"><input type="checkbox" name="priority" value="1" {% if priority_filter %}checked{% endif %}> 只看Priority Subject</label>
+  <button class="btn btn-sm" type="submit">筛选</button>{% if q or priority_filter %}<a class="btn btn-sm btn-outline" href="/admin/organizations">清除</a>{% endif %}
+</form></section>
+<section class="dashboard-card"><strong>重点主体资料待补全：{{ incomplete_count }}</strong><span class="text-muted">仅统计当前筛选结果；不会自动覆盖、合并或激活来源。</span></section>
+<section class="data-table-section"><div class="table-header"><span class="table-count">共 <strong>{{ orgs|length }}</strong> 条</span></div>
+<div class="table-wrap"><table class="data-table"><thead><tr><th>机构名称</th><th>简称</th><th>优先级</th><th>身份状态</th><th>地区</th><th>关联人物</th><th>操作</th></tr></thead><tbody>
+{% for item in orgs %}<tr><td><a class="link" href="/admin/organizations/{{ item.org.id }}">{{ item.org.standard_name }}</a></td><td>{{ item.org.short_name or '—' }}</td><td>{{ item.priority.priority or '—' }}</td><td><span class="badge">{{ item.identity.status }}</span><div class="text-muted">{{ item.identity.reason }}</div></td><td>{{ item.org.region or '—' }}</td><td>{{ item.people_count }}</td><td class="table-actions"><a class="action-link" href="/admin/organizations/{{ item.org.id }}">补全</a><a class="action-link" href="/network/entities/organization/{{ item.org.external_id }}">监测与关系</a></td></tr>
+{% else %}<tr><td colspan="7" class="empty-state">暂无符合条件的机构</td></tr>{% endfor %}
+</tbody></table></div></section>
+
+{% else %}
+<section class="form-section"><h2>{{ '编辑机构主数据' if org else '新增机构' }}</h2>
+{% if org %}<div class="dashboard-card"><p><strong>Priority：</strong>{{ priority_info.priority or '非Priority Subject' }}{% if priority_info.reason %} · {{ priority_info.reason }}{% endif %}</p><p><strong>身份状态：</strong>{{ identity.status }} · {{ identity.reason }}</p><p><strong>监测状态：</strong>{{ {'COVERED_ACTIVE':'已建立官方监测','COVERED_CANDIDATE':'已有候选来源','MANUAL_DOMAIN_REQUIRED':'需要人工确认官网'}.get(monitoring.monitoring_status, monitoring.monitoring_status) }}</p></div>{% endif %}
+<form method="post" action="{{ '/admin/organizations/' ~ org.id ~ '/update' if org else '/admin/organizations' }}" class="platform-form"><div class="form-grid">
+<div class="form-group"><label class="form-label required">正式名称</label><input class="form-input" name="standard_name" required value="{{ org.standard_name if org else '' }}"></div>
+<div class="form-group"><label class="form-label">正式简称</label><input class="form-input" name="short_name" value="{{ org.short_name if org else '' }}"></div>
+<div class="form-group"><label class="form-label">类型</label><input class="form-input" name="org_type" value="{{ org.org_type if org else '' }}"></div>
+<div class="form-group"><label class="form-label">地区</label><input class="form-input" name="region" value="{{ org.region if org else '' }}"></div>
+<div class="form-group form-full"><label class="form-label">产业标签</label><input class="form-input" name="industry_tags" value="{{ org.industry_tags if org else '' }}"></div>
+<div class="form-group form-full"><label class="form-label">资源</label><textarea class="form-textarea" name="resources">{{ org.resources if org else '' }}</textarea></div>
+<div class="form-group form-full"><label class="form-label">需求</label><textarea class="form-textarea" name="needs">{{ org.needs if org else '' }}</textarea></div>
+<div class="form-group"><label class="form-label">可见性</label><input class="form-input" name="visibility" value="{{ org.visibility if org else '内部' }}"></div>
+<div class="form-group"><label class="form-label">核验状态</label><input class="form-input" name="verification_status" value="{{ org.verification_status if org else '待核验' }}"></div>
+{% if org %}<div class="form-group form-full"><label class="form-label">管理员确认官网</label><input class="form-input" name="official_website" type="url" value="{{ monitoring.official_domain.identifier_value if monitoring.official_domain else '' }}" placeholder="仅填写已核对的官方网站"></div>
+<div class="form-group"><label class="form-label">新增别名</label><input class="form-input" name="new_alias" placeholder="中文简称、英文名或品牌名"></div>
+<div class="form-group"><label class="form-label">别名类型</label><select class="form-input" name="alias_type"><option value="short_name">简称</option><option value="english_name">英文名</option><option value="brand_name">品牌名</option><option value="former_name">历史名称</option></select></div>{% endif %}
+</div><div class="form-actions"><label class="form-checkbox"><input type="checkbox" name="is_active" value="1" {% if not org or org.is_active %}checked{% endif %}> 启用</label><button class="btn btn-primary" type="submit">保存机构主数据</button><a class="btn btn-outline" href="/admin/organizations">取消</a></div></form></section>
 {% if org %}
-<section class="detail-section mt-16">
-  <h2>关联人物</h2>
-  <ul class="link-list">
-    {% for p in related_people %}
-    <li><a class="link" href="/admin/people/{{ p.id }}">{{ p.name }}</a> {{ p.public_role or '' }}</li>
-    {% else %}
-    <li class="empty">暂无明确关联人物</li>
-    {% endfor %}
-  </ul>
-</section>
+<section class="detail-section mt-16"><h2>别名与官网证据</h2><p><strong>已确认别名：</strong>{% for alias in entity.aliases %}{{ alias.alias }}（{{ alias.alias_type }}）{% if not loop.last %}、{% endif %}{% else %}暂无{% endfor %}</p>
+{% if monitoring.domain_candidate %}<div class="warning-box">候选官网：{{ monitoring.domain_candidate.identifier_value }}。候选不会自动写入，请到监测页人工确认。</div>{% endif %}
+{% if monitoring.website_evidence %}<ul class="link-list">{% for evidence in monitoring.website_evidence %}<li>{{ evidence.basis }}：<a href="{{ evidence.url }}" target="_blank" rel="noopener">{{ evidence.url }}</a></li>{% endfor %}</ul>{% else %}<p class="text-muted">现有Canonical数据中没有官网候选证据。</p>{% endif %}
+<p><a class="btn btn-primary" href="/network/entities/organization/{{ org.external_id }}">进入监测、候选确认与Source Discovery</a></p></section>
+<section class="detail-section mt-16"><h2>可能重复（只提示，不自动合并）</h2><ul class="link-list">{% for item in duplicate_candidates %}<li>{{ item.label }} · 相似度 {{ item.score }}%</li>{% else %}<li class="empty">未发现高相似候选</li>{% endfor %}</ul></section>
+<section class="detail-section mt-16"><h2>关联人物</h2><ul class="link-list">{% for p in related_people %}<li><a class="link" href="/admin/people/{{ p.id }}">{{ p.name }}</a> {{ p.public_role or '' }}</li>{% else %}<li class="empty">暂无明确关联人物</li>{% endfor %}</ul></section>
+{% endif %}
 {% endif %}
 {% endblock %}

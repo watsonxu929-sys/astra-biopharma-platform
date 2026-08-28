@@ -19,6 +19,7 @@ class Organization(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     external_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     standard_name: Mapped[str] = mapped_column(String(300), index=True)
+    short_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     org_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     region: Mapped[str | None] = mapped_column(String(200), nullable=True)
     industry_tags: Mapped[str | None] = mapped_column(Text, nullable=True)

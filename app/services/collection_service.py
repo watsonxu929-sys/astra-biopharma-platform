@@ -845,6 +845,118 @@ def review_official_domain_candidate(
         ).fetchone())
 
 
+def set_admin_confirmed_official_domain(
+    organization_id: str, url: str, actor: str, *, evidence: str = "管理员主数据",
+    db_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Persist an administrator-confirmed website in the existing identifier table."""
+    root = _domain_root(url)
+    if not root:
+        raise ValueError("INVALID_URL")
+    if _is_third_party_domain(root):
+        raise ValueError("THIRD_PARTY_DOMAIN")
+    normalized = (urlparse(root).hostname or "").lower().removeprefix("www.")
+    with db_connection(db_path) as conn:
+        if not conn.execute("SELECT 1 FROM organizations WHERE external_id=?", (organization_id,)).fetchone():
+            raise ValueError("organization_not_found")
+        conflict = conn.execute(
+            """SELECT entity_id FROM p3_entity_external_identifiers
+               WHERE entity_type='organization' AND identifier_type='official_domain'
+                 AND normalized_value=? AND review_status='approved' AND entity_id<>? LIMIT 1""",
+            (normalized, organization_id),
+        ).fetchone()
+        if conflict:
+            raise ValueError("official_domain_conflict")
+        existing = conn.execute(
+            """SELECT * FROM p3_entity_external_identifiers
+               WHERE entity_type='organization' AND entity_id=? AND identifier_type='official_domain'
+                 AND normalized_value=? AND review_status='approved' ORDER BY id DESC LIMIT 1""",
+            (organization_id, normalized),
+        ).fetchone()
+        if existing:
+            return dict(existing)
+        stamp = now()
+        conn.execute(
+            """UPDATE p3_entity_external_identifiers SET review_status='rejected',reviewed_by=?,reviewed_at=?,updated_at=?
+               WHERE entity_type='organization' AND entity_id=? AND identifier_type='official_domain' AND review_status='approved'""",
+            (actor, stamp, stamp, organization_id),
+        )
+        cur = conn.execute(
+            """INSERT INTO p3_entity_external_identifiers(
+               entity_type,entity_id,identifier_type,identifier_value,normalized_value,authority,
+               source,source_url,review_status,is_sensitive,is_pilot,created_by,reviewed_by,reviewed_at,created_at,updated_at
+               ) VALUES ('organization',?,'official_domain',?,?,?,?,?,'approved',0,0,?,?,?,?,?)""",
+            (organization_id, root, normalized, evidence, "管理员确认", root, actor, actor, stamp, stamp, stamp),
+        )
+        return dict(conn.execute("SELECT * FROM p3_entity_external_identifiers WHERE id=?", (cur.lastrowid,)).fetchone())
+
+
+def preview_website_import(text_value: str, db_path: str | Path | None = None) -> list[dict[str, Any]]:
+    raw = str(text_value or "").strip()
+    if not raw:
+        return []
+    rows = list(csv.DictReader(io.StringIO(raw)))
+    if len(rows) > 100:
+        raise ValueError("IMPORT_LIMIT_EXCEEDED")
+    preview = []
+    with db_connection(db_path) as conn:
+        organizations = [dict(row) for row in conn.execute(
+            "SELECT id,external_id,COALESCE(NULLIF(name,''),standard_name) AS name,short_name FROM organizations WHERE COALESCE(is_active,1)=1"
+        )]
+        aliases = [dict(row) for row in conn.execute(
+            "SELECT entity_id,alias FROM p3_entity_aliases WHERE entity_type='organization' AND review_status='approved'"
+        )]
+        for row in rows:
+            reference = str(row.get("organization_id") or row.get("organization_name") or "").strip()
+            website = str(row.get("website") or "").strip()
+            root = _domain_root(website)
+            matches = []
+            if reference:
+                key = _brand_key(reference)
+                matches = [item for item in organizations if reference in {str(item["id"]), item["external_id"]} or key in {_brand_key(item["name"]), _brand_key(item.get("short_name") or "")}]
+                alias_ids = {item["entity_id"] for item in aliases if _brand_key(item["alias"]) == key}
+                matches.extend(item for item in organizations if item["external_id"] in alias_ids and item not in matches)
+            status = "READY"
+            if not root or _is_third_party_domain(root):
+                status = "INVALID_URL"
+            elif not matches:
+                status = "NOT_FOUND"
+            elif len(matches) > 1:
+                status = "AMBIGUOUS"
+            else:
+                normalized = (urlparse(root).hostname or "").lower().removeprefix("www.")
+                same = conn.execute(
+                    """SELECT entity_id FROM p3_entity_external_identifiers WHERE entity_type='organization'
+                       AND identifier_type='official_domain' AND normalized_value=? AND review_status='approved'""",
+                    (normalized,),
+                ).fetchall()
+                if any(str(item[0]) != matches[0]["external_id"] for item in same):
+                    status = "AMBIGUOUS"
+                elif same:
+                    status = "EXISTS"
+            match = matches[0] if len(matches) == 1 else None
+            preview.append({"reference": reference, "website": root or website, "status": status,
+                            "organization_id": match["external_id"] if match else "",
+                            "organization_name": match["name"] if match else "",
+                            "match_count": len(matches)})
+    return preview
+
+
+def save_website_import(
+    text_value: str, actor: str, db_path: str | Path | None = None,
+) -> dict[str, int]:
+    preview = preview_website_import(text_value, db_path)
+    counts = {"saved": 0, "exists": 0, "skipped": 0}
+    for row in preview:
+        if row["status"] == "READY":
+            set_admin_confirmed_official_domain(row["organization_id"], row["website"], actor, evidence="管理员CSV确认", db_path=db_path)
+            counts["saved"] += 1
+        elif row["status"] == "EXISTS":
+            counts["exists"] += 1
+        else:
+            counts["skipped"] += 1
+    return counts
+
 def organization_monitoring_context(
     organization_id: str, db_path: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -874,12 +986,22 @@ def organization_monitoring_context(
                WHERE l.subject_type='organization' AND l.subject_id=? ORDER BY i.id DESC LIMIT 1""",
             (int(organization["id"]),),
         ).fetchone()
-        evidence_urls = [str(organization["source_url"])] if organization["source_url"] else []
-        evidence_urls.extend(str(row[0]) for row in conn.execute(
+        website_evidence = []
+        if organization["source_url"]:
+            website_evidence.append({"url": str(organization["source_url"]), "basis": "Organization档案"})
+        website_evidence.extend({"url": str(row[0]), "basis": "已关联情报"} for row in conn.execute(
             """SELECT DISTINCT i.source_url FROM core_intelligence_subject_links l
                JOIN v06_intelligence_items i ON i.id=l.intelligence_item_id
                WHERE l.subject_type='organization' AND l.subject_id=? AND i.source_url IS NOT NULL""",
             (int(organization["id"]),),
+        ))
+        website_evidence.extend({"url": str(row[0]), "basis": "Canonical Relationship Evidence"} for row in conn.execute(
+            """SELECT DISTINCT e.source_url FROM p3_canonical_relationships r
+               JOIN p3_relationship_evidence e ON e.relationship_id=r.id
+               WHERE ((r.subject_type='organization' AND r.subject_id=?)
+                   OR (r.object_type='organization' AND r.object_id=?))
+                 AND r.review_status='approved' AND e.source_url IS NOT NULL""",
+            (organization_id, organization_id),
         ))
     active = [source for source in sources if source.get("is_enabled")]
     candidates = [source for source in sources if source.get("health_status") == "candidate"]
@@ -889,7 +1011,9 @@ def organization_monitoring_context(
     return {
         "organization": dict(organization), "sources": sources, "active_sources": active,
         "candidate_sources": candidates, "official_domain": approved_domain,
-        "domain_candidate": pending_domain, "evidence_urls": list(dict.fromkeys(evidence_urls)),
+        "domain_candidate": pending_domain,
+        "website_evidence": list({item["url"]: item for item in website_evidence}.values()),
+        "evidence_urls": list(dict.fromkeys(item["url"] for item in website_evidence)),
         "monitoring_status": status,
         "last_collection": max((str(source.get("last_success_at") or "") for source in sources), default=""),
         "latest_intelligence": dict(latest_intelligence) if latest_intelligence else None,

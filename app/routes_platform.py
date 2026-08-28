@@ -19,6 +19,14 @@ from app.services.intelligence_product_service import IntelligenceProductService
 from app.services.unified_resource_service import UnifiedResourceService
 from app.services.unified_opportunity_service import UnifiedOpportunityService
 from app.services.golden_loop_service import GoldenLoopService
+from app.services.collection_service import (
+    organization_monitoring_context, preview_website_import, save_website_import,
+    set_admin_confirmed_official_domain,
+)
+from app.services.entity_governance_service import (
+    EntityRegistryService, classify_identity, organization_duplicate_candidates,
+)
+from app.services.organization_access_service import OrganizationAccessError, update_organization
 from app.services.platform_service import (
     get_user_person, get_person_full_profile, upsert_person_profile, set_person_tags,
     list_tags, seed_default_tags,
@@ -1091,18 +1099,38 @@ async def admin_update_person(person_id: int, request: Request, db: Session = De
 
 
 @router.get("/admin/organizations", response_class=HTMLResponse)
-def admin_organizations(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+def admin_organizations(request: Request, q: str = Query(""), priority: bool = Query(False), db: Session = Depends(get_db)):
     if not _can_manage_people_orgs(request):
         raise HTTPException(403, "organization admin permission required")
-    stmt = select(Organization).order_by(desc(Organization.created_at))
-    if q:
-        stmt = stmt.where((Organization.standard_name.contains(q)) | (Organization.region.contains(q)) | (Organization.industry_tags.contains(q)))
-    org_rows = list(db.scalars(stmt.limit(100)).all())
-    orgs = []
-    for org in org_rows:
+    stmt = select(Organization).order_by(desc(Organization.created_at)).limit(100)
+    all_rows = list(db.scalars(stmt).all())
+    db_path = Path(str(db.get_bind().url.database))
+    registry = EntityRegistryService(db_path)
+    items = []
+    for org in all_rows:
+        priority_info = GoldenLoopService(db).subject_priority("organization", org.id)
+        if priority and not priority_info.get("is_priority"):
+            continue
+        if q and q not in " ".join(filter(None, [org.standard_name, org.short_name, org.region, org.industry_tags])):
+            continue
+        monitoring = organization_monitoring_context(org.external_id, db_path) if priority_info.get("is_priority") else None
+        identity = classify_identity(
+            "organization", org.standard_name, verification_status=org.verification_status,
+            has_monitoring_seed=bool(monitoring and (monitoring["official_domain"] or monitoring["sources"])),
+        )
         people_count = db.scalar(select(func.count()).select_from(Person).where(Person.organization_network.contains(org.standard_name))) or 0
-        orgs.append({"org": org, "people_count": int(people_count)})
-    return render(request, "platform/admin_organizations.html", orgs=orgs, org=None, related_people=[], q=q)
+        items.append({"org": org, "people_count": int(people_count), "priority": priority_info, "identity": identity})
+    incomplete = sum(1 for item in items if item["priority"].get("is_priority") and item["identity"]["status"] != "IDENTITY_CONFIRMED")
+    return render(request, "platform/admin_organizations.html", orgs=items, org=None, related_people=[], q=q,
+                  priority_filter=priority, incomplete_count=incomplete, show_form=False, website_import=False)
+
+
+@router.get("/admin/organizations/new", response_class=HTMLResponse)
+def admin_new_organization(request: Request):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    return render(request, "platform/admin_organizations.html", orgs=[], org=None, related_people=[], q="",
+                  show_form=True, website_import=False, priority_filter=False, incomplete_count=0)
 
 
 @router.post("/admin/organizations")
@@ -1111,21 +1139,57 @@ async def admin_create_organization(request: Request, db: Session = Depends(get_
         raise HTTPException(403, "organization admin permission required")
     form = await request.form()
     org = Organization(
-        external_id=_next_external_id("ORG"),
-        standard_name=str(form.get("standard_name", "")).strip(),
-        org_type=str(form.get("org_type", "")).strip() or None,
-        region=str(form.get("region", "")).strip() or None,
-        industry_tags=str(form.get("industry_tags", "")).strip() or None,
-        resources=str(form.get("resources", "")).strip() or None,
-        needs=str(form.get("needs", "")).strip() or None,
-        visibility=str(form.get("visibility", "内部")).strip() or "内部",
+        external_id=_next_external_id("ORG"), standard_name=str(form.get("standard_name", "")).strip(),
+        short_name=str(form.get("short_name", "")).strip() or None,
+        org_type=str(form.get("org_type", "")).strip() or None, region=str(form.get("region", "")).strip() or None,
+        industry_tags=str(form.get("industry_tags", "")).strip() or None, resources=str(form.get("resources", "")).strip() or None,
+        needs=str(form.get("needs", "")).strip() or None, visibility=str(form.get("visibility", "内部")).strip() or "内部",
         verification_status=str(form.get("verification_status", "待核验")).strip() or "待核验",
-        manually_confirmed=True,
-        is_active=bool(form.get("is_active")),
+        manually_confirmed=True, is_active=bool(form.get("is_active")),
     )
     db.add(org)
     db.commit()
     return RedirectResponse(f"/admin/organizations/{org.id}", 303)
+
+
+@router.get("/admin/organizations/website-import", response_class=HTMLResponse)
+def admin_organization_website_import(request: Request):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    return render(request, "platform/admin_organizations.html", orgs=[], org=None, related_people=[], q="",
+                  show_form=False, website_import=True, website_preview=[], source_text="",
+                  priority_filter=False, incomplete_count=0)
+
+
+async def _website_csv_text(request: Request) -> str:
+    form = await request.form()
+    upload = form.get("file")
+    if upload and getattr(upload, "read", None) and getattr(upload, "filename", ""):
+        uploaded_text = (await upload.read()).decode("utf-8-sig")
+        if uploaded_text.strip():
+            return uploaded_text
+    return str(form.get("source_text") or "")
+
+
+@router.post("/admin/organizations/website-import/preview", response_class=HTMLResponse)
+async def admin_organization_website_preview(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    source_text = await _website_csv_text(request)
+    preview = preview_website_import(source_text, Path(str(db.get_bind().url.database)))
+    return render(request, "platform/admin_organizations.html", orgs=[], org=None, related_people=[], q="",
+                  show_form=False, website_import=True, website_preview=preview, source_text=source_text,
+                  priority_filter=False, incomplete_count=0)
+
+
+@router.post("/admin/organizations/website-import/confirm")
+async def admin_organization_website_confirm(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    source_text = await _website_csv_text(request)
+    actor = request.scope.get("security_context", {}).get("user", {}).get("username", "admin")
+    result = save_website_import(source_text, actor, Path(str(db.get_bind().url.database)))
+    return RedirectResponse(f"/admin/organizations?priority=1&message=官网已保存{result['saved']}条，跳过{result['skipped']}条", 303)
 
 
 @router.get("/admin/organizations/{org_id:int}", response_class=HTMLResponse)
@@ -1135,10 +1199,17 @@ def admin_organization_detail(org_id: int, request: Request, q: str = Query(""),
     org = db.get(Organization, int(org_id))
     if not org:
         raise HTTPException(404, "organization not found")
+    db_path = Path(str(db.get_bind().url.database))
+    entity = EntityRegistryService(db_path).get("organization", org.external_id)
+    monitoring = organization_monitoring_context(org.external_id, db_path)
+    priority_info = GoldenLoopService(db).subject_priority("organization", org.id)
+    identity = classify_identity("organization", org.standard_name, verification_status=org.verification_status,
+                                 has_monitoring_seed=bool(monitoring["official_domain"] or monitoring["sources"]))
     related_people = list(db.scalars(select(Person).where(Person.organization_network.contains(org.standard_name)).limit(50)).all())
-    org_rows = list(db.scalars(select(Organization).order_by(desc(Organization.created_at)).limit(100)).all())
-    orgs = [{"org": item, "people_count": int(db.scalar(select(func.count()).select_from(Person).where(Person.organization_network.contains(item.standard_name))) or 0)} for item in org_rows]
-    return render(request, "platform/admin_organizations.html", orgs=orgs, org=org, related_people=related_people, q=q)
+    return render(request, "platform/admin_organizations.html", orgs=[], org=org, related_people=related_people, q=q,
+                  entity=entity, monitoring=monitoring, priority_info=priority_info, identity=identity,
+                  duplicate_candidates=organization_duplicate_candidates(org.external_id, db_path), show_form=True,
+                  website_import=False, priority_filter=False, incomplete_count=0)
 
 
 @router.post("/admin/organizations/{org_id:int}/update")
@@ -1149,21 +1220,33 @@ async def admin_update_organization(org_id: int, request: Request, db: Session =
     if not org:
         raise HTTPException(404, "organization not found")
     form = await request.form()
-    org.standard_name = str(form.get("standard_name", org.standard_name)).strip() or org.standard_name
-    org.org_type = str(form.get("org_type", "")).strip() or None
-    org.region = str(form.get("region", "")).strip() or None
-    org.industry_tags = str(form.get("industry_tags", "")).strip() or None
-    org.resources = str(form.get("resources", "")).strip() or None
-    org.needs = str(form.get("needs", "")).strip() or None
-    org.visibility = str(form.get("visibility", org.visibility)).strip() or org.visibility
-    org.verification_status = str(form.get("verification_status", org.verification_status)).strip() or org.verification_status
-    org.is_active = bool(form.get("is_active"))
-    org.manually_confirmed = True
-    if not org.is_active:
-        org.deactivated_at = datetime.now()
-    db.commit()
-    return RedirectResponse(f"/admin/organizations/{org.id}", 303)
-
+    actor_user = request.scope.get("security_context", {}).get("user", {})
+    actor = actor_user.get("username", "admin")
+    db_path = Path(str(db.get_bind().url.database))
+    try:
+        update_organization(org_id, {
+            "name": str(form.get("standard_name", org.standard_name)).strip(),
+            "short_name": str(form.get("short_name", "")).strip(), "organization_type": str(form.get("org_type", "")).strip(),
+            "region": str(form.get("region", "")).strip(), "industry_tags": str(form.get("industry_tags", "")).strip(),
+            "resources": str(form.get("resources", "")).strip(), "needs": str(form.get("needs", "")).strip(),
+            "visibility": str(form.get("visibility", "内部")).strip(),
+            "verification_status": str(form.get("verification_status", "待核验")).strip(),
+            "status": "active" if form.get("is_active") else "inactive",
+        }, actor_user, db_path)
+        alias = str(form.get("new_alias", "")).strip()
+        if alias:
+            EntityRegistryService(db_path).add_alias(
+                "organization", org.external_id, alias,
+                alias_type=str(form.get("alias_type", "brand_name")).strip() or "brand_name",
+                source="管理员主数据", actor=actor, permissions={"review_data"},
+            )
+        website = str(form.get("official_website", "")).strip()
+        if website:
+            set_admin_confirmed_official_domain(org.external_id, website, actor, db_path=db_path)
+    except (OrganizationAccessError, ValueError) as exc:
+        detail = getattr(exc, "message", str(exc))
+        return RedirectResponse(f"/admin/organizations/{org_id}?error={detail}", 303)
+    return RedirectResponse(f"/admin/organizations/{org_id}?message=机构主数据已保存", 303)
 
 @router.get("/admin/intelligence", response_class=HTMLResponse)
 def admin_intelligence(request: Request, db: Session = Depends(get_db)):

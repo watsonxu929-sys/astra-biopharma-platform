@@ -1,22 +1,43 @@
 from __future__ import annotations
 
+import os
+import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from scripts.migrate_db import run_upgrade
-
-
-FORMAL_DATABASE = (Path(__file__).resolve().parents[1] / "data" / "app.db").resolve()
 ROOT = Path(__file__).resolve().parents[1]
+FORMAL_DATABASE = (ROOT / "data" / "app.db").resolve()
 TEST_DATABASE_TEMPLATE = ROOT / "data" / "t1_test.db"
 TEST_SCHEMA_MIGRATIONS = ("006_entity_relationship_network.py", "007_club_operations_mvp.py", "008_business_collaboration_mvp.py")
 
+# Bind module-level engines and services to an OS-temporary formal snapshot before
+# test modules are imported. Individual write tests still use temp_database.
+_SESSION_TEST_ROOT = Path(tempfile.mkdtemp(prefix="biopharma_pytest_session_"))
+_SESSION_TEST_DATABASE = _SESSION_TEST_ROOT / "app_session.db"
+with sqlite3.connect(f"file:{FORMAL_DATABASE.as_posix()}?mode=ro", uri=True) as source:
+    with sqlite3.connect(_SESSION_TEST_DATABASE) as destination:
+        source.backup(destination)
+os.environ.update({
+    "APP_ENV": "testing", "APP_DB_PATH": str(_SESSION_TEST_DATABASE),
+    "DATABASE_URL": f"sqlite:///{_SESSION_TEST_DATABASE.as_posix()}",
+    "ENABLE_SCHEDULER_IN_WEB": "false", "SCHEDULER_ENABLED": "false", "WORKER_ENABLED": "false",
+})
 
+from scripts.migrate_db import run_upgrade
+
+
+def pytest_sessionfinish(session, exitstatus):
+    try:
+        from app.database import engine
+        engine.dispose()
+    finally:
+        shutil.rmtree(_SESSION_TEST_ROOT, ignore_errors=True)
 
 @pytest.fixture
 def temp_db_conn(temp_database: Path) -> sqlite3.Connection:

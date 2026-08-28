@@ -1,0 +1,76 @@
+{
+  "status": "PASS",
+  "browser": "151.0.7922.34",
+  "pages": [
+    {
+      "name": "01_priority_subjects",
+      "path": "/admin/organizations?priority=1",
+      "title": "机构库管理",
+      "overflow": false
+    },
+    {
+      "name": "02_organization_detail",
+      "path": "/admin/organizations/1",
+      "title": "机构库管理",
+      "overflow": false
+    },
+    {
+      "name": "03_monitoring_confirmed",
+      "path": "/network/entities/organization/ORG-20260626-000001",
+      "title": "主体治理与产业关系网络",
+      "overflow": false
+    },
+    {
+      "name": "04_alias_search",
+      "path": "/search?q=R75%20Browser%20Alias",
+      "title": "搜索结果",
+      "overflow": false
+    },
+    {
+      "name": "05_website_import",
+      "path": "/admin/organizations/website-import",
+      "title": "机构库管理",
+      "overflow": false
+    },
+    {
+      "name": "06_source_candidate",
+      "path": "/collection/sources?status=candidate",
+      "title": "信息采集中心",
+      "overflow": false
+    },
+    {
+      "name": "07_qbay_alignment",
+      "path": "/club/members",
+      "title": "会员",
+      "overflow": false
+    },
+    {
+      "name": "08_priority_wide",
+      "path": "/admin/organizations?priority=1",
+      "title": "机构库管理",
+      "overflow": false
+    },
+    {
+      "name": "09_viewer_context",
+      "path": "/network/entities/organization/ORG-20260626-000001",
+      "title": "主体治理与产业关系网络",
+      "overflow": false
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "network_failures": [],
+  "http_errors": [],
+  "overflow": [],
+  "viewer_write_status": 403,
+  "flow": [
+    "Priority Subject列表与身份状态可见",
+    "管理员确认既有证据官网候选",
+    "候选Source保持未启用",
+    "管理员补全简称和别名",
+    "品牌别名统一搜索命中Canonical Organization",
+    "CSV预览后确认保存",
+    "Q-BAY复用同一Organization",
+    "viewer关键写入口后端403"
+  ]
+}
