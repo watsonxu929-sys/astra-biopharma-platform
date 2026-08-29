@@ -1,0 +1,65 @@
+level_1_nav,level_2_entry,route,page_or_tab,target_user,current_role,actual_data_source,actual_main_action,business_question_answered,golden_path_relevance,independent_value,current_problem,target_role,decision,destination_if_merged,ui_priority,rc1_2b_scope,reason
+工作台,工作台首页,/platform,工作台,普通产业运营用户,USER_PRODUCT,"GoldenLoopService.priority_feed; v06_follow_ups; v05h_intelligence_feedback",打开最高优先情报或跟进,今天最值得处理什么,高,高,工作台核心已成立但需更清晰的信息层级,USER_PRODUCT,RESTRUCTURE,,P0,重排现有区块并统一视觉,保留为普通用户唯一首页
+工作台,今天值得处理,/platform,优先情报区,普通产业运营用户,USER_PRODUCT,"已发布非demo Intelligence; Canonical Subject/Resource/Relationship/Opportunity; 用户反馈",查看并决定下一步或暂不处理,哪条动态需要我今天采取行动,高,高,同页可出现多个同权重主按钮,USER_PRODUCT,KEEP,,P0,保持规则并收敛动作层级,现有数据和确定性排序已能支撑核心工作
+工作台,今天已忽略,/platform,恢复区,当前用户,USER_PRODUCT,v05h_intelligence_feedback,恢复到今日列表,刚才忽略的事项能否恢复,中,中,入口只在存在已忽略项时出现,USER_PRODUCT,KEEP,,P1,改善提示和恢复入口,用户级追加反馈且不改Intelligence
+工作台,我的工作区,/workspace,业务概览,普通产业运营用户,USER_PRODUCT,"v06_collab_tasks; v06_opportunities; contact intents; v06_market_resources; v06_favorites",查看个人工作汇总,我的任务和合作集中在哪里,中,低,与/platform重复且二级tab名与实际页面不一致,USER_PRODUCT,MERGE,/platform,P0,合并高频内容,避免两个工作台
+工作台,我的待办,/workspace?tab=todos,待办Tab,当前用户,USER_PRODUCT,v06_collab_tasks,打开待办,我现在要完成什么,高,高,query tab未实现且部分任务链接无有效目标,USER_PRODUCT,MERGE,/platform,P0,合并到工作台并修正已有入口,高频工作应在首页
+工作台,最近跟进,/workspace?tab=followups,跟进Tab,当前用户,USER_PRODUCT,v06_follow_ups,继续跟进,哪些机会最近需要推进,高,高,query tab未实现且/workspace未渲染FollowUp,USER_PRODUCT,MERGE,/platform,P0,合并最近跟进区,高频工作应在首页
+工作台,我的收藏,/workspace?tab=favorites,收藏Tab,当前用户,USER_PRODUCT,v06_favorites,打开收藏对象,我保存了哪些对象,低,中,route查询但模板未显示且当前记录为0,UTILITY,MOVE_TO_UTILITY,用户工具菜单,P2,移动入口并保留现有数据,便利功能不应占工作台主导航
+工作台,最近访问,/workspace?tab=recent,最近访问Tab,当前用户,USER_PRODUCT,未发现可用recent_views持久化来源,打开最近对象,我刚看过什么,低,低,route未提供数据且无可靠持久化,UTILITY,HIDE,,P2,隐藏入口,不能展示无数据逻辑的空壳能力
+工作台,待处理联系,/workspace,联系意向区,当前用户,USER_PRODUCT,pending contact intents,查看人物并处理联系,哪些联系请求待处理,中,中,入口目标与正式人物详情路径不一致,USER_PRODUCT,MERGE,/platform或企业与人物,P1,合并并修正上下文入口,属于待办而非独立页面
+工作台,我的合作,/workspace,合作区,当前用户,USER_PRODUCT,v06_opportunities,打开机会,我发起的合作进展如何,高,中,与跟进列表重复,USER_PRODUCT,MERGE,/opportunities,P1,合并到跟进,Opportunity已有正式列表
+情报,情报首页,/intelligence,情报列表,普通产业运营用户,USER_PRODUCT,v06_intelligence_items,筛选并打开情报,最近发生了什么,高,高,内容很长且对象上下文扫描效率不足,USER_PRODUCT,RESTRUCTURE,,P0,提高列表密度和状态可读性,正式情报消费入口
+情报,情报详情,/intelligence/{id},情报详情,普通产业运营用户,USER_PRODUCT,"v06_intelligence_items; subject links; Resource; Relationship; Opportunity trace",执行一个有依据的下一步,发生了什么涉及谁下一步是什么,高,高,七个区块纵向堆叠且动作权重分散,USER_PRODUCT,RESTRUCTURE,,P0,重组事实上下文和动作,Golden Path起点
+情报,订阅,/subscriptions,订阅管理,普通产业运营用户,USER_PRODUCT,现有subscription表和服务,查看或维护订阅,我要持续关注什么,中,中,不是日常消费主路径,UTILITY,MOVE_TO_UTILITY,情报辅助入口,P2,保留为辅助工具,有用户级持久价值但非主导航
+情报,采集与数据源,/collection,采集中心,管理员/运营维护,ADMIN_CONSOLE,"v05f_sources; collection runs/items; snapshots",运行采集和诊断,采集链是否正常,低,低,后台运行操作混入普通情报导航,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,迁移入口并保持能力,普通用户不应理解采集管线
+情报,来源管理,/collection/sources,Source列表与配置,管理员,ADMIN_CONSOLE,v05f_sources,维护和发现来源,哪些来源应被采集,低,中,当前与产品消费层同组,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,纳入情报运行后台,明确管理职责
+情报,采集运行,/collection/runs,Run与Item,管理员/运维,ADMIN_CONSOLE,"collection runs; v05f_collection_items; v04g_source_snapshots",查看运行和失败,哪次采集出了问题,低,中,运行日志不应成为普通二级导航,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P1,纳入运行记录,后台诊断价值明确
+情报,情报加工,/processing/jobs,Processing Job,管理员/运维,ADMIN_CONSOLE,"v05g_processing_jobs; Collection Item; Snapshot",手工建任务运行或重新加工,某采集项如何恢复加工,中,低,标题像核心产品但实际是后台和恢复工具,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,迁移整个入口,总体分类ADMIN_OPERATION
+情报,加工候选,/processing/candidates,Extraction Candidate,审核员,ADMIN_CONSOLE,"v05g_extraction_candidates; processing blocks; candidate evidence",审核候选,机器规则抽取了什么,中,中,候选与正式情报边界对普通用户不清晰,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,放入审核工作区,候选不是正式产品内容
+情报,审核发布,/processing/review-queue,Review Queue,审核员,ADMIN_CONSOLE,"extraction candidates; IntelligenceReviewService",审核并发布,哪些候选可以成为正式情报,高,中,发布动作混入普通消费导航,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,后台化但保持与情报详情可追溯,正式写入口必须受控
+情报,报告中心,/reports,报告列表与生成混合页,普通用户和报告运营,职责混合,"v05h_report_jobs; generated reports; report templates; signals/events/review items",生成或查看报告,本周期有什么汇总结论,中,中,消费与生成审核混合且页面过长,USER_PRODUCT_READ + ADMIN_CONSOLE_OPERATIONS,RESTRUCTURE,,P0,拆分阅读层和管理操作层,保留固定报告消费但不宣称成熟引擎
+情报,报告详情,/reports/{id},报告阅读页,普通产业运营用户,USER_PRODUCT,v05h_generated_reports,阅读已生成报告,报告具体结论是什么,中,高,Chromium真实访问返回422且页面不可用,USER_PRODUCT,RESTRUCTURE,,P0,恢复现有阅读链并统一版式,详情链是报告消费成立的最低条件
+情报,报告生成,/reports,报告Job表单,报告运营/审核员,ADMIN_CONSOLE,"v05h_report_templates; report jobs; fixed Python renderer",选择类型日期并生成,如何生成固定周期汇总,低,中,与普通报告列表同页且名义参数多于真实支持,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,移动生成审核区,当前只适合固定模板运营
+情报,产业信号,/signals,信号中心,分析/运营维护,ADMIN_CONSOLE,v05e_industry_signals,生成筛选和转行动,规则产生了哪些信号,中,低,历史规则产品与Canonical情报消费重叠,ADMIN_CONSOLE,HIDE,,P2,从普通产品隐藏并保留后台审计,避免第二套情报产品表面
+情报,Research,/research,研究实验页,研究实验用户,历史实验,历史research表和规则/Provider选择,生成草稿或发现,实验链能否辅助研究,低,低,包含ResearchAgent与Provider等非RC1产品术语,冻结,HIDE,,P2,隐藏正式入口,RC1.2B禁止AI和新报告算法
+情报,Watchlists,/watchlists,历史关注列表,历史用户,历史能力,历史watchlist数据,维护关注,关注哪些主体,低,低,与现有收藏标签优先主体能力重复,冻结,DELETE_CANDIDATE,,P3,仅列删除候选不实际删除,不得恢复第二套Watchlist
+企业与人物,关系Landing,/network,统计入口,普通产业运营用户,USER_PRODUCT,"people; organizations; p3_canonical_relationships",再选择人物机构或关系图,系统有多少主体,中,低,只提供42/23/5和快捷入口且增加一跳,USER_PRODUCT,RESTRUCTURE,/network目录,P0,改为直接目录默认页,最终决策DIRECT_TO_DIRECTORY
+企业与人物,人物,/network/people,人物目录,普通产业运营用户,USER_PRODUCT,people,搜索并打开人物,我要找的人是谁,高,高,与机构目录分开且需经Landing,USER_PRODUCT,KEEP,,P0,作为合并目录的tab,Canonical主体入口
+企业与人物,企业/机构,/network/organizations,机构目录,普通产业运营用户,USER_PRODUCT,organizations,搜索并打开机构,我要找的企业是谁,高,高,与人物目录分开且需经Landing,USER_PRODUCT,KEEP,,P0,作为默认目录tab,Canonical主体入口
+企业与人物,主体档案,/network/entities/{type}/{external_id},基础资料区,普通产业运营用户,USER_PRODUCT,people或organizations,理解主体身份,这是谁,高,高,字段和业务上下文层级不够突出,USER_PRODUCT,RESTRUCTURE,,P0,统一档案头和摘要,档案核心职责
+企业与人物,主体档案,/network/entities/{type}/{external_id},Relationship区,普通产业运营用户,USER_PRODUCT,p3_canonical_relationships,查看关系,我们是什么关系认识谁,高,高,与联系人和证据分散,USER_PRODUCT,RESTRUCTURE,,P0,按关系上下文聚合,数据AVAILABLE
+企业与人物,主体档案,/network/entities/{type}/{external_id},Person联系人区,普通产业运营用户,USER_PRODUCT,"people.organization_network文本匹配; relationships",查看联系人,我可以联系谁,高,中,Organization到Person主要依赖名称文本关联,USER_PRODUCT,KEEP,,P1,明确PARTIAL和证据来源,不在B新增模型
+企业与人物,主体档案,/network/entities/{type}/{external_id},Intelligence区,普通产业运营用户,USER_PRODUCT,"subject links; v06_intelligence_items",打开相关情报,最近发生什么,高,高,纵向区块缺少优先级,USER_PRODUCT,RESTRUCTURE,,P0,突出最近高价值情报,数据AVAILABLE
+企业与人物,主体档案,/network/entities/{type}/{external_id},Resource区,普通产业运营用户,USER_PRODUCT,v06_market_resources,查看资源,它有什么需求供给或能力,高,高,资源上下文与下一步衔接弱,USER_PRODUCT,RESTRUCTURE,,P0,聚合并提供单一上下文动作,数据AVAILABLE
+企业与人物,主体档案,/network/entities/{type}/{external_id},Opportunity与FollowUp区,普通产业运营用户,USER_PRODUCT,"v06_opportunities; v06_follow_ups",继续跟进,我正在推进什么,高,高,服务层有Opportunity但模板无独立机会区,USER_PRODUCT,RESTRUCTURE,,P0,补足现有数据呈现而非新功能,Opportunity PARTIAL且FollowUp AVAILABLE
+企业与人物,主体档案,/network/entities/{type}/{external_id},Evidence区,普通产业运营用户,USER_PRODUCT,"relationship evidence; historical evidence summaries",打开关系证据,过去合作依据是什么,高,中,详情只给摘要和关系链接,USER_PRODUCT,KEEP,,P1,保持追溯链接并改善标识,Evidence PARTIAL
+企业与人物,关系网络,/network/graph,图谱视图,关系运营用户,USER_PRODUCT,p3_canonical_relationships,查看网络和路径,主体之间如何连接,中,中,独立入口价值低于档案上下文,USER_PRODUCT,MERGE,企业与人物的关系视图,P1,保留为目录次级视图,存在真实网络计算
+企业与人物,人脉推荐,/network/recommendations,连接推荐,获授权业务用户,USER_PRODUCT,Canonical Relationship路径规则,查看推荐路径,通过谁可以认识目标,中,中,容易被误解为AI且当前只对特定权限开放,USER_PRODUCT,KEEP,,P2,作为次级入口并写明规则依据,现有确定性逻辑有独立业务价值
+企业与人物,主体治理,/network/governance,治理中心,管理员/审核员,ADMIN_CONSOLE,"subject candidates; merge/governance records",审核候选和合并,哪些主体数据需治理,中,中,治理混入普通企业导航,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,完整移动入口,正式数据治理必须受控
+上下文,资源市场,/resources,资源列表,产业运营用户,USER_PRODUCT,v06_market_resources,筛选并打开Resource,系统有哪些可调用资源,高,中,若做一级会与情报主体俱乐部跟进争夺入口,CONTEXTUAL,MERGE,情报/主体/俱乐部上下文与搜索,P1,保留页面但降为上下文入口,Resource是Golden Path中间对象
+上下文,需求,/resources?type=demand,demand筛选,产业运营用户,USER_PRODUCT,v06_market_resources resource_type=demand,筛选需求,有哪些需求可对接,高,中,历史路径和正式筛选入口并存,CONTEXTUAL,KEEP,,P1,统一筛选和返回上下文,Canonical Resource视图
+上下文,供给,/resources?type=supply,supply筛选,产业运营用户,USER_PRODUCT,v06_market_resources resource_type=supply,筛选供给,有哪些能力可调用,高,中,历史路径和正式筛选入口并存,CONTEXTUAL,KEEP,,P1,统一筛选和返回上下文,Canonical Resource视图
+上下文,Resource详情,/resources/{id},资源详情,产业运营用户,USER_PRODUCT,"v06_market_resources; source intelligence; subject; match candidates",检查匹配或进入机会,该资源来自哪与谁相关,高,高,上下文可读性和动作层级需统一,CONTEXTUAL,RESTRUCTURE,,P0,重组追溯和下一步,Golden Path关键页
+上下文,匹配,/resources/matching,匹配列表,产业运营用户,USER_PRODUCT,p4_resource_match_candidates,检查候选,哪些资源可能匹配,高,中,零候选时容易被误解为成熟推荐产品,CONTEXTUAL,MERGE,/resources或Resource详情,P1,作为Resource上下文并定义空状态,不得为展示结果调整算法
+上下文,资源维护,/resources/new|edit,创建编辑关闭删除,管理员/获授权运营,管理操作,v06_market_resources,维护正式Resource,如何受控维护资源,高,中,业务阅读与维护入口需视觉分层,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P1,管理入口后台化但保持详情可达,写操作与普通阅读分开
+跟进,合作机会,/opportunities,机会列表,产业运营用户,USER_PRODUCT,v06_opportunities,筛选并打开机会,哪些机会需要推进,高,高,列表扫描密度和状态层级可改善,USER_PRODUCT,RESTRUCTURE,,P0,统一状态筛选和主动作,正式跟进首页
+跟进,机会详情,/opportunities/{id},机会工作页,产业运营用户,USER_PRODUCT,"Opportunity; Intelligence; Resource; Match; FollowUp; Task; Evidence",登记下一步或结果,这个机会为何存在下一步是什么,高,高,信息和表单较多需建立主次,USER_PRODUCT,RESTRUCTURE,,P0,按来源判断行动结果组织,Golden Path核心工作页
+跟进,协作首页,/collaboration,机会任务会议汇总,产业运营用户,USER_PRODUCT,"v06_opportunities; v06_collab_tasks; meetings",进入协作对象,团队正在协作什么,中,低,与/opportunities和工作台重复,USER_PRODUCT,MERGE,/opportunities,P1,合并到跟进二级结构,避免第二个协作首页
+跟进,行动任务,/collaboration/tasks,任务列表,产业运营用户,USER_PRODUCT,v06_collab_tasks,更新任务,我和团队要完成什么,高,中,入口分散在Workspace与Collaboration,USER_PRODUCT,MERGE,/opportunities?tab=tasks,P1,合并为跟进次级视图,同一Canonical任务
+跟进,会议,/collaboration/meetings,会议列表,产业运营用户,USER_PRODUCT,meetings,查看或完成会议,哪些会议与机会相关,中,中,独立入口优先级过高,USER_PRODUCT,KEEP,,P2,作为跟进次级视图,有独立对象但非一级
+跟进,Relationship详情,/relationships/{id},关系与证据追溯,产业运营用户,USER_PRODUCT,"p3_canonical_relationships; evidence; Opportunity; Intelligence",反向查看证据,这条正式关系如何形成,高,高,入口应从主体和机会上下文出现,CONTEXTUAL,KEEP,,P1,统一追溯面包屑,Golden Path闭环终点
+跟进,Legacy Lead,/collaboration/leads,历史Lead流程,历史运营用户,冻结legacy,历史lead数据,创建审核转换Lead,是否存在另一套线索,低,低,与Canonical Opportunity重复,冻结,DELETE_CANDIDATE,,P3,正式产品隐藏并列退役候选,禁止恢复第二套Lead
+未在一级,俱乐部首页,/club,Club场景首页,会员/俱乐部运营,USER_PRODUCT,"memberships; events; Canonical Resource/Match/Opportunity/FollowUp; notifications",进入当前俱乐部动作,我的俱乐部业务今天要做什么,高,高,有完整场景却没有一级高亮且卡片入口较多,USER_PRODUCT,RESTRUCTURE,,P0,恢复一级并分会员/运营阅读层,选择Club OPTION 1
+未在一级,会员,/club/members,会员目录,俱乐部成员/运营,职责混合,"v04f_club_memberships linked to canonical Person/Organization",查找会员,谁在Q-BAY生态中,高,高,viewer从可见入口进入无权限页,USER_PRODUCT_READ + ADMIN_CONSOLE_OPERATIONS,RESTRUCTURE,,P0,普通阅读与管理维护分层,真实Membership能力可用
+未在一级,活动,/club/events,活动列表与详情,会员/普通内部用户,USER_PRODUCT,"events; v05c_club_event_profiles; registrations",查看和报名活动,有哪些活动可参加,高,高,列表消费与创建运营需要分层,USER_PRODUCT,RESTRUCTURE,,P0,保留阅读报名并移管理操作,Event业务可用
+未在一级,活动运营,/club/events/create|{id}/status|checkin,创建审核签到反馈,俱乐部运营,ADMIN_CONSOLE,"event profiles; registrations; participation; checkin audit; feedback",创建审核签到和复盘,活动如何被运营,高,高,操作密集且不应暴露给普通用户,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,移入Club运营后台,独立运营闭环真实存在
+未在一级,会员申请与账户,/club/apply|/member/*,申请资料通知,外部申请者/会员,USER_PRODUCT,"club applications; member accounts; memberships; notifications",申请或维护本人资料,我的会员身份和通知是什么,中,高,与运营后台入口混杂且部分链接权限不一致,USER_PRODUCT,RESTRUCTURE,,P1,形成清晰会员自助层,用户级动作有独立价值
+未在一级,俱乐部供需,/club/matches?tab=my,需求与供给场景,会员,USER_PRODUCT,v06_market_resources,查看或发布受控供需,会员有哪些需求与能力,高,高,页面名称仍像第二套Club资源,CONTEXTUAL,MERGE,/club资源视图,P0,明确复用Canonical Resource,不新增第二套Resource
+未在一级,俱乐部匹配,/club/matches,匹配候选,会员/运营,USER_PRODUCT,p4_resource_match_candidates,查看匹配候选,Club内哪些资源可连接,高,中,零候选和运营动作需清楚分层,CONTEXTUAL,MERGE,Resource详情与Club上下文,P1,保持Canonical Match,不新增推荐平台
+未在一级,俱乐部运营,/club/operations,运营队列,俱乐部运营,ADMIN_CONSOLE,"applications; memberships; canonical resources/matches; relationship and lead candidates",审核和处理队列,今天有哪些Club运营事项,中,高,操作页与会员体验共享产品外观,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P0,移入明确管理控制台,真实运营能力应保留
+未在一级,会员导入,/club/member-import,导入与预览,管理员,ADMIN_CONSOLE,"import staging; memberships; canonical Person/Organization links",受控导入会员,如何维护批量会员数据,低,中,纯管理能力,ADMIN_CONSOLE,MOVE_TO_ADMIN,/admin/platform,P1,纳入Club后台,不得在用户产品出现
+工具,全局搜索,/search,搜索结果,所有登录用户,UTILITY,现有多对象查询,搜索并打开对象,我要找的对象在哪里,中,高,结果对象和返回上下文需统一,UTILITY,KEEP,,P1,统一样式和结果分类,跨对象高频辅助能力
+管理控制台,管理首页,/admin/platform,管理控制台,管理员/审核员,ADMIN_CONSOLE,各管理Service和运行计数,进入管理模块,哪项系统工作需维护,低,高,真实页有29个卡片且高度9559像能力目录堆叠,ADMIN_CONSOLE,RESTRUCTURE,,P0,改为表格筛选状态主导并建立三项视觉信号,后台唯一总入口
+管理控制台,用户权限,/system/users|permissions,账号权限管理,管理员,ADMIN_CONSOLE,"users; roles; permissions; identity link",维护账号和权限,谁可执行什么,高,高,必须与业务产品明显隔离,ADMIN_CONSOLE,KEEP,,P1,统一后台组件和危险动作,权限安全核心
+管理控制台,数据完整性,/admin/integrity,完整性与诊断,管理员/运维,ADMIN_CONSOLE,"SQLite integrity; migrations; audit logs",检查或恢复系统,数据与运行是否安全,高,高,技术信息可能干扰普通产品,ADMIN_CONSOLE,KEEP,,P1,只在后台并采用高密度状态布局,数据库安全核心
