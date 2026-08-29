@@ -222,12 +222,13 @@ def platform_home(request: Request, db: Session = Depends(get_db)):
 
     my_follow_ups = golden.current_user_follow_ups(user_id, limit=8) if user_id is not None else []
     dismissed_today = golden.dismissed_today(user_id, limit=8) if user_id is not None else []
+    favorites = list_favorites(db, user_id) if user_id is not None else []
     return render(request, "platform/home.html",
         rec_people=rec_people, recent_people=recent_people,
         feed=feed, supplies=supplies, demands=demands,
         opps=opps, user_id=user_id,
         workspace=workspace, tasks=tasks, my_follow_ups=my_follow_ups,
-        dismissed_today=dismissed_today,
+        dismissed_today=dismissed_today, favorites=favorites,
     )
 
 
@@ -296,41 +297,34 @@ async def update_industry_profile(request: Request, db: Session = Depends(get_db
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  NETWORK  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
 
 @router.get("/network", response_class=HTMLResponse)
-def network_home(request: Request, db: Session = Depends(get_db)):
-    user_id = get_current_user_id(request)
-    rec = recommend_people(db, user_id, limit=8) if user_id is not None else []
-    
-    people_count = int(db.scalar(select(func.count()).select_from(Person).where(Person.is_active == True)) or 0)
-    org_count = int(db.scalar(select(func.count()).select_from(Organization).where(Organization.is_active == True)) or 0)
-    
-    stats = {
-        "people_count": people_count,
-        "org_count": org_count,
-        "project_count": 0,
-        "relation_count": 0,
-        "history_relation_count": 0,
-        "pending_review_count": 0,
-        "unidentified_count": 0,
-        "duplicate_count": 0,
-    }
-    
-    try:
-        from app.v04c_review import db_connection, default_db_path
-        from app.settings import resolved_db_path
-        db_path = resolved_db_path()
-        with db_connection(db_path) as conn:
-            stats["relation_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_canonical_relationships WHERE review_status='approved' AND is_current=1").fetchone()[0] or 0)
-            stats["history_relation_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_canonical_relationships WHERE review_status='approved' AND is_current=0").fetchone()[0] or 0)
-            stats["pending_review_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_relationship_candidates WHERE status='pending'").fetchone()[0] or 0)
-            stats["unidentified_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_entity_resolution_candidates WHERE resolution_status='pending'").fetchone()[0] or 0)
-            stats["duplicate_count"] = int(conn.execute("SELECT COUNT(*) FROM p3_entity_merge_records WHERE merge_status='preview'").fetchone()[0] or 0)
-    except Exception:
-        pass
-    
-    can_access_governance = _can_manage_people_orgs(request)
-    
-    return render(request, "platform/network.html", 
-        rec=rec, stats=stats, can_access_governance=can_access_governance, user_id=user_id)
+def network_home(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+    rows = db.execute(text("""
+        SELECT o.id, o.external_id, o.standard_name, o.org_type, o.region, o.industry_tags,
+               COUNT(DISTINCT CASE WHEN m.status='active' THEN m.id END) AS membership_count,
+               COUNT(DISTINCT CASE WHEN r.status='published' THEN r.id END) AS resource_count,
+               COUNT(DISTINCT CASE WHEN rel.review_status='approved' AND rel.is_current=1 THEN rel.id END) AS relationship_count,
+               COUNT(DISTINCT CASE WHEN opp.status='active' THEN opp.id END) AS opportunity_count,
+               COUNT(DISTINCT f.id) AS follow_up_count,
+               COUNT(DISTINCT link.intelligence_item_id) AS intelligence_count,
+               MAX(intel.title) AS recent_intelligence_title
+        FROM organizations o
+        LEFT JOIN v04f_club_memberships m ON m.organization_id=o.id
+        LEFT JOIN v06_market_resources r ON r.organization_id=o.id
+        LEFT JOIN p3_canonical_relationships rel
+          ON (rel.subject_type='organization' AND rel.subject_id=o.id)
+          OR (rel.object_type='organization' AND rel.object_id=o.id)
+        LEFT JOIN v06_opportunities opp
+          ON opp.organization_id=o.id OR opp.target_organization_id=o.id
+          OR opp.demand_organization_id=o.id OR opp.supply_organization_id=o.id
+        LEFT JOIN v06_follow_ups f ON f.opportunity_id=opp.id
+        LEFT JOIN core_intelligence_subject_links link
+          ON link.subject_type='organization' AND link.subject_id=o.id
+        LEFT JOIN v06_intelligence_items intel ON intel.id=link.intelligence_item_id
+        WHERE o.is_active=1 AND (:q='' OR o.standard_name LIKE :pattern OR COALESCE(o.short_name,'') LIKE :pattern)
+        GROUP BY o.id
+        ORDER BY membership_count DESC, relationship_count DESC, o.standard_name
+    """), {"q": q.strip(), "pattern": f"%{q.strip()}%"}).mappings().all()
+    return render(request, "platform/network.html", organizations=rows, q=q)
 
 
 @router.get("/network/people", response_class=HTMLResponse)
@@ -416,11 +410,7 @@ def person_card(request: Request, person_id: int, history: bool = False, db: Ses
 
 @router.get("/network/organizations", response_class=HTMLResponse)
 def network_organizations(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
-    stmt = select(Organization).where(Organization.is_active == True).order_by(Organization.standard_name)
-    if q:
-        stmt = stmt.where(Organization.standard_name.contains(q))
-    orgs = list(db.scalars(stmt).all())
-    return render(request, "platform/organizations.html", orgs=orgs, q=q)
+    return RedirectResponse("/network", status_code=302)
 
 
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  CONTACT INTENTS  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
@@ -878,26 +868,7 @@ async def convert_intent_to_opp(intent_id: int, request: Request, db: Session = 
 
 @router.get("/workspace", response_class=HTMLResponse)
 def workspace(request: Request, db: Session = Depends(get_db)):
-    user_id = get_current_user_id(request)
-    if user_id is None:
-        raise HTTPException(403)
-    tasks = list_user_tasks(db, user_id)
-    my_opps = list(db.scalars(
-        select(CooperationOpportunity).where(
-            CooperationOpportunity.initiator_id == user_id,
-            CooperationOpportunity.status == "active",
-        ).order_by(desc(CooperationOpportunity.updated_at))
-    ).all())
-    pending_intents = list_contact_intents(db, user_id, "received") if user_id is not None else []
-    pending_intents = [c for c in pending_intents if c.status == "pending"]
-    my_resources = list(db.scalars(
-        select(MarketResource).where(MarketResource.publisher_id == user_id).order_by(desc(MarketResource.updated_at))
-    ).all())
-    favs = list_favorites(db, user_id)
-    return render(request, "platform/workspace.html",
-        tasks=tasks, my_opps=my_opps, pending_intents=pending_intents,
-        my_resources=my_resources, favs=favs, user_id=user_id,
-    )
+    return RedirectResponse("/platform", status_code=302)
 
 
 # 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲  FAVORITES & FOLLOWS (AJAX)  鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲
@@ -1327,4 +1298,3 @@ def admin_publish_collection_item(collection_item_id: int, request: Request, db:
         raise HTTPException(403, "intelligence admin permission required")
     item = _v06e_publish_collection_item(db, int(collection_item_id), actor_user_id=get_current_user_id(request), status="published")
     return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
-

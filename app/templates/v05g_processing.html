@@ -1,16 +1,16 @@
 {% extends "platform/base.html" %}
-{% block platform_title %}情报加工中心{% endblock %}
-{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/intelligence">情报中心</a><span class="sep">/</span><span class="current">情报加工</span></span>{% endblock %}
+{% block platform_title %}管理控制台 · 情报加工{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/admin/platform">管理控制台</a><span class="sep">/</span><span class="current">情报加工</span></span>{% endblock %}
 {% block page_header %}
 <section class="page-header">
   <div class="page-header-top">
-    <h1>情报加工中心</h1>
+    <div><span class="eyebrow">管理员工具</span><h1>情报加工</h1></div>
     <div class="header-actions">
-      <a class="btn btn-primary" href="/processing/jobs">处理队列</a>
-      <a class="btn" href="/processing/candidates">审核候选</a>
+      <a class="btn btn-secondary" href="/processing/jobs">处理队列</a>
+      <a class="btn btn-tertiary" href="/processing/candidates">审核候选</a>
     </div>
   </div>
-  <p class="page-desc">将原始情报加工为候选数据、主体匹配和可审核变更。完成审核后，系统才能生成正式产业信号。</p>
+  <p class="page-desc">系统运营与恢复工具：检查原始情报、候选数据、主体匹配和审核状态；不会因打开页面自动写入正式数据。</p>
 </section>
 {% endblock %}
 {% block platform_content %}

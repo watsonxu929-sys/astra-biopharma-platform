@@ -231,7 +231,10 @@ def test_web_entry_and_empty_queues_are_discoverable(p3_db: Path, monkeypatch: p
         network = client.get("/network")
         governance = client.get("/network/governance")
         relationships = client.get("/network/relationship-candidates")
+        admin = client.get("/admin/platform")
     assert network.status_code == governance.status_code == relationships.status_code == 200
-    assert "/network/governance" in network.text
+    assert admin.status_code == 200
+    assert "/network/governance" not in network.text
+    assert "/network/governance" in admin.text
     assert "暂无消歧候选" in governance.text
     assert "暂无关系候选" in relationships.text

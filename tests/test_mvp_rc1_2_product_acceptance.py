@@ -6,9 +6,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.routes_platform import STATUS_LABELS, _templates, status_label
-from app.platform.capability_registry import CAPABILITIES
+from app.security import ROLE_PERMISSIONS
 from app.p3_network import templates as network_templates
 from app.services.golden_loop_service import GoldenLoopService
+from app.services.navigation_service import get_client_navigation
 from app.services.unified_intelligence_service import UnifiedIntelligenceService
 from app.services.unified_opportunity_service import UnifiedOpportunityService
 from app.services.unified_resource_service import UnifiedResourceService
@@ -103,7 +104,10 @@ def test_user_visible_statuses_and_templates_are_product_facing() -> None:
     assert "来源情报 #" not in opportunity
 
 
-def test_four_formal_navigation_labels_are_exact() -> None:
-    categories = {"workspace", "network", "intelligence", "resources", "collaboration"}
-    top_level = [item.name for item in CAPABILITIES if item.parent_key is None and item.category in categories]
-    assert top_level == ["工作台", "企业与人物", "情报", "资源", "跟进"]
+def test_five_formal_navigation_labels_are_exact() -> None:
+    navigation = get_client_navigation(
+        {"permissions": sorted(ROLE_PERMISSIONS["admin"])}, path="/platform"
+    )
+    assert [item["label"] for item in navigation["primary"]] == [
+        "工作台", "情报", "企业与人物", "俱乐部", "跟进",
+    ]

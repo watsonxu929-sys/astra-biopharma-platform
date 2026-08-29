@@ -1,153 +1,52 @@
 {% extends "platform/base.html" %}
 {% set active_nav = "intelligence" %}
 {% block platform_title %}{{ reading.display_title }}{% endblock %}
+{% block platform_breadcrumb %}<nav class="breadcrumb"><a href="/intelligence">情报</a><span class="sep">/</span><span>情报详情</span></nav>{% endblock %}
+{% block platform_page_header %}
+<div class="page-header intelligence-heading">
+  <div class="page-header-left"><div class="row-meta"><span class="badge badge-info">{{ item.intel_type or '产业动态' }}</span><span>{{ item.source_name or '公开来源' }}</span><time>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '日期待核对' }}</time></div><h1 class="page-title">{{ reading.display_title }}</h1></div>
+</div>
+{% endblock %}
 {% block platform_content %}
-<div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
-  <a href="/intelligence">← 返回情报</a>
-  {% if message %}
-  <div class="success-box mt-16" role="status">
-    <strong>{{ message }}</strong>
-    {% if opportunity_id %}
-    <div class="header-actions mt-16">
-      <a class="btn btn-sm btn-primary" href="/opportunities/{{ opportunity_id }}">查看跟进</a>
-      <a class="btn btn-sm btn-outline" href="/platform">返回工作台</a>
-    </div>
-    {% endif %}
+{% if message %}<div class="success-box" role="status"><strong>{{ message }}</strong>{% if opportunity_id %} <a class="text-link" href="/opportunities/{{ opportunity_id }}">查看跟进</a>{% endif %} <a class="text-link" href="/platform">返回工作台</a></div>{% endif %}
+<div class="intelligence-detail-layout">
+  <div class="intelligence-main">
+    <section class="content-section" aria-labelledby="happened-heading"><div class="section-header"><div><span class="section-index">01</span><h2 id="happened-heading">发生了什么</h2></div></div><p class="lead-copy">{{ reading.display_summary }}</p>{% if not reading.has_chinese_reading %}<div class="warning-box">中文辅助内容尚未完成，作出业务判断前请核对页面底部原文。</div>{% endif %}</section>
+
+    <section class="content-section" aria-labelledby="subjects-heading">
+      <div class="section-header"><div><span class="section-index">02</span><h2 id="subjects-heading">涉及主体</h2></div></div>
+      {% if trace.subjects %}<div class="object-links">{% for subject in trace.subjects %}<a class="object-link object-chip" href="{{ subject.subject_url }}">{{ subject.subject_label }}</a>{% endfor %}</div>
+      {% else %}<p class="business-empty">尚未确认涉及的企业或人物。</p>{% if subject_candidates %}<p><strong>原文可能提及：</strong>{% for candidate in subject_candidates %}{{ candidate.subject_label }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}{% endif %}
+      {% if can_write %}<details class="inline-tool"><summary>人工确认正式主体</summary>
+        <form method="get" action="/intelligence/{{ item.id }}" class="inline-form"><label>搜索企业或人物<input name="subject_q" value="{{ subject_q }}" placeholder="输入正式名称"></label><button class="btn btn-tertiary btn-sm" type="submit">搜索</button></form>
+        <form method="post" action="/golden-loop/intelligence/{{ item.id }}/subjects" class="inline-form"><label>选择正式主体<select name="subject_ref" required><option value="">请选择</option>{% for x in organizations %}<option value="organization:{{ x.id }}">企业/机构 · {{ x.standard_name }}</option>{% endfor %}{% for x in people %}<option value="person:{{ x.id }}">人物 · {{ x.name }}</option>{% endfor %}{% for x in projects %}<option value="project:{{ x.id }}">项目 · {{ x.name }}</option>{% endfor %}</select></label><button class="btn btn-secondary btn-sm" type="submit">确认关联</button></form>
+      </details>{% endif %}
+    </section>
+
+    <section class="content-section" aria-labelledby="why-heading"><div class="section-header"><div><span class="section-index">03</span><h2 id="why-heading">为什么值得关注</h2></div></div><p>{{ opportunity_context.value_reason }}</p><p>{{ event_insight.importance_reason }}</p>{% if opportunity_context.priority.is_priority %}{% for subject in opportunity_context.priority.subjects %}<p><strong>{{ subject.subject_label }}</strong>：{{ subject.reason }}{% if subject.qbay_context != '无直接会员记录' %}，{{ subject.qbay_context }}{% endif %}。</p>{% endfor %}{% endif %}</section>
+
+    <details class="content-section evidence-section" data-translation-mode="{{ reading.translation_mode }}">
+      <summary><strong>原文与公开证据</strong></summary>
+      <h3>{{ reading.original_title or '原文标题待核对' }}</h3><p class="source-copy">{{ reading.original_summary or item.content or '原文摘要待核对' }}</p>
+      {% if item.source_url %}<p><a class="text-link" href="{{ item.source_url }}" target="_blank" rel="noopener">打开公开来源</a></p>{% endif %}
+      {% for ev in evidence %}<article class="evidence-row">{% if ev.url %}<a class="object-link" href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or '查看公开证据' }}</a>{% endif %}<p>{{ ev.evidence_excerpt or '证据摘录待核对' }}</p></article>{% else %}<p class="business-empty">暂无补充证据</p>{% endfor %}
+    </details>
   </div>
-  {% endif %}
 
-  <header class="mt-16">
-    <h1 class="page-title" style="overflow-wrap:anywhere;">{{ reading.display_title }}</h1>
-    <p class="text-muted">{{ item.source_name or '公开来源' }} · {{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '日期待核对' }}</p>
-  </header>
-
-  <section class="platform-card" aria-labelledby="happened-heading">
-    <h2 id="happened-heading">1. 发生了什么</h2>
-    <p>{{ reading.display_summary }}</p>
-    {% if not reading.has_chinese_reading %}
-    <p class="warning-box">中文辅助内容尚未完成，作出业务判断前请核对页面底部原文。</p>
-    {% endif %}
-  </section>
-
-  <section class="platform-card" aria-labelledby="subjects-heading">
-    <h2 id="subjects-heading">2. 涉及谁</h2>
-    {% if trace.subjects %}
-      <div class="header-actions">
-      {% for subject in trace.subjects %}
-        <a class="btn btn-sm btn-outline" href="{{ subject.subject_url }}">{{ subject.subject_label }}</a>
-      {% endfor %}
-      </div>
-    {% else %}
-      <p>尚未确认涉及的企业或人物。</p>
-      {% if subject_candidates %}
-      <p><strong>原文可能提及：</strong>{% for candidate in subject_candidates %}{{ candidate.subject_label }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
-      {% endif %}
-    {% endif %}
-    {% if can_write %}
-    <details class="mt-16">
-      <summary>人工确认正式主体</summary>
-      <form method="get" action="/intelligence/{{ item.id }}" class="inline-form">
-        <label>搜索企业或人物<input name="subject_q" value="{{ subject_q }}" placeholder="输入正式名称"></label>
-        <button class="btn btn-outline btn-sm" type="submit">搜索</button>
-      </form>
-      <form method="post" action="/golden-loop/intelligence/{{ item.id }}/subjects">
-        <label>选择正式主体<select name="subject_ref" required>
-          <option value="">请选择</option>
-          {% for x in organizations %}<option value="organization:{{ x.id }}">企业/机构 · {{ x.standard_name }}</option>{% endfor %}
-          {% for x in people %}<option value="person:{{ x.id }}">人物 · {{ x.name }}</option>{% endfor %}
-          {% for x in projects %}<option value="project:{{ x.id }}">项目 · {{ x.name }}</option>{% endfor %}
-        </select></label>
-        <button class="btn btn-primary btn-sm" type="submit">确认关联</button>
-      </form>
-    </details>
-    {% endif %}
-  </section>
-
-  <section class="platform-card" aria-labelledby="why-heading">
-    <h2 id="why-heading">3. 为什么值得关注</h2>
-    <p>{{ opportunity_context.value_reason }}</p>
-    <p>{{ event_insight.importance_reason }}</p>
-    {% if opportunity_context.priority.is_priority %}
-      {% for subject in opportunity_context.priority.subjects %}
-      <p><strong>{{ subject.subject_label }}</strong>：{{ subject.reason }}{% if subject.qbay_context != '无直接会员记录' %}，{{ subject.qbay_context }}{% endif %}。</p>
-      {% endfor %}
-    {% endif %}
-  </section>
-
-  <section class="platform-card" aria-labelledby="relationship-heading">
-    <h2 id="relationship-heading">4. 与我们的关系</h2>
-    {% set relationship_rows = trace.related_context.relationships %}
-    {% if relationship_rows %}
-      {% for row in relationship_rows %}
-      <p><a href="{{ row.url }}">{{ row.label }}</a>{% if row.detail %} · {{ row.detail }}{% endif %}</p>
-      {% endfor %}
-    {% else %}
-      <p>当前未发现直接关系</p>
-    {% endif %}
-  </section>
-
-  <section class="platform-card" aria-labelledby="resources-heading">
-    <h2 id="resources-heading">5. 相关资源</h2>
-    {% set related_resources = trace.related_context.resources %}
-    {% if trace.resources or related_resources %}
-      {% for row in trace.resources %}<p><a href="/resources/{{ row.id }}">{{ row.title }}</a></p>{% endfor %}
-      {% for row in related_resources %}<p><a href="{{ row.url }}">{{ row.label }}</a>{% if row.detail %} · {{ row.detail }}{% endif %}</p>{% endfor %}
-    {% else %}
-      <p>暂无相关资源</p>
-    {% endif %}
-  </section>
-
-  <section class="platform-card" aria-labelledby="next-heading">
-    <h2 id="next-heading">6. 下一步</h2>
-    <p><strong>建议：</strong>{{ opportunity_context.next_action }}</p>
-    {% if opportunity_context.next_action_url %}
-    <p><a class="btn btn-sm btn-outline" href="{{ opportunity_context.next_action_url }}">{{ opportunity_context.next_action }}</a></p>
-    {% endif %}
-    {% if can_write %}
-    <details open>
-      <summary><strong>建立跟进</strong></summary>
-      <p class="text-muted">提交后将使用现有正式跟进记录保存，并保留这条情报作为来源。</p>
-      <form method="post" action="/golden-loop/intelligence/{{ item.id }}/follow-ups" class="form-grid">
-        <label>跟进对象
-          <input name="object_name" required value="{% if trace.subjects %}{{ trace.subjects[0].subject_label }}{% endif %}" placeholder="企业、人物或事项">
-        </label>
-        <label>跟进事项
-          <input name="matter" required value="核实该产业动态对当前业务的影响">
-        </label>
-        <label>为什么要跟进
-          <textarea name="reason" required>{{ opportunity_context.value_reason }}</textarea>
-        </label>
-        <label>下一步做什么
-          <input name="next_action" required value="{{ opportunity_context.next_action }}">
-        </label>
-        <label>计划时间
-          <input name="next_follow_at" type="datetime-local" required>
-        </label>
+  <aside class="intelligence-context" aria-label="业务上下文与下一步">
+    <section class="context-panel" aria-labelledby="relationship-heading"><h2 id="relationship-heading">与我们的关系</h2>{% set relationship_rows = trace.related_context.relationships %}{% if relationship_rows %}{% for row in relationship_rows %}<p><a class="object-link" href="{{ row.url }}">{{ row.label }}</a>{% if row.detail %}<small>{{ row.detail }}</small>{% endif %}</p>{% endfor %}{% else %}<p class="business-empty">当前未发现直接关系</p>{% endif %}</section>
+    <section class="context-panel" aria-labelledby="resources-heading"><h2 id="resources-heading">相关资源</h2>{% set related_resources = trace.related_context.resources %}{% if trace.resources or related_resources %}{% for row in trace.resources %}<p><a class="object-link" href="/resources/{{ row.id }}">{{ row.title }}</a></p>{% endfor %}{% for row in related_resources %}<p><a class="object-link" href="{{ row.url }}">{{ row.label }}</a>{% if row.detail %}<small>{{ row.detail }}</small>{% endif %}</p>{% endfor %}{% else %}<p class="business-empty">暂无相关资源</p>{% endif %}</section>
+    <section class="context-panel action-panel" aria-labelledby="next-heading"><h2 id="next-heading">下一步行动</h2><p>{{ opportunity_context.next_action }}</p>{% if opportunity_context.next_action_url %}<p><a class="text-link" href="{{ opportunity_context.next_action_url }}">打开相关上下文</a></p>{% endif %}
+      {% if can_write %}<details open><summary><strong>建立跟进</strong></summary><form method="post" action="/golden-loop/intelligence/{{ item.id }}/follow-ups" class="stack-form">
+        <label>跟进对象<input name="object_name" required value="{% if trace.subjects %}{{ trace.subjects[0].subject_label }}{% endif %}" placeholder="企业、人物或事项"></label>
+        <label>跟进事项<input name="matter" required value="核实该产业动态对当前业务的影响"></label>
+        <label>为什么要跟进<textarea name="reason" required>{{ opportunity_context.value_reason }}</textarea></label>
+        <label>下一步做什么<input name="next_action" required value="{{ opportunity_context.next_action }}"></label>
+        <label>计划时间<input name="next_follow_at" type="datetime-local" required></label>
         <button class="btn btn-primary" type="submit">建立跟进</button>
-      </form>
-    </details>
-    {% else %}
-    <p class="text-muted">当前账号只可查看，不能建立跟进。</p>
-    {% endif %}
-    {% if can_write %}<form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-dismiss" class="mt-16">
-      <button class="btn btn-outline btn-sm" type="submit">暂不处理</button>
-    </form>{% endif %}
-  </section>
-
-  <details class="platform-card" data-translation-mode="{{ reading.translation_mode }}">
-    <summary><strong>原文与公开证据</strong></summary>
-    {% if reading.translation_mode == 'MANUAL_CURATED_ACCEPTANCE_SAMPLE' %}
-    <p class="text-muted">内容加工标记：MANUAL_CURATED_ACCEPTANCE_SAMPLE</p>
-    {% endif %}
-    <h3>{{ reading.original_title or '原文标题待核对' }}</h3>
-    <p style="white-space:pre-wrap;">{{ reading.original_summary or item.content or '原文摘要待核对' }}</p>
-    {% if item.source_url %}<p><a href="{{ item.source_url }}" target="_blank" rel="noopener">打开公开来源</a></p>{% endif %}
-    {% for ev in evidence %}
-    <article>
-      {% if ev.url %}<p><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or '查看公开证据' }}</a></p>{% endif %}
-      <p>{{ ev.evidence_excerpt or '证据摘录待核对' }}</p>
-    </article>
-    {% endfor %}
-  </details>
+      </form></details><form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-dismiss"><button class="btn btn-tertiary btn-sm" type="submit">暂不处理</button></form>
+      {% else %}<p class="text-muted">当前账号只可查看，不能建立跟进。</p>{% endif %}
+    </section>
+  </aside>
 </div>
 {% endblock %}

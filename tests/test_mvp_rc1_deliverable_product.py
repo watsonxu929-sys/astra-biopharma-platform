@@ -30,7 +30,7 @@ def test_rc1_primary_navigation_is_product_first() -> None:
             {"permissions": sorted(ROLE_PERMISSIONS[role])}, path="/platform"
         )
         assert [item["label"] for item in navigation["primary"]] == [
-            "工作台", "情报", "企业与人物", "跟进",
+            "工作台", "情报", "企业与人物", "俱乐部", "跟进",
         ]
 
 

@@ -44,12 +44,11 @@ def report_jobs_page(request: Request, page: int = 1, status: str = "", message:
     return templates.TemplateResponse(request, "v05h_reports.html", {"mode": "jobs", "jobs": jobs, "status": status, "message": message})
 
 
-@router.get("/reports/{report_id:int}", response_class=HTMLResponse)
-
 @router.get("/reports/products/{product_id:int}", response_class=HTMLResponse)
 def intelligence_product_detail(request: Request, product_id: int, db: Session = Depends(get_db)):
     return RedirectResponse(f"/intelligence/{int(product_id)}", status_code=303)
 
+@router.get("/reports/{report_id:int}", response_class=HTMLResponse)
 def report_detail(request: Request, report_id: int, message: str = "", error: str = ""):
     report = get_report(report_id)
     if not report:
@@ -60,19 +59,19 @@ def report_detail(request: Request, report_id: int, message: str = "", error: st
 @router.post("/reports/{report_id:int}/edit")
 def report_edit(report_id: int, title: str = Form(""), summary: str = Form(""), content_markdown: str = Form("")):
     update_report(report_id, title=title, summary=summary, content_markdown=content_markdown)
-    return RedirectResponse(f"/reports/{report_id:int}?message=已保存", status_code=303)
+    return RedirectResponse(f"/reports/{report_id}?message=已保存", status_code=303)
 
 
 @router.post("/reports/{report_id:int}/submit")
 def report_submit(request: Request, report_id: int):
     submit_report(report_id, actor=current_username(request))
-    return RedirectResponse(f"/reports/{report_id:int}?message=已提交审核", status_code=303)
+    return RedirectResponse(f"/reports/{report_id}?message=已提交审核", status_code=303)
 
 
 @router.post("/reports/{report_id:int}/approve")
 def report_approve(request: Request, report_id: int):
     approve_report(report_id, actor=current_username(request))
-    return RedirectResponse(f"/reports/{report_id:int}?message=已批准", status_code=303)
+    return RedirectResponse(f"/reports/{report_id}?message=已批准", status_code=303)
 
 
 @router.post("/reports/{report_id:int}/archive")
@@ -85,4 +84,3 @@ def report_archive(request: Request, report_id: int):
 def health():
     data = list_reports(page=1, page_size=1)
     return {"ok": True, "version": "0.5H", "report_count": data["pagination"]["total"]}
-

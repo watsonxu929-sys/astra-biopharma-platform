@@ -1,92 +1,26 @@
-﻿{% extends "platform/base.html" %}
-{% block platform_breadcrumb %}
-<nav class="breadcrumb">
-  <a href="/platform">工作台</a>
-  <span class="sep">/</span>
-  <span>协作</span>
-</nav>
-{% endblock %}
-{% block platform_title %}合作机会{% endblock %}
+{% extends "platform/base.html" %}
+{% set active_nav = "collaboration" %}
+{% block platform_title %}跟进{% endblock %}
 {% block platform_page_header %}
-<div class="page-header">
-  <div class="page-header-left">
-    <h1 class="page-title">合作机会</h1>
-    <p class="page-desc">正式合作机会、商务跟进、任务和时间线。</p>
-  </div>
-  <div class="page-header-right">
-    <a class="btn btn-primary" href="/resources">从供需匹配创建机会</a>
-  </div>
-</div>
+<div class="page-header"><div class="page-header-left"><h1 class="page-title">跟进</h1><p class="page-desc">查看正在推进的业务事项、下一步、负责人和计划时间。</p></div><div class="page-header-right"><a class="btn btn-tertiary" href="/resources">从资源上下文进入</a></div></div>
 {% endblock %}
 {% block platform_content %}
-
 <section class="filter-bar">
   <form method="get" action="/opportunities" class="filter-form">
-    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索机会标题、描述" class="filter-input">
-    <select name="stage" class="filter-select">
-      <option value="">全部阶段</option>
-      {% for value, label in [('lead','线索'),('contacted','已联系'),('qualified','已确认'),('negotiating','洽谈中'),('proposal','方案阶段'),('due_diligence','尽职调查'),('agreement','协议阶段'),('won','已达成'),('lost','未成交')] %}
-      <option value="{{ value }}" {% if stage == value %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-    <select name="status" class="filter-select">
-      <option value="active" {% if status in ['', 'active'] %}selected{% endif %}>进行中</option>
-      <option value="paused" {% if status == 'paused' %}selected{% endif %}>已暂停</option>
-      <option value="closed" {% if status == 'closed' %}selected{% endif %}>已关闭</option>
-      <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
-    </select>
-    <select name="outcome" class="filter-select">
-      <option value="">全部结果</option><option value="won" {% if outcome == 'won' %}selected{% endif %}>合作达成</option>
-      <option value="lost" {% if outcome == 'lost' %}selected{% endif %}>未成交</option><option value="paused" {% if outcome == 'paused' %}selected{% endif %}>暂停</option>
-    </select>
-    <select name="owner_id" class="filter-select"><option value="">全部负责人</option>
-      {% for owner in owners %}<option value="{{ owner.id }}" {% if owner_id == owner.id %}selected{% endif %}>{{ owner.username }}</option>{% endfor %}
-    </select>
-    <select name="updated_period" class="filter-select"><option value="">全部更新时间</option>
-      <option value="today" {% if updated_period == 'today' %}selected{% endif %}>今日更新</option>
-      <option value="7days" {% if updated_period == '7days' %}selected{% endif %}>近七天</option>
-      <option value="30days" {% if updated_period == '30days' %}selected{% endif %}>近三十天</option>
-    </select>
-    <select name="follow_scope" class="filter-select"><option value="">全部跟进</option>
-      <option value="today" {% if follow_scope == 'today' %}selected{% endif %}>今日跟进</option>
-      <option value="overdue" {% if follow_scope == 'overdue' %}selected{% endif %}>逾期跟进</option>
-      <option value="future" {% if follow_scope == 'future' %}selected{% endif %}>后续跟进</option>
-    </select>
-    {% if closed_period %}<input type="hidden" name="closed_period" value="{{ closed_period }}">{% endif %}
-    <button class="btn btn-sm" type="submit">筛选</button>
-    {% if q or stage or outcome or owner_id or updated_period or follow_scope or (status and status != 'active') %}
-    <a class="btn btn-sm btn-outline" href="/opportunities">清除</a>
-    {% endif %}
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索跟进对象或事项" class="filter-input">
+    <select name="status" class="filter-select"><option value="active" {% if status in ['', 'active'] %}selected{% endif %}>进行中</option><option value="paused" {% if status == 'paused' %}selected{% endif %}>已暂停</option><option value="closed" {% if status == 'closed' %}selected{% endif %}>已完成 / 关闭</option><option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option></select>
+    <select name="follow_scope" class="filter-select"><option value="">全部计划时间</option><option value="today" {% if follow_scope == 'today' %}selected{% endif %}>今日</option><option value="overdue" {% if follow_scope == 'overdue' %}selected{% endif %}>已逾期</option><option value="future" {% if follow_scope == 'future' %}selected{% endif %}>后续</option></select>
+    <select name="owner_id" class="filter-select"><option value="">全部负责人</option>{% for owner in owners %}<option value="{{ owner.id }}" {% if owner_id == owner.id %}selected{% endif %}>{{ owner.username }}</option>{% endfor %}</select>
+    <button class="btn btn-primary btn-sm" type="submit">筛选</button>
+    {% if q or owner_id or follow_scope or (status and status != 'active') %}<a class="btn btn-tertiary btn-sm" href="/opportunities">清除</a>{% endif %}
   </form>
 </section>
-
-<section class="data-table-section">
-  {% if opps %}
-  <div class="card-grid">
-    {% for o in opps %}
-    <article class="opportunity-card">
-      <div class="opportunity-card-header">
-        <span class="badge badge-{{ o.stage or 'default' }}">{{ o.stage|status_label }}</span>
-        <span class="badge">{{ o.status|status_label }}</span>
-      </div>
-      <h3 class="opportunity-card-title">
-        <a href="/opportunities/{{ o.id }}">{{ o.title }}</a>
-      </h3>
-      <p class="opportunity-card-summary">{{ o.description|default('', true)|truncate(100, True) }}</p>
-      <div class="opportunity-card-meta">
-        <span>负责人：{{ owner_names.get(o.owner_id, '未分配') }}</span>
-        <span>{{ o.updated_at.strftime('%Y-%m-%d') if o.updated_at else '' }}</span>
-      </div>
-    </article>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="empty-state">
-    <div class="empty-icon">🤝</div>
-    <h3>暂无合作机会</h3>
-    <p>接受的联系意向或确认的线索可转为正式机会。</p>
-    <a class="btn btn-sm" href="/resources">查看资源与匹配候选</a>
-  </div>
-  {% endif %}
+<section class="content-section">
+  <div class="section-header"><div><h2>业务跟进</h2><p>Opportunity承载业务对象，FollowUp记录具体下一步。</p></div></div>
+  {% if opps %}<div class="dense-list">{% for item in opps %}<article class="dense-row opportunity-row">
+    <div class="dense-row-main"><div class="row-meta"><span class="badge badge-{{ item.status }}">{{ item.status|status_label }}</span><span>{{ item.stage|status_label }}</span><span>负责人：{{ owner_names.get(item.owner_id, '未分配') }}</span><time>{{ item.updated_at.strftime('%Y-%m-%d') if item.updated_at else '时间待确认' }}</time></div><h3><a class="object-link" href="/opportunities/{{ item.id }}">{{ item.title }}</a></h3>{% if item.description %}<p>{{ item.description|truncate(150, True) }}</p>{% endif %}{% if item.next_action %}<p class="next-action"><strong>下一步：</strong>{{ item.next_action }}</p>{% endif %}</div>
+    <a class="text-link row-open" href="/opportunities/{{ item.id }}">继续跟进</a>
+  </article>{% endfor %}</div>
+  {% else %}<div class="empty-state compact-empty"><p>暂无进行中的跟进。</p><a class="text-link" href="/intelligence">从情报判断下一步</a></div>{% endif %}
 </section>
 {% endblock %}

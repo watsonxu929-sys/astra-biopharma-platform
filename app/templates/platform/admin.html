@@ -1,228 +1,54 @@
 {% extends "platform/base.html" %}
-{% block platform_breadcrumb %}管理中心{% endblock %}
+{% block platform_title %}管理控制台{% endblock %}
 {% block platform_page_header %}
-  <div class="page-header-left"><h1 class="page-title">管理中心</h1><p class="page-subtitle">运营、数据维护、权限和系统治理入口。</p></div>
+<div class="page-header admin-page-heading"><div class="page-header-left"><span class="eyebrow">系统运营与数据治理</span><h1 class="page-title">管理控制台</h1><p class="page-desc">集中处理采集、加工、审核、主数据、Club运营、权限和运行恢复。</p></div></div>
 {% endblock %}
 {% block platform_content %}
-
-<!-- 1. 人物与机构 -->
-<section class="admin-group">
-  <h2 class="group-title">人物与机构</h2>
-  <p class="group-desc">维护主体主数据、身份关联和关系。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>人物库</h3>
-      <p>统一管理人物主数据、标签和关系。</p>
-      <a href="/admin/people" class="btn btn-outline btn-sm">进入管理</a>
-    </div>
-    <div class="platform-card">
-      <h3>机构库</h3>
-      <p>维护机构信息、类型和关联关系。</p>
-      <a href="/admin/organizations" class="btn btn-outline btn-sm">进入管理</a>
-    </div>
-    <div class="platform-card">
-      <h3>数据审核</h3>
-      <p>审核待确认的主体、关系和内容。</p>
-      <a href="/review" class="btn btn-outline btn-sm">进入审核</a>
-    </div>
-  </div>
+<section class="admin-index-section">
+  <div class="section-header"><div><h2>情报运行</h2><p>从来源到正式发布的后台链路。</p></div></div>
+  <div class="table-wrap"><table class="admin-index-table"><thead><tr><th>工具</th><th>职责</th><th>类型</th><th>入口</th></tr></thead><tbody>
+    <tr><td>情报运营总览</td><td>查看采集、加工、审核和发布状态</td><td><span class="badge badge-neutral">运行</span></td><td><a href="/intelligence/operations">打开</a></td></tr>
+    <tr><td>Source管理</td><td>维护来源、发现候选和运行采集</td><td><span class="badge badge-neutral">来源</span></td><td><a href="/collection/sources">打开</a></td></tr>
+    <tr><td>Collection运行</td><td>查看采集记录、原始条目与失败</td><td><span class="badge badge-neutral">日志</span></td><td><a href="/collection">打开</a></td></tr>
+    <tr><td>情报加工</td><td>创建、恢复和检查Processing Job</td><td><span class="badge badge-warning">工具</span></td><td><a href="/processing/jobs">打开</a></td></tr>
+    <tr><td>候选与审核</td><td>核对候选、证据和正式发布</td><td><span class="badge badge-warning">审核</span></td><td><a href="/processing/review-queue">打开</a></td></tr>
+    <tr><td>报告生成</td><td>运行固定模板并查看生成任务</td><td><span class="badge badge-neutral">固定模板</span></td><td><a href="/reports/jobs">打开</a></td></tr>
+  </tbody></table></div>
 </section>
 
-<!-- 2. 会员与俱乐部 -->
-<section class="admin-group">
-  <h2 class="group-title">会员与俱乐部</h2>
-  <p class="group-desc">会员管理、活动、供需和申请处理。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>会员管理</h3>
-      <p>查看和管理俱乐部会员。</p>
-      <a href="/club/members" class="btn btn-outline btn-sm">进入管理</a>
-    </div>
-    <div class="platform-card">
-      <h3>活动管理</h3>
-      <p>创建和管理俱乐部活动。</p>
-      <a href="/club/events" class="btn btn-outline btn-sm">进入管理</a>
-    </div>
-    <div class="platform-card">
-      <h3>会员申请</h3>
-      <p>处理入会申请和审批。</p>
-      <a href="/club" class="btn btn-outline btn-sm">查看申请</a>
-    </div>
-    <div class="platform-card">
-      <h3>数据导入</h3>
-      <p>批量导入会员和机构数据。</p>
-      <a href="/club/import" class="btn btn-outline btn-sm">进入导入</a>
-    </div>
-  </div>
+<section class="admin-index-section">
+  <div class="section-header"><div><h2>主体与数据治理</h2><p>正式主数据、关系和完整性控制。</p></div></div>
+  <div class="table-wrap"><table class="admin-index-table"><thead><tr><th>工具</th><th>职责</th><th>类型</th><th>入口</th></tr></thead><tbody>
+    <tr><td>人物维护</td><td>维护人物主数据与身份关联</td><td>主数据</td><td><a href="/admin/people">打开</a></td></tr>
+    <tr><td>机构维护</td><td>维护企业和机构主数据</td><td>主数据</td><td><a href="/admin/organizations">打开</a></td></tr>
+    <tr><td>主体治理</td><td>处理主体候选、合并预览和关系审核</td><td>审核</td><td><a href="/network/governance">打开</a></td></tr>
+    <tr><td>数据完整性</td><td>检查数据质量和恢复状态</td><td>安全</td><td><a href="/admin/data-integrity">打开</a></td></tr>
+  </tbody></table></div>
 </section>
 
-<!-- 3. 情报运营 -->
-<section class="admin-group">
-  <h2 class="group-title">情报运营</h2>
-  <p class="group-desc">采集、处理、审核、发布和报告全流程。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>情报运营中心</h3>
-      <p>工作流总览和快捷操作入口。</p>
-      <a href="/intelligence/operations" class="btn btn-outline btn-sm">进入中心</a>
-    </div>
-    <div class="platform-card">
-      <h3>数据源管理</h3>
-      <p>配置和管理情报采集数据源。</p>
-      <a href="/collection/sources" class="btn btn-outline btn-sm">管理数据源</a>
-    </div>
-    <div class="platform-card">
-      <h3>数据处理</h3>
-      <p>查看和处理采集内容。</p>
-      <a href="/processing/jobs" class="btn btn-outline btn-sm">查看任务</a>
-    </div>
-    <div class="platform-card">
-      <h3>情报审核与发布</h3>
-      <p>审核候选情报并发布。</p>
-      <a href="/admin/intelligence" class="btn btn-outline btn-sm">进入管理</a>
-    </div>
-    <div class="platform-card">
-      <h3>候选匹配</h3>
-      <p>查看待处理候选匹配结果。</p>
-      <a href="/processing/candidates" class="btn btn-outline btn-sm">查看候选</a>
-    </div>
-    <div class="platform-card">
-      <h3>产业信号</h3>
-      <p>查看和分析产业动态信号。</p>
-      <a href="/signals" class="btn btn-outline btn-sm">查看信号</a>
-    </div>
-    <div class="platform-card">
-      <h3>报告中心</h3>
-      <p>生成和查看情报分析报告。</p>
-      <a href="/reports" class="btn btn-outline btn-sm">查看报告</a>
-    </div>
-  </div>
+<section class="admin-index-section">
+  <div class="section-header"><div><h2>Q-BAY运营</h2><p>会员、活动、供需和会后工作。</p></div></div>
+  <div class="table-wrap"><table class="admin-index-table"><thead><tr><th>工具</th><th>职责</th><th>类型</th><th>入口</th></tr></thead><tbody>
+    <tr><td>运营队列</td><td>处理会员申请、报名、签到和会后跟进</td><td>运营</td><td><a href="/club/operations">打开</a></td></tr>
+    <tr><td>会员维护</td><td>查看会员并处理受控维护</td><td>会员</td><td><a href="/club/members?tab=applications">打开</a></td></tr>
+    <tr><td>活动维护</td><td>发起活动并管理状态</td><td>活动</td><td><a href="/club/events">打开</a></td></tr>
+    <tr><td>会员导入</td><td>预览并受控导入既有会员数据</td><td>导入</td><td><a href="/club/import">打开</a></td></tr>
+  </tbody></table></div>
 </section>
 
-<!-- 4. 资源与合作 -->
-<section class="admin-group">
-  <h2 class="group-title">资源与合作</h2>
-  <p class="group-desc">资源管理、合作机会和协作任务。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>资源市场</h3>
-      <p>管理供给和需求资源。</p>
-      <a href="/resources" class="btn btn-outline btn-sm">进入市场</a>
-    </div>
-    <div class="platform-card">
-      <h3>合作机会</h3>
-      <p>跟踪和管理合作机会。</p>
-      <a href="/opportunities" class="btn btn-outline btn-sm">查看机会</a>
-    </div>
-    <div class="platform-card">
-      <h3>协作任务</h3>
-      <p>查看和分配协作任务。</p>
-      <a href="/workspace" class="btn btn-outline btn-sm">查看任务</a>
-    </div>
-  </div>
+<section class="admin-index-section">
+  <div class="section-header"><div><h2>权限与系统</h2><p>账号、权限和运行状态。</p></div></div>
+  <div class="table-wrap"><table class="admin-index-table"><thead><tr><th>工具</th><th>职责</th><th>类型</th><th>入口</th></tr></thead><tbody>
+    <tr><td>用户与权限</td><td>维护系统用户和角色权限</td><td>安全</td><td><a href="/admin/users">打开</a></td></tr>
+    <tr><td>运行状态</td><td>检查应用健康和关键服务状态</td><td>运维</td><td><a href="/api/v1/health" target="_blank" rel="noopener">打开</a></td></tr>
+  </tbody></table></div>
 </section>
 
-<!-- 5. 数据治理 -->
-<section class="admin-group">
-  <h2 class="group-title">数据治理</h2>
-  <p class="group-desc">数据完整性、质量、审核和审计。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>审核队列</h3>
-      <p>审核待确认的数据和内容。</p>
-      <a href="/review" class="btn btn-outline btn-sm">进入审核</a>
-    </div>
-    <div class="platform-card">
-      <h3>候选数据</h3>
-      <p>查看和处理候选匹配数据。</p>
-      <a href="/processing/candidates" class="btn btn-outline btn-sm">查看候选</a>
-    </div>
-  </div>
-</section>
+<details class="admin-inline-tool">
+  <summary><strong>产业标签维护</strong></summary>
+  <form method="post" action="/admin/tags/create" class="admin-form-panel compact-form"><div class="form-grid"><label>分组<select name="tag_group"><option value="user_type">用户类型</option><option value="industry_direction">产业方向</option><option value="capability">能力标签</option><option value="need">需求标签</option></select></label><label>标签名称<input name="label" required></label></div><button class="btn btn-primary" type="submit">添加标签</button></form>
+  <div class="table-wrap"><table class="admin-index-table"><thead><tr><th>分组</th><th>标签</th><th>标识</th><th>状态</th></tr></thead><tbody>{% for tag in tags %}<tr><td>{{ tag.tag_group }}</td><td>{{ tag.label }}</td><td>{{ tag.tag_key }}</td><td>{{ '启用' if tag.is_active else '停用' }}</td></tr>{% else %}<tr><td colspan="4">暂无产业标签</td></tr>{% endfor %}</tbody></table></div>
+</details>
 
-<!-- 6. 用户与权限 -->
-<section class="admin-group">
-  <h2 class="group-title">用户与权限</h2>
-  <p class="group-desc">用户管理、角色权限和操作审计。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>用户管理</h3>
-      <p>管理系统用户和角色。</p>
-      <a href="/admin/users" class="btn btn-outline btn-sm">进入管理</a>
-    </div>
-  </div>
-</section>
-
-<!-- 7. 系统运维 -->
-<section class="admin-group">
-  <h2 class="group-title">系统运维</h2>
-  <p class="group-desc">运行状态、日志和系统配置。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>API 健康</h3>
-      <p>检查系统各模块运行状态。</p>
-      <a href="/api/v1/health" target="_blank" class="btn btn-outline btn-sm">查看状态</a>
-    </div>
-  </div>
-</section>
-
-<!-- 实验功能 -->
-<section class="admin-group">
-  <h2 class="group-title">实验功能</h2>
-  <p class="group-desc">试点能力和建设中功能，仅供管理员测试使用。</p>
-  <div class="platform-grid platform-grid-3">
-    <div class="platform-card">
-      <h3>项目管理</h3>
-      <p><span class="badge badge-warning">试点能力</span> 项目管理模块。</p>
-      <a href="/projects" class="btn btn-outline btn-sm">进入测试</a>
-    </div>
-    <div class="platform-card">
-      <h3>事件管理</h3>
-      <p><span class="badge badge-warning">试点能力</span> 事件管理模块。</p>
-      <a href="/events" class="btn btn-outline btn-sm">进入测试</a>
-    </div>
-    <div class="platform-card">
-      <h3>关系管理</h3>
-      <p><span class="badge badge-warning">试点能力</span> 关系管理模块。</p>
-      <a href="/relations" class="btn btn-outline btn-sm">进入测试</a>
-    </div>
-    <div class="platform-card">
-      <h3>动作任务</h3>
-      <p><span class="badge badge-warning">试点能力</span> 动作任务管理。</p>
-      <a href="/actions" class="btn btn-outline btn-sm">进入测试</a>
-    </div>
-    <div class="platform-card">
-      <h3>导入记录</h3>
-      <p><span class="badge badge-warning">试点能力</span> 数据导入记录。</p>
-      <a href="/imports" class="btn btn-outline btn-sm">进入测试</a>
-    </div>
-    <div class="platform-card">
-      <h3>智能粘贴</h3>
-      <p><span class="badge badge-warning">试点能力</span> 智能文本分析粘贴。</p>
-      <a href="/analyze/paste" class="btn btn-outline btn-sm">进入测试</a>
-    </div>
-    <div class="platform-card">
-      <h3>流水线管理</h3>
-      <p><span class="badge badge-warning">试点能力</span> 数据处理流水线。</p>
-      <a href="/pipeline" class="btn btn-outline btn-sm">进入测试</a>
-    </div>
-  </div>
-</section>
-
-<!-- 产业标签管理 -->
-<section class="platform-card mt-16">
-  <h2>产业标签管理</h2>
-  <form method="post" action="/admin/tags/create" class="platform-form">
-    <div class="grid-2">
-      <label>分组<select name="tag_group"><option value="user_type">用户类型</option><option value="industry_direction">产业方向</option><option value="capability">能力标签</option><option value="need">需求标签</option></select></label>
-      <label>标签名称<input name="label" required></label>
-    </div>
-    <button class="btn btn-primary">添加标签</button>
-  </form>
-  <table class="admin-table">
-    <thead><tr><th>分组</th><th>标签</th><th>标识</th><th>状态</th></tr></thead>
-    <tbody>{% for t in tags %}<tr><td>{{ t.tag_group }}</td><td>{{ t.label }}</td><td>{{ t.tag_key }}</td><td>{{ '启用' if t.is_active else '停用' }}</td></tr>{% else %}<tr><td colspan="4" class="empty">暂无标签</td></tr>{% endfor %}
-    </tbody>
-  </table>
-</section>
+<details class="admin-archive-links"><summary>历史兼容工具</summary><p>以下入口继续保留用于历史恢复，不属于正式产品页面。</p><div class="utility-links"><a href="/projects">项目维护</a><a href="/events">事件维护</a><a href="/relations">关系维护</a><a href="/actions">动作记录</a><a href="/imports">导入记录</a><a href="/pipeline">历史流水线</a></div></details>
 {% endblock %}

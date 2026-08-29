@@ -618,7 +618,7 @@ def required_permission(path: str, method: str) -> str | None:
         return "view_internal"
     if path.startswith("/api/v1/network/people/"):
         return "view_internal"
-    if path == "/club" and method in {"GET", "HEAD", "OPTIONS"}:
+    if path in {"/club", "/club/members", "/club/matches"} and method in {"GET", "HEAD", "OPTIONS"}:
         return "view_internal"
     if method in {"GET", "HEAD", "OPTIONS"} and (path == "/club/events" or bool(re.fullmatch(r"/club/events/[0-9]+", path))):
         return "view_internal"

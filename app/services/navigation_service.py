@@ -6,15 +6,13 @@ from app.platform.capability_registry import filter_capabilities, list_capabilit
 
 INTELLIGENCE_WORK_ENTRY_KEYS = {
     "intelligence.feed",
-    "intelligence.collection",
-    "intelligence.processing",
-    "intelligence.review",
     "intelligence.reports",
+    "intelligence.subscriptions",
 }
 NETWORK_WORK_ENTRY_KEYS = {
+    "network.organizations",
     "network.people",
     "network.graph",
-    "network.governance",
     "network.recommendations",
 }
 RESOURCES_WORK_ENTRY_KEYS = {
@@ -24,8 +22,6 @@ RESOURCES_WORK_ENTRY_KEYS = {
     "resources.matching",
 }
 COLLABORATION_WORK_ENTRY_KEYS = {
-    "collaboration.home",
-    "collaboration.leads",
     "collaboration.opportunities",
     "collaboration.tasks",
     "collaboration.meetings",
@@ -35,9 +31,8 @@ CLUB_WORK_ENTRY_KEYS = {
     "club.members",
     "club.events",
     "club.matching",
-    "club.operations",
 }
-PRIMARY_ORDER = ["workspace", "intelligence", "network", "collaboration"]
+PRIMARY_ORDER = ["workspace", "intelligence", "network", "club", "collaboration"]
 CLIENTS = {"web", "app", "miniprogram", "admin"}
 
 
@@ -88,13 +83,15 @@ def get_primary_navigation(context: dict[str, Any] | None, path: str = "/", *, c
         cap = by_key.get(key)
         if cap:
             result.append(_nav_item(cap, path))
-    return result[:4]
+    return result
 
 
 def get_secondary_navigation(context: dict[str, Any] | None, active_category: str | None = None, path: str = "/", *, client: str = "web") -> list[dict[str, Any]]:
     active_category = active_category or resolve_active_capability(path).get("category") or "workspace"
     caps = [cap for cap in _allowed_capabilities(context, client=client) if cap.get("category") == active_category and cap.get("parent_key")]
-    if active_category == "intelligence":
+    if active_category == "workspace":
+        caps = []
+    elif active_category == "intelligence":
         caps = [cap for cap in caps if cap.get("capability_key") in INTELLIGENCE_WORK_ENTRY_KEYS]
     elif active_category == "network":
         caps = [cap for cap in caps if cap.get("capability_key") in NETWORK_WORK_ENTRY_KEYS]

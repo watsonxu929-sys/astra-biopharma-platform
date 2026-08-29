@@ -1,59 +1,43 @@
 {% extends "platform/base.html" %}
-{% block platform_breadcrumb %}
-<nav class="breadcrumb">
-  <a href="/platform">工作台</a>
-  <span class="sep">/</span>
-  <span>关系</span>
-</nav>
-{% endblock %}
-{% block platform_title %}关系{% endblock %}
+{% set active_nav = "network" %}
+{% block platform_title %}企业与人物{% endblock %}
 {% block platform_page_header %}
 <div class="page-header">
-  <div class="page-header-left">
-    <h1 class="page-title">关系</h1>
-    <p class="page-desc">发现人物、机构和可信连接关系。</p>
-  </div>
-  <div class="page-header-right">
-    <a class="btn btn-primary" href="/network/people">人物发现</a>
-    {% if stats.relation_count %}<a class="btn btn-outline" href="/network/graph">关系网络</a>{% endif %}
-  </div>
+  <div class="page-header-left"><h1 class="page-title">企业与人物</h1><p class="page-desc">直接查找企业、机构和人物，并查看我们与其已有的业务上下文。</p></div>
 </div>
 {% endblock %}
 {% block platform_content %}
+<nav class="directory-tabs" aria-label="主体类型">
+  <a class="active" href="/network">企业与机构</a>
+  <a href="/network/people">人物</a>
+</nav>
+<form method="get" action="/network" class="filter-bar directory-search">
+  <input name="q" value="{{ q }}" placeholder="搜索企业、人物、机构……" aria-label="搜索企业、人物、机构">
+  <button type="submit" class="btn btn-primary btn-sm">搜索</button>
+  {% if q %}<a class="btn btn-tertiary btn-sm" href="/network">清除</a>{% endif %}
+</form>
 
-<div class="dashboard-grid">
-  <section class="dashboard-card">
-    <div class="card-stats">
-      <div class="stat-item"><span class="stat-value">{{ stats.people_count or 0 }}</span><span class="stat-label">人物数量</span></div>
-      <div class="stat-item"><span class="stat-value">{{ stats.org_count or 0 }}</span><span class="stat-label">机构数量</span></div>
-      <div class="stat-item"><span class="stat-value">{{ stats.relation_count or 0 }}</span><span class="stat-label">当前关系</span></div>
-    </div>
-  </section>
-
-  <section class="dashboard-card">
-    <h3 class="card-title">快速入口</h3>
-    <div class="quick-links">
-      <a href="/network/people" class="quick-link-item">
-        <span class="quick-link-icon">👥</span>
-        <span class="quick-link-text">人物与机构</span>
-        <span class="quick-link-desc">浏览产业人物和机构档案</span>
-      </a>
-      <a href="/network/graph" class="quick-link-item">
-      {% if stats.relation_count %}
-        <span class="quick-link-icon">🔗</span>
-        <span class="quick-link-text">关系网络</span>
-        <span class="quick-link-desc">查看主体关系图谱和路径</span>
-      </a>
-      {% if request.scope.get('security_context', {}).get('can_manage_users') %}
-      {% endif %}
-      <a href="/network/governance" class="quick-link-item">
-        <span class="quick-link-icon">🛡️</span>
-        <span class="quick-link-text">主体治理</span>
-        <span class="quick-link-desc">主体消歧、合并和关系审核</span>
-      </a>
-      {% endif %}
-    </div>
-  </section>
-
-</div>
+<section class="content-section directory-section" aria-labelledby="organization-list-title">
+  <div class="section-header"><div><h2 id="organization-list-title">企业与机构</h2><p>共 {{ organizations|length }} 个可用档案；优先显示Q-BAY及已有业务上下文的主体。</p></div></div>
+  {% if organizations %}
+  <div class="directory-list">
+    {% for org in organizations %}
+    <article class="directory-row">
+      <div class="directory-identity">
+        <h3><a class="object-link" href="/network/entities/organization/{{ org.external_id }}">{{ org.standard_name }}</a>{% if org.membership_count %}<span class="badge badge-info">Q-BAY</span>{% endif %}</h3>
+        <p>{% if org.org_type %}{{ org.org_type }}{% endif %}{% if org.region %} · {{ org.region }}{% endif %}</p>
+        {% if org.industry_tags %}<div class="tag-line">{% for tag in org.industry_tags.split(';')[:4] %}{% if tag.strip() %}<span class="tag">{{ tag.strip() }}</span>{% endif %}{% endfor %}</div>{% endif %}
+      </div>
+      <div class="directory-context">
+        {% if org.recent_intelligence_title %}<p><strong>最近动态</strong>{{ org.recent_intelligence_title|truncate(55, True) }}</p>{% else %}<p class="text-muted">暂无相关产业动态</p>{% endif %}
+        <div class="context-counts">
+          <span>关系 {{ org.relationship_count }}</span><span>资源 {{ org.resource_count }}</span><span>跟进 {{ org.follow_up_count }}</span>
+        </div>
+      </div>
+      <a class="text-link row-open" href="/network/entities/organization/{{ org.external_id }}">查看档案</a>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty-state compact-empty"><p>未找到符合条件的企业或机构。</p></div>{% endif %}
+</section>
 {% endblock %}

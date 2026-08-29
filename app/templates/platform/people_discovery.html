@@ -1,54 +1,32 @@
 {% extends "platform/base.html" %}
-{% block platform_title %}产业人物{% endblock %}
+{% set active_nav = "network" %}
+{% block platform_title %}企业与人物 · 人物{% endblock %}
+{% block platform_page_header %}
+<div class="page-header"><div class="page-header-left"><h1 class="page-title">企业与人物</h1><p class="page-desc">查找产业人物，沿其所属机构和现有业务上下文继续浏览。</p></div></div>
+{% endblock %}
 {% block platform_content %}
-<h1 class="page-title">人物发现</h1>
-  <p class="page-subtitle">发现生物医药产业值得认识的人物</p>
-
-  <form method="get" class="filter-bar">
-    <input name="name" value="{{ name_filter }}" placeholder="姓名关键词">
-    <select name="user_type"><option value="">用户类型</option>
-      {% for t in all_tags if t.tag_group == 'user_type' %}<option value="{{ t.label }}" {% if user_type == t.label %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
-    </select>
-    <select name="industry_direction"><option value="">产业方向</option>
-      {% for t in all_tags if t.tag_group == 'industry_direction' %}<option value="{{ t.label }}" {% if industry_direction == t.label %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
-    </select>
-    <select name="capability"><option value="">能力标签</option>
-      {% for t in all_tags if t.tag_group == 'capability' %}<option value="{{ t.label }}" {% if capability == t.label %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
-    </select>
-    <select name="need"><option value="">需求标签</option>
-      {% for t in all_tags if t.tag_group == 'need' %}<option value="{{ t.label }}" {% if need == t.label %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
-    </select>
-    <input name="organization" value="{{ organization }}" placeholder="所属机构">
-    <input name="region" value="{{ region }}" placeholder="地区">
-    <button type="submit" class="btn btn-primary btn-sm">筛选</button>
-  </form>
-
+<nav class="directory-tabs" aria-label="主体类型"><a href="/network">企业与机构</a><a class="active" href="/network/people">人物</a></nav>
+<form method="get" class="filter-bar directory-search">
+  <input name="name" value="{{ name_filter }}" placeholder="搜索姓名">
+  <select name="industry_direction"><option value="">全部产业方向</option>{% for t in all_tags if t.tag_group == 'industry_direction' %}<option value="{{ t.label }}" {% if industry_direction == t.label %}selected{% endif %}>{{ t.label }}</option>{% endfor %}</select>
+  <select name="capability"><option value="">全部能力标签</option>{% for t in all_tags if t.tag_group == 'capability' %}<option value="{{ t.label }}" {% if capability == t.label %}selected{% endif %}>{{ t.label }}</option>{% endfor %}</select>
+  <input name="organization" value="{{ organization }}" placeholder="所属企业或机构">
+  <input name="region" value="{{ region }}" placeholder="地区">
+  <button type="submit" class="btn btn-primary btn-sm">筛选</button>
+</form>
+<section class="content-section directory-section">
+  <div class="section-header"><div><h2>人物</h2><p>共 {{ total }} 位可用人物档案。</p></div></div>
   {% if items %}
-  <p class="text-sm text-muted mb-16">共 {{ total }} 位人物</p>
-  <div class="person-cards">
-    {% for p in items %}
-    <div class="person-card">
-      <div class="person-name"><a href="/network/people/{{ p.id }}">{{ p.name }}</a></div>
-      <div class="person-role">{{ p.public_role or '' }}</div>
-      <div class="person-org">{{ p.organization_network or '' }}</div>
-      <div class="person-tags">
-        {% for t in p.tags[:4] %}<span class="tag tag-blue">{{ t.label }}</span>{% endfor %}
-      </div>
-      {% if p.profile and p.profile.contact_visibility != 'private' %}
-      <div class="text-sm text-muted" style="margin-top:4px;">联系方式可见：{{ p.profile.contact_visibility }}</div>
-      {% endif %}
-      <div class="person-actions"><a href="/network/people/{{ p.id }}" class="btn btn-sm">查看详情</a></div>
-    </div>
+  <div class="directory-list">
+    {% for person in items %}
+    <article class="directory-row">
+      <div class="directory-identity"><h3><a class="object-link" href="/network/people/{{ person.id }}">{{ person.name }}</a></h3><p>{{ person.public_role or '身份待补充' }}{% if person.organization_network %} · {{ person.organization_network }}{% endif %}</p></div>
+      <div class="directory-context">{% if person.tags %}<div class="tag-line">{% for tag in person.tags[:4] %}<span class="tag">{{ tag.label }}</span>{% endfor %}</div>{% else %}<p class="text-muted">暂无已确认标签</p>{% endif %}</div>
+      <a class="text-link row-open" href="/network/people/{{ person.id }}">查看人物</a>
+    </article>
     {% endfor %}
   </div>
-  {% if total > 20 %}
-  <div class="pagination mt-16">
-    {% if page > 1 %}<a href="?page={{ page - 1 }}&name={{ name_filter }}&user_type={{ user_type }}" class="btn btn-sm">上一页</a>{% endif %}
-    <span class="text-sm">第 {{ page }} 页</span>
-    <a href="?page={{ page + 1 }}&name={{ name_filter }}&user_type={{ user_type }}" class="btn btn-sm">下一页</a>
-  </div>
-  {% endif %}
-  {% else %}
-  <div class="empty-state"><div class="empty-icon">&#x1f50d;</div><h3>暂无匹配的产业人物</h3><p>尝试调整筛选条件或扩大搜索范围。</p></div>
-  {% endif %}
+  {% if total > 20 %}<nav class="pagination" aria-label="分页">{% if page > 1 %}<a href="?page={{ page - 1 }}&name={{ name_filter }}&industry_direction={{ industry_direction }}&capability={{ capability }}" class="btn btn-tertiary btn-sm">上一页</a>{% endif %}<span>第 {{ page }} 页</span><a href="?page={{ page + 1 }}&name={{ name_filter }}&industry_direction={{ industry_direction }}&capability={{ capability }}" class="btn btn-tertiary btn-sm">下一页</a></nav>{% endif %}
+  {% else %}<div class="empty-state compact-empty"><p>未找到符合条件的人物。</p></div>{% endif %}
+</section>
 {% endblock %}

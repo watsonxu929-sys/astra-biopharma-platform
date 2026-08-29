@@ -4,95 +4,86 @@
 <div class="page-header">
   <div class="page-header-left">
     <h1 class="page-title">工作台</h1>
-    <p class="page-desc">先处理今天最值得关注的产业动态，再推进自己的跟进。</p>
+    <p class="page-desc">从值得处理的产业动态开始，连续推进到跟进与行动。</p>
   </div>
+  <div class="page-header-right"><a class="btn btn-primary" href="/intelligence">查看全部情报</a></div>
 </div>
 {% endblock %}
 {% block platform_content %}
-{% if request.query_params.get('message') %}
-<div class="success-box" role="status">{{ request.query_params.get('message') }}</div>
-{% endif %}
+{% if request.query_params.get('message') %}<div class="success-box" role="status">{{ request.query_params.get('message') }}</div>{% endif %}
 
-<section class="platform-card" aria-labelledby="today-heading">
-  <div class="platform-card-header">
-    <div>
-      <h2 id="today-heading">今天值得处理</h2>
-      <p class="text-muted">仅展示近三十天内、按业务上下文排序的真实产业动态。</p>
-    </div>
-    <a class="btn btn-sm btn-outline" href="/intelligence">查看全部情报</a>
+<section class="workbench-summary" aria-label="今日工作摘要">
+  <div><strong>今天有 {{ feed|length }} 件值得处理</strong><span>依据真实业务上下文排序，不制造高优先级。</span></div>
+  <nav>
+    <a href="#today">产业动态 <b>{{ feed|length }}</b></a>
+    <a href="#todo">我的待办 <b>{{ tasks|length }}</b></a>
+    <a href="#followups">近期跟进 <b>{{ my_follow_ups|length }}</b></a>
+  </nav>
+</section>
+
+<section class="content-section" id="today" aria-labelledby="today-heading">
+  <div class="section-header">
+    <div><h2 id="today-heading">今天值得处理</h2><p>近三十天内、与主体、资源或既有关系有关的产业动态。</p></div>
+    <a class="text-link" href="/intelligence">查看全部</a>
   </div>
   {% if feed %}
-  <div class="card-grid">
+  <div class="dense-list">
     {% for item in feed %}
-    <article class="intel-card" data-intelligence-id="{{ item.id }}">
-      <div class="intel-card-header">
-        <span class="badge">{{ item.priority_reason }}</span>
-        <span>{{ (item.published_at|string)[:10] if item.published_at else '近期' }}</span>
+    <article class="dense-row intelligence-row" data-intelligence-id="{{ item.id }}">
+      <div class="dense-row-main">
+        <div class="row-meta"><span class="badge badge-info">{{ item.priority_reason }}</span><time>{{ (item.published_at|string)[:10] if item.published_at else '近期' }}</time></div>
+        <h3><a class="object-link" href="/intelligence/{{ item.id }}">{{ item.display_title }}</a></h3>
+        <p>{{ item.display_summary|truncate(150, True) }}</p>
+        <div class="context-line">
+          <span>主体：{% for subject in item.subjects %}<a class="object-link" href="{{ subject.subject_url }}">{{ subject.subject_label }}</a>{% if not loop.last %}、{% endif %}{% else %}尚待人工确认{% endfor %}</span>
+          <span>{{ '已有关系 ' ~ item.relationship_count ~ ' 条' if item.relationship_count else '当前未发现直接关系' }}</span>
+          <span>{{ '相关资源 ' ~ item.resource_count ~ ' 项' if item.resource_count else '暂无相关资源' }}</span>
+        </div>
+        <p class="next-action"><strong>下一步：</strong>{{ item.next_action }}</p>
       </div>
-      <h3 class="intel-card-title"><a href="/intelligence/{{ item.id }}">{{ item.display_title }}</a></h3>
-      <p class="intel-card-summary">{{ item.display_summary|truncate(150, True) }}</p>
-      <p><strong>涉及主体：</strong>
-        {% for subject in item.subjects %}{{ subject.subject_label }}{% if not loop.last %}、{% endif %}
-        {% else %}尚待人工确认{% endfor %}
-      </p>
-      <p><strong>业务上下文：</strong>
-        {% if item.relationship_count %}已有关系 {{ item.relationship_count }} 条{% else %}当前未发现直接关系{% endif %}；
-        {% if item.resource_count %}相关资源 {{ item.resource_count }} 项{% else %}暂无相关资源{% endif %}
-      </p>
-      <p><strong>建议：</strong>{{ item.next_action }}</p>
-      <div class="header-actions">
-        <a class="btn btn-primary btn-sm" href="/intelligence/{{ item.id }}">查看并决定下一步</a>
-        {% if user_id %}
-        <form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-dismiss">
-          <button class="btn btn-outline btn-sm" type="submit">暂不处理</button>
-        </form>
-        {% endif %}
-      </div>
+      {% if user_id %}<form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-dismiss"><button class="btn btn-tertiary btn-sm" type="submit">暂不处理</button></form>{% endif %}
     </article>
     {% endfor %}
   </div>
   {% else %}
-  <div class="empty-state">
-    <p>今天暂时没有需要优先处理的产业动态。</p>
-    <a class="btn btn-sm" href="/intelligence">查看全部情报</a>
-  </div>
+  <div class="empty-state compact-empty"><p>今天暂时没有需要优先处理的产业动态。</p><a class="text-link" href="/intelligence">查看全部情报</a></div>
   {% endif %}
 </section>
 
-<section class="platform-card" aria-labelledby="follow-heading">
-  <div class="platform-card-header">
-    <h2 id="follow-heading">我的待办</h2>
-    <a class="btn btn-sm btn-outline" href="/opportunities">查看全部跟进</a>
-  </div>
-  {% if my_follow_ups %}
-  <div class="relation-list">
-    {% for item in my_follow_ups %}
-    <article class="relation-item">
-      <div>
-        <a href="/opportunities/{{ item.opportunity_id }}"><strong>{{ item.opportunity_title }}</strong></a>
-        <p>{{ item.content }}</p>
-        <p><strong>下一步：</strong>{{ item.next_action or '继续人工跟进' }}</p>
-      </div>
-      <span>进行中 · {{ ((item.next_follow_at|string)[:16]|replace('T',' ')) if item.next_follow_at else '时间待确认' }}</span>
-    </article>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="text-muted">暂无进行中的跟进</p>
-  {% endif %}
-</section>
+<div class="workbench-columns">
+  <section class="content-section" id="todo" aria-labelledby="todo-heading">
+    <div class="section-header"><div><h2 id="todo-heading">我的待办</h2><p>需要当前用户完成的行动任务。</p></div><a class="text-link" href="/opportunities">查看全部</a></div>
+    {% if tasks %}
+    <div class="dense-list">
+      {% for task in tasks[:6] %}
+      <article class="dense-row">
+        <div><h3><a class="object-link" href="{{ '/opportunities/' ~ task.opportunity_id if task.opportunity_id else '/opportunities' }}">{{ task.title }}</a></h3><p>{{ task.due_date.strftime('%Y-%m-%d %H:%M') if task.due_date else '计划时间待确认' }}</p></div>
+        <span class="badge badge-{{ task.status }}">{{ task.status|status_label }}</span>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}<p class="business-empty">暂无待处理任务</p>{% endif %}
+  </section>
+
+  <section class="content-section" id="followups" aria-labelledby="follow-heading">
+    <div class="section-header"><div><h2 id="follow-heading">最近跟进</h2><p>由情报或机会产生的下一步行动。</p></div><a class="text-link" href="/opportunities">查看全部</a></div>
+    {% if my_follow_ups %}
+    <div class="dense-list">
+      {% for item in my_follow_ups[:6] %}
+      <article class="dense-row">
+        <div><h3><a class="object-link" href="/opportunities/{{ item.opportunity_id }}">{{ item.opportunity_title }}</a></h3><p>{{ item.content }}</p><p class="next-action"><strong>下一步：</strong>{{ item.next_action or '继续人工跟进' }}</p></div>
+        <time>{{ ((item.next_follow_at|string)[:16]|replace('T',' ')) if item.next_follow_at else '时间待确认' }}</time>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}<p class="business-empty">暂无进行中的跟进</p>{% endif %}
+  </section>
+</div>
 
 {% if dismissed_today %}
-<details class="platform-card">
-  <summary><strong>今天已忽略（{{ dismissed_today|length }}）</strong></summary>
-  {% for item in dismissed_today %}
-  <div class="relation-item">
-    <a href="/intelligence/{{ item.id }}">{{ item.display_title }}</a>
-    <form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-restore">
-      <button class="btn btn-sm btn-outline" type="submit">恢复</button>
-    </form>
-  </div>
-  {% endfor %}
+<details class="utility-section"><summary>今天已忽略（{{ dismissed_today|length }}）</summary>
+  {% for item in dismissed_today %}<div class="utility-row"><a class="object-link" href="/intelligence/{{ item.id }}">{{ item.display_title }}</a><form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-restore"><button class="btn btn-tertiary btn-sm" type="submit">恢复</button></form></div>{% endfor %}
 </details>
 {% endif %}
+<section class="utility-section" id="favorites"><div class="section-header"><div><h2>个人工具</h2><p>收藏和辅助入口不会影响今日工作排序。</p></div></div><span class="text-muted">我的收藏 {{ favorites|length }} 项</span></section>
 {% endblock %}

@@ -1,44 +1,24 @@
 {% extends "platform/base.html" %}
-{% set active_nav = "resources" %}
 {% block platform_title %}{{ resource.title }}{% endblock %}
+{% block platform_breadcrumb %}<nav class="breadcrumb"><a href="/resources">资源</a><span class="sep">/</span><span>资源详情</span></nav>{% endblock %}
+{% block platform_page_header %}
+{% set record = golden_resource %}
+<div class="page-header"><div class="page-header-left"><div class="row-meta"><span class="badge badge-info">{{ '供给' if resource.direction == 'supply' else '需求' }}</span><span>{{ resource.resource_type }}</span><span>{{ resource.region or '区域待补充' }}</span><span>{{ resource.status|status_label }}</span></div><h1 class="page-title">{{ resource.title }}</h1></div>{% if trace.opportunities %}<div class="page-header-right"><a class="btn btn-primary" href="/opportunities/{{ trace.opportunities[0].id }}">继续跟进</a></div>{% endif %}</div>
+{% endblock %}
 {% block platform_content %}
 {% set record = golden_resource %}
-<div class="platform-content" style="max-width:960px;margin:0 auto;padding:24px 32px;">
-  <a href="/resources">← 返回资源市场</a>
-  {% if message %}<div class="success-box">{{ message }}</div>{% endif %}
-  {% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
-  <div class="flex-between mt-16" style="align-items:flex-start;gap:16px;">
-    <div style="min-width:0;flex:1 1 auto;"><h1 class="page-title" style="overflow-wrap:anywhere;">{{ resource.title }}</h1>
-      <div class="opp-meta"><span class="badge">{{ '供给' if resource.direction == 'supply' else '需求' }}</span><span>{{ resource.resource_type }}</span><span>{{ resource.region or '区域待补充' }}</span><span>状态：{{ resource.status|status_label }}</span></div>
-    </div>
-    <div class="actions">{% if record.source_intelligence_id %}<a class="btn btn-outline" href="/intelligence/{{ record.source_intelligence_id }}">查看来源情报</a>{% endif %}{% if can_write %}<a class="btn btn-primary" href="/resources/{{ resource.id }}/edit">编辑资源</a>{% endif %}</div>
+{% if message %}<div class="success-box">{{ message }}</div>{% endif %}{% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
+<div class="resource-detail-layout">
+  <div>
+    <section class="content-section"><div class="section-header"><div><h2>当前状态与下一步</h2><p>基于该资源现有数据给出当前操作位置。</p></div></div><p><strong>{{ trace.guidance.current_state }}</strong></p><p>{{ trace.guidance.next_action }}</p></section>
+    <section class="content-section"><div class="section-header"><div><h2>资源说明</h2><p>正式资源内容与合作条件。</p></div></div><p>{{ resource.summary or '资源摘要待补充' }}</p>{% if resource.description %}<p class="source-copy">{{ resource.description }}</p>{% endif %}<dl class="compact-definition"><dt>合作方式</dt><dd>{{ record.cooperation_mode or '合作方式待沟通' }}</dd><dt>合作条件</dt><dd>{{ record.cooperation_terms or '合作条件待确认' }}</dd><dt>有效期</dt><dd>{{ record.valid_until or '长期有效 / 待补充' }}</dd></dl></section>
+    {% if record.source_intelligence_id %}<section class="content-section"><div class="section-header"><div><h2>来源情报</h2><p>该资源的正式追溯起点。</p></div></div><a class="object-link" href="/intelligence/{{ record.source_intelligence_id }}">{{ record.intelligence_title or record.source_intelligence_title or '查看来源情报' }}</a></section>{% endif %}
   </div>
-  {% if record.source_intelligence_id %}<section class="platform-card"><strong>来源情报</strong><p><a href="/intelligence/{{ record.source_intelligence_id }}">{{ record.intelligence_title or record.source_intelligence_title or '查看来源情报' }}</a></p></section>{% endif %}
-  <section class="platform-card"><h2>当前状态与下一步</h2><p><strong>{{ trace.guidance.current_state }}</strong></p><p>{{ trace.guidance.next_action }}</p></section>
-  <section class="platform-card"><h2>资源说明</h2><p>{{ resource.summary or '尚未填写摘要，建议补充具体资源内容。' }}</p>{% if resource.description %}<p style="white-space:pre-wrap;">{{ resource.description }}</p>{% endif %}</section>
-  <div class="platform-grid platform-grid-2">
-    <section class="platform-card"><h3>谁需要/提供</h3><p>{{ record.organization_name or record.owner_person_name or '主体信息待补充' }}</p><p class="text-muted">{{ record.project_name or '' }}</p></section>
-    <section class="platform-card"><h3>合作条件</h3><p>{{ record.cooperation_mode or '合作方式待沟通' }}</p><p>{{ record.cooperation_terms or '' }}</p><p>有效期：{{ record.valid_until or '长期有效/待补充' }}</p></section>
-  </div>
-  <section class="platform-card"><h2>匹配候选</h2>
-    {% for item in matches %}
-    <article class="platform-card" style="margin:12px 0;">
-      <div class="flex-between" style="gap:12px;align-items:flex-start;"><div><h3><a href="/resources/{{ item.resource.id }}">{{ item.resource.title }}</a></h3><p><strong>对方主体：</strong>{{ item.owner_label }} · <strong>匹配类别：</strong>{{ item.match_category }} · <strong>状态：</strong>{{ item.resource.status|status_label }}</p></div><span class="badge">匹配度 {{ item.score }}</span></div>
-      <p>{{ item.resource.summary or '对方尚未填写资源摘要。' }}</p>
-      <p><strong>推荐理由：</strong>{% for reason in item.reasons %}{{ reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p>
-      {% if can_write %}<form method="post" action="/golden-loop/matches" style="display:flex;gap:8px;flex-wrap:wrap;">
-        <input type="hidden" name="demand_resource_id" value="{{ item.demand_resource_id }}"><input type="hidden" name="supply_resource_id" value="{{ item.supply_resource_id }}"><input type="hidden" name="note" value="基于资源类别、业务关键词和有效状态进行人工核验">
-        <button class="btn btn-primary" type="submit" name="decision" value="confirm">确认匹配</button><button class="btn btn-outline" type="submit" name="decision" value="reject">暂不匹配</button>
-      </form>{% endif %}
-    </article>
-    {% else %}<div class="empty-state"><h3>当前没有满足条件的候选</h3><p>建议补充资源类别、描述或有效期，系统会自动寻找可能合作方。</p></div>{% endfor %}
-  </section>
-  <section class="platform-card"><h2>业务进展</h2>
-    {% for item in trace.matches %}<p><a href="/matches/{{ item.id }}">{{ item.demand_title }} ↔ {{ item.supply_title }}</a> · {{ {'accepted':'已确认','rejected':'暂不匹配','reviewed':'待后续判断','converted_to_lead':'已转合作机会'}.get(item.status, '待确认') }}</p>{% endfor %}
-    {% for item in trace.opportunities %}<p><a href="/opportunities/{{ item.id }}">合作机会：{{ item.title }}</a></p>{% endfor %}
-    {% if not trace.matches and not trace.opportunities %}<p class="text-muted">尚未确认匹配。选择合适候选后即可创建合作机会。</p>{% endif %}
-  </section>
-  {% if can_write %}<section class="platform-card"><h2>资源管理</h2><div class="actions">{% if resource.status != 'archived' %}<form method="post" action="/resources/{{ resource.id }}/close"><button class="btn btn-outline" type="submit">关闭并归档</button></form>{% endif %}{% if not references.matches and not references.opportunities and not references.relationships %}<form method="post" action="/resources/{{ resource.id }}/delete"><label class="checkbox-line"><input type="checkbox" name="confirm" value="1" required> 确认删除无下游记录的资源</label><button class="btn btn-outline" type="submit">删除安全资源</button></form>{% else %}<p class="text-muted">该资源已有匹配、商机或关系记录，不能物理删除；可关闭归档。</p>{% endif %}</div></section>
-  <section class="platform-card"><form method="post" action="/api/v1/favorites/toggle"><input type="hidden" name="target_type" value="resource"><input type="hidden" name="target_id" value="{{ resource.id }}"><button class="btn btn-sm" type="submit">{{ '取消收藏' if is_favorited else '收藏' }}</button></form></section>{% endif %}
+  <aside class="resource-context">
+    <section class="context-panel"><h2>相关主体</h2><p>{{ record.organization_name or record.owner_person_name or '主体信息待补充' }}</p>{% if record.project_name %}<small>{{ record.project_name }}</small>{% endif %}</section>
+    <section class="context-panel"><h2>匹配候选</h2>{% if matches %}{% for item in matches %}<div class="match-row"><div><a class="object-link" href="/resources/{{ item.resource.id }}">{{ item.resource.title }}</a><small>{{ item.owner_label }} · 匹配度 {{ item.score }}</small><p><strong>推荐理由：</strong>{% for reason in item.reasons %}{{ reason }}{% if not loop.last %}；{% endif %}{% endfor %}</p></div>{% if can_write %}<form method="post" action="/golden-loop/matches" class="inline-actions"><input type="hidden" name="demand_resource_id" value="{{ item.demand_resource_id }}"><input type="hidden" name="supply_resource_id" value="{{ item.supply_resource_id }}"><input type="hidden" name="note" value="基于资源类别、业务关键词和有效状态进行人工核验"><button class="btn btn-secondary btn-sm" type="submit" name="decision" value="confirm">确认匹配</button><button class="btn btn-tertiary btn-sm" type="submit" name="decision" value="reject">暂不匹配</button></form>{% endif %}</div>{% endfor %}{% else %}<p class="business-empty">当前没有匹配候选</p>{% endif %}</section>
+    <section class="context-panel"><h2>业务进展</h2>{% for item in trace.matches %}<p><a class="object-link" href="/matches/{{ item.id }}">{{ item.demand_title }} ↔ {{ item.supply_title }}</a><small>{{ {'accepted':'已确认','rejected':'暂不匹配','reviewed':'待后续判断','converted_to_lead':'已转合作机会'}.get(item.status, '待确认') }}</small></p>{% endfor %}{% for item in trace.opportunities %}<p><a class="object-link" href="/opportunities/{{ item.id }}">{{ item.title }}</a></p>{% endfor %}{% if not trace.matches and not trace.opportunities %}<p class="business-empty">尚未形成正式匹配或跟进</p>{% endif %}</section>
+  </aside>
 </div>
+{% if can_write %}<details class="admin-inline-tool"><summary><strong>管理工具 · 资源维护</strong></summary><div class="admin-actions"><a class="btn btn-secondary" href="/resources/{{ resource.id }}/edit">编辑资源</a>{% if resource.status != 'archived' %}<form method="post" action="/resources/{{ resource.id }}/close"><button class="btn btn-secondary" type="submit">关闭并归档</button></form>{% endif %}</div>{% if not references.matches and not references.opportunities and not references.relationships %}<form method="post" action="/resources/{{ resource.id }}/delete" class="stack-form"><label class="form-checkbox"><input type="checkbox" name="confirm" value="1" required> 确认删除无下游记录的资源</label><button class="btn btn-danger" type="submit">删除安全资源</button></form>{% else %}<p class="text-muted">该资源已有匹配、机会或关系记录，不能物理删除；可关闭归档。</p>{% endif %}</details>{% endif %}
 {% endblock %}

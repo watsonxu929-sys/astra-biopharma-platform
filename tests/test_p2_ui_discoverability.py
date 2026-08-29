@@ -72,10 +72,10 @@ EVIDENCE = [{"snapshot_id": 301, "page_title": "P2.1 试点来源", "url": "http
 DETAIL = {"candidate": CANDIDATE, "matches": [], "history": [], "logs": [], "evidence": EVIDENCE}
 
 
-def test_intelligence_secondary_navigation_has_only_six_work_entries():
+def test_intelligence_product_navigation_excludes_admin_operations():
     context = {"permissions": ["view_internal", "review_data", "manage_monitoring"], "auth_disabled": True}
     items = get_secondary_navigation(context, "intelligence", "/processing/candidates/201")
-    assert [item["label"] for item in items] == ["情报首页", "采集与数据源", "情报加工", "审核发布", "专题与报告"]
+    assert [item["label"] for item in items] == ["情报首页", "报告", "我的订阅"]
     assert resolve_active_capability("/processing/candidates/201/evidence")["capability_key"] == "intelligence.candidates"
     assert resolve_active_capability("/collection/snapshots/301")["capability_key"] == "intelligence.raw_items"
 
@@ -101,7 +101,8 @@ def test_lists_expose_clickable_p2_detail_links(monkeypatch):
         assert 'href="/processing/candidates/201"' in review_html
         assert 'action="/processing/candidates/201/review"' in review_html
         reports_html = client.get("/reports").text
-        assert 'href="/intelligence/401"' in reports_html
+        assert "固定模板聚合器" in reports_html
+        assert 'href="/processing/review-queue"' not in reports_html
 
 
 def test_p2_detail_pages_render_http_200(monkeypatch):

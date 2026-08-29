@@ -49,8 +49,8 @@
     <div class="member-avatar" style="width:64px;height:64px;font-size:22px">{{ member.person_name[:1] }}</div>
     {% endif %}
     <div class="member-info">
-      <h3>{{ member.person_name or "未关联人物" }}</h3>
-      <p>{{ member.organization_name or "暂无机构" }}</p>
+      <h3>{% if member.person_external_id %}<a class="object-link" href="/network/entities/person/{{ member.person_external_id }}">{{ member.person_name }}</a>{% else %}{{ member.person_name or "未关联人物" }}{% endif %}</h3>
+      <p>{% if member.organization_external_id %}<a class="object-link" href="/network/entities/organization/{{ member.organization_external_id }}">{{ member.organization_name }}</a>{% else %}{{ member.organization_name or "暂无已关联企业" }}{% endif %}</p>
       <p>{{ member.public_role or member.member_role or "暂无职务" }}</p>
       <div class="member-tags">
         {% if member.expertise_tags %}<span class="tag">{{ member.expertise_tags[:20] }}</span>{% endif %}

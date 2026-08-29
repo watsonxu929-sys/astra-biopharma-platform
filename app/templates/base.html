@@ -12,26 +12,53 @@
   <link rel="stylesheet" href="{{ url_for('static', path='/v04a_additions.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='/platform.css') }}">
 </head>
-<body>
 {% set path = request.url.path %}
 {% set sec = request.scope.get('security_context', {}) %}
 {% set authenticated = sec.get('authenticated', false) %}
 {% set nav = request.app.state.navigation_for(sec, path) if authenticated else {'primary': [], 'secondary': [], 'account': [], 'admin': []} %}
+{% set is_admin_surface = authenticated and (
+  path.startswith('/admin') or path.startswith('/system') or path.startswith('/collection') or
+  path.startswith('/processing') or path.startswith('/review') or
+  path.startswith('/intelligence/operations') or path.startswith('/intelligence/monitoring') or
+  path.startswith('/network/governance') or path.startswith('/network/relationship-candidates') or
+  path.startswith('/network/resolution-candidates') or path.startswith('/network/merges') or
+  path.startswith('/club/operations') or path.startswith('/club/admin') or
+  path.startswith('/club/import') or path.startswith('/club/member-import') or
+  path == '/reports/jobs'
+) %}
+{% if path.startswith('/processing') %}{% set admin_location = '情报加工' %}
+{% elif path.startswith('/collection') %}{% set admin_location = '采集与数据源' %}
+{% elif path.startswith('/review') %}{% set admin_location = '审核发布' %}
+{% elif path.startswith('/network') %}{% set admin_location = '主体与关系治理' %}
+{% elif path.startswith('/club') %}{% set admin_location = '俱乐部运营' %}
+{% elif path.startswith('/reports') %}{% set admin_location = '报告生成' %}
+{% elif path.startswith('/system') %}{% set admin_location = '系统设置' %}
+{% else %}{% set admin_location = '管理首页' %}{% endif %}
+<body class="{{ 'surface-admin' if is_admin_surface else ('surface-product' if authenticated else 'surface-public') }}">
 {% set explicit_active_nav = active_nav|default('', true) %}
 {% set explicit_active_subnav = active_subnav|default('', true) %}
-<header class="{{ 'public-header' if not authenticated else 'platform-header' }}">
+<header class="{{ 'public-header' if not authenticated else ('platform-header management-header' if is_admin_surface else 'platform-header product-header') }}">
   {% if request.app.state.is_acceptance %}<div class="environment-badge acceptance">验收环境</div>{% endif %}
   <div class="nav-brand-row">
+    {% if is_admin_surface %}
+    <a class="brand management-brand" href="/admin/platform"><span>管理控制台</span><small>系统运营与数据治理</small></a>
+    {% else %}
     <a class="brand" href="{{ '/platform' if authenticated else '/club/apply' }}">生物医药产业连接与情报平台</a>
+    {% endif %}
     {% if authenticated %}<button class="menu-button" type="button" aria-label="打开菜单" aria-expanded="false">菜单</button>{% endif %}
   </div>
   {% if authenticated %}
+  {% if is_admin_surface %}
+  <div class="admin-location" aria-label="当前位置"><span>管理控制台</span><b>/</b><strong>{{ admin_location }}</strong></div>
+  {% else %}
   <nav class="main-nav" aria-label="一级导航">
     {% for item in nav.primary %}<a class="{{ 'active' if (explicit_active_nav and item.key == explicit_active_nav) or (not explicit_active_nav and item.active) else '' }}" href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}
   </nav>
+  {% endif %}
   <div class="nav-tools">
-    <form class="nav-search" action="/search" method="get"><input name="q" value="{{ q|default('', true) }}" placeholder="全局搜索" aria-label="全局搜索"><button type="submit">搜索</button></form>
-    {% if nav.admin %}<a class="button nav-primary" href="/admin/platform">管理控制台</a>{% endif %}
+    {% if not is_admin_surface %}<form class="nav-search" action="/search" method="get"><input name="q" value="{{ q|default('', true) }}" placeholder="全局搜索" aria-label="全局搜索"><button type="submit">搜索</button></form>{% endif %}
+    {% if is_admin_surface %}<a class="button secondary admin-return" href="/platform">返回业务产品</a>
+    {% elif nav.admin %}<a class="button nav-primary" href="/admin/platform">管理控制台</a>{% endif %}
     <details class="user-nav">
       <summary><span class="user-avatar">{{ sec.get('user', {}).get('display_name', '用')[:1] }}</span><span class="user-label">{{ sec.get('user', {}).get('display_name', '用户') }}</span></summary>
       <div class="user-menu">
@@ -45,7 +72,7 @@
   <div class="public-nav-tools"><a class="button" href="/account/login">内部登录</a><a class="button secondary" href="/club/apply">会员申请</a></div>
   {% endif %}
 </header>
-{% if authenticated and nav.secondary %}<nav class="secondary-nav" aria-label="二级导航">{% for item in nav.secondary %}<a class="{{ 'active' if item.active else '' }}" href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}</nav>{% endif %}
+{% if authenticated and nav.secondary and not is_admin_surface %}<nav class="secondary-nav" aria-label="二级导航">{% for item in nav.secondary %}<a class="{{ 'active' if item.active else '' }}" href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}</nav>{% endif %}
 <main class="{{ 'public-main' if not authenticated else '' }}">{% block content %}{% endblock %}</main>
 <footer>生物医药产业连接与情报平台 · 内部使用</footer>
 {% block scripts %}{% endblock %}

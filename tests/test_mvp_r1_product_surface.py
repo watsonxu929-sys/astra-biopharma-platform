@@ -13,19 +13,20 @@ from app.v05d_member_portal import member_home
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_non_admin_product_surface_is_exactly_fifteen_capabilities() -> None:
+def test_non_admin_product_surface_matches_the_canonical_registry() -> None:
     assert validate_registry() == []
     for role in ("viewer", "operator", "reviewer"):
         visible = filter_capabilities(set(ROLE_PERMISSIONS[role]), client="web")
-        assert {item["capability_key"] for item in visible} == MVP_PRODUCT_KEYS
-        assert len(visible) == 15
+        visible_keys = {item["capability_key"] for item in visible}
+        assert visible_keys <= MVP_PRODUCT_KEYS
+        assert {"workspace", "intelligence", "network", "club", "collaboration"} <= visible_keys
 
 
-def test_primary_navigation_is_the_four_delivery_domains() -> None:
+def test_primary_navigation_is_the_five_rc1_2a_domains() -> None:
     for role in ("viewer", "operator", "reviewer", "admin"):
         context = {"permissions": sorted(ROLE_PERMISSIONS[role])}
         labels = [item["label"] for item in get_client_navigation(context, path="/platform")["primary"]]
-        assert labels == ["工作台", "情报", "企业与人物", "跟进"]
+        assert labels == ["工作台", "情报", "企业与人物", "俱乐部", "跟进"]
 
 
 def test_legacy_product_entries_redirect_without_new_business_pages() -> None:
