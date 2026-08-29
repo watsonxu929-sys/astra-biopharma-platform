@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import re
 
-ORG_SUFFIX = r"(?:公司|集团|基金|园区|医院|大学|学院|研究院|实验室|协会|中心|Biotech|Bio|Pharma|Therapeutics|Inc\.?|Ltd\.?)"
-ORG_RE = re.compile(rf"([\u4e00-\u9fa5A-Za-z0-9（）()·.\-& ]{{2,60}}{ORG_SUFFIX})")
+ORG_SUFFIX = r"(?:公司|集团|基金|园区|医院|大学|学院|研究院|实验室|协会|中心|Biotech|Bio|Pharma|Therapeutics|Agency|Council|Committee|Authority|Administration|Institute|University|Foundation|Association|Inc\.?|Ltd\.?)"
+ORG_RE = re.compile(rf"([\u4e00-\u9fa5A-Za-z0-9（）()·.\-& ]{{2,60}}?{ORG_SUFFIX})")
 PERSON_ROLE_RE = re.compile(r"([\u4e00-\u9fa5]{2,4})\s*(?:，|,|：|:|\||-|—)?\s*(创始人|联合创始人|董事长|总经理|CEO|CTO|CSO|CFO|教授|博士|主任|负责人|合伙人|总监)")
 PERSON_EN_ACTION_RE = re.compile(
     r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+(?:has\s+been\s+|was\s+|is\s+)?"
     r"(appointed|assigned|named|joined|joins|retires|retired)\b"
 )
-PROJECT_RE = re.compile(r"([A-Z]{2,}[A-Z0-9-]{1,30}|[\u4e00-\u9fa5A-Za-z0-9-]{2,40}(?:项目|平台|产品|药物|疗法|管线))")
+PROJECT_RE = re.compile(r"((?=[A-Z0-9-]{3,31}\b)(?=[A-Z0-9-]*(?:\d|-))[A-Z]{2,}[A-Z0-9-]*|[\u4e00-\u9fa5A-Za-z0-9-]{2,40}(?:项目|平台|产品|药物|疗法|管线))")
 AMOUNT_RE = re.compile(r"((?:数)?\d+(?:\.\d+)?\s*(?:万|亿|million|billion)?\s*(?:美元|人民币|元|USD|RMB)?)")
 ROUND_RE = re.compile(r"([A-D]\+?轮|天使轮|Pre-A轮|IPO|并购|战略融资)")
 

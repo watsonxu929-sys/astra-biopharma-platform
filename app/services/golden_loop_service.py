@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
@@ -70,6 +70,33 @@ class GoldenLoopService:
     def _many(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         return [dict(row) for row in self.db.execute(text(sql), params).mappings().all()]
 
+    def _collection_item_id(self, intelligence_id: int) -> int | None:
+        item = self._one(
+            "SELECT source_record_type,source_record_id FROM v06_intelligence_items WHERE id=:id",
+            {"id": int(intelligence_id)},
+        )
+        if not item:
+            return None
+        if item.get("source_record_type") == "v05f_collection_items" and item.get("source_record_id"):
+            return int(item["source_record_id"])
+        if item.get("source_record_type") == "fact_candidate" and item.get("source_record_id"):
+            row = self._one(
+                "SELECT collection_item_id FROM v05g_extraction_candidates WHERE id=:id",
+                {"id": int(item["source_record_id"])},
+            )
+            if row and row.get("collection_item_id"):
+                return int(row["collection_item_id"])
+        row = self._one(
+            """
+            SELECT c.collection_item_id FROM p2_intelligence_product_candidates pc
+            JOIN v05g_extraction_candidates c ON c.id=pc.candidate_id
+            WHERE pc.product_id=:id AND c.collection_item_id IS NOT NULL
+            ORDER BY c.id LIMIT 1
+            """,
+            {"id": int(intelligence_id)},
+        )
+        return int(row["collection_item_id"]) if row and row.get("collection_item_id") else None
+
     def _workflow_event(
         self,
         intelligence_id: int,
@@ -78,35 +105,7 @@ class GoldenLoopService:
         actor_user_id: int,
         note: str,
     ) -> None:
-        item = self._one(
-            """
-            SELECT source_record_type,source_record_id FROM v06_intelligence_items
-            WHERE id=:id
-            """,
-            {"id": int(intelligence_id)},
-        )
-        if not item:
-            return
-        collection_id = None
-        if item.get("source_record_type") == "v05f_collection_items" and item.get("source_record_id"):
-            collection_id = int(item["source_record_id"])
-        elif item.get("source_record_type") == "fact_candidate" and item.get("source_record_id"):
-            row = self._one(
-                "SELECT collection_item_id FROM v05g_extraction_candidates WHERE id=:id",
-                {"id": int(item["source_record_id"])},
-            )
-            collection_id = int(row["collection_item_id"]) if row and row.get("collection_item_id") else None
-        if not collection_id:
-            row = self._one(
-                """
-                SELECT c.collection_item_id FROM p2_intelligence_product_candidates pc
-                JOIN v05g_extraction_candidates c ON c.id=pc.candidate_id
-                WHERE pc.product_id=:id AND c.collection_item_id IS NOT NULL
-                ORDER BY c.id LIMIT 1
-                """,
-                {"id": int(intelligence_id)},
-            )
-            collection_id = int(row["collection_item_id"]) if row else None
+        collection_id = self._collection_item_id(intelligence_id)
         if not collection_id:
             return
         self.db.execute(
@@ -130,6 +129,134 @@ class GoldenLoopService:
                 "note": note,
                 "created_at": _now(),
             },
+        )
+
+    @staticmethod
+    def _contains_chinese(value: str) -> bool:
+        return any("\u4e00" <= char <= "\u9fff" for char in str(value or ""))
+
+    def reading_view(self, intelligence_id: int, item: dict[str, Any] | None = None) -> dict[str, Any]:
+        item = item or self._published_intelligence(intelligence_id)
+        if not isinstance(item, dict):
+            canonical = self._published_intelligence(intelligence_id)
+            item = {
+                key: getattr(item, key, None)
+                for key in (
+                    "title", "summary", "content", "analysis_notes", "source_name",
+                    "source_url", "published_at", "created_at",
+                )
+            }
+            item["analysis_notes"] = canonical.get("analysis_notes")
+        title = str(item.get("title") or "").strip()
+        summary = str(item.get("summary") or item.get("content") or "").strip()
+        notes: dict[str, Any] = {}
+        try:
+            notes = json.loads(str(item.get("analysis_notes") or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            notes = {}
+        translation = notes.get("translation") if isinstance(notes, dict) else None
+        translation = translation if isinstance(translation, dict) else {}
+        title_zh = str(translation.get("title_zh") or "").strip()
+        summary_zh = str(translation.get("summary_zh") or "").strip()
+        mode = str(translation.get("mode") or "").strip()
+        if title_zh and summary_zh and self._contains_chinese(title_zh + summary_zh):
+            return {
+                "display_title": title_zh,
+                "display_summary": summary_zh,
+                "translation_mode": mode or "MANUAL_CURATED_ACCEPTANCE_SAMPLE",
+                "has_chinese_reading": True,
+                "original_title": title,
+                "original_summary": summary,
+            }
+        if self._contains_chinese(title + summary):
+            return {
+                "display_title": title or "产业动态",
+                "display_summary": summary or "请查看公开来源了解详情。",
+                "translation_mode": "ORIGINAL_CHINESE",
+                "has_chinese_reading": True,
+                "original_title": title,
+                "original_summary": summary,
+            }
+        return {
+            "display_title": "产业动态（中文辅助加工待补充）",
+            "display_summary": "当前尚无可核验的中文辅助内容，请在页面底部查看原文与公开证据。",
+            "translation_mode": "MANUAL_ACCEPTANCE_FALLBACK",
+            "has_chinese_reading": False,
+            "original_title": title,
+            "original_summary": summary,
+        }
+
+    def set_today_disposition(
+        self, intelligence_id: int, *, actor_user_id: int, dismissed: bool
+    ) -> None:
+        self._published_intelligence(intelligence_id)
+        collection_id = self._collection_item_id(intelligence_id)
+        if not collection_id:
+            raise HTTPException(status_code=409, detail="该情报缺少可追溯采集记录，不能保存个人处理状态")
+        self.db.execute(
+            text(
+                """
+                INSERT INTO v05h_intelligence_feedback(
+                    collection_item_id,user_id,user_name,feedback_type,note,created_at
+                ) VALUES (:collection_id,:user_id,:user_name,:feedback_type,:note,:created_at)
+                """
+            ),
+            {
+                "collection_id": int(collection_id),
+                "user_id": int(actor_user_id),
+                "user_name": str(actor_user_id),
+                "feedback_type": "dismissed_today" if dismissed else "restored_today",
+                "note": "用户从今天值得处理中暂时隐藏" if dismissed else "用户恢复到今天值得处理",
+                "created_at": _now(),
+            },
+        )
+        self.db.commit()
+
+    def dismissed_today(self, user_id: int, *, limit: int = 20) -> list[dict[str, Any]]:
+        rows = self._many(
+            """
+            SELECT i.id,i.title,i.summary,i.analysis_notes,i.source_name,i.published_at,i.created_at
+            FROM v06_intelligence_items i
+            JOIN (
+                SELECT f.collection_item_id,f.feedback_type
+                FROM v05h_intelligence_feedback f
+                JOIN (
+                    SELECT collection_item_id,MAX(id) AS latest_id
+                    FROM v05h_intelligence_feedback WHERE user_id=:user_id
+                    GROUP BY collection_item_id
+                ) latest ON latest.latest_id=f.id
+                WHERE f.feedback_type='dismissed_today'
+            ) state ON state.collection_item_id=(
+                CASE WHEN i.source_record_type='v05f_collection_items' THEN i.source_record_id ELSE
+                (SELECT c.collection_item_id FROM p2_intelligence_product_candidates pc
+                 JOIN v05g_extraction_candidates c ON c.id=pc.candidate_id
+                 WHERE pc.product_id=i.id AND c.collection_item_id IS NOT NULL ORDER BY c.id LIMIT 1) END
+            )
+            WHERE i.status='published' AND COALESCE(i.is_demo,0)=0
+            ORDER BY COALESCE(i.published_at,i.created_at) DESC LIMIT :limit
+            """,
+            {"user_id": int(user_id), "limit": max(1, min(int(limit), 50))},
+        )
+        for row in rows:
+            row.update(self.reading_view(int(row["id"]), row))
+        return rows
+
+    def current_user_follow_ups(self, user_id: int, *, limit: int = 12) -> list[dict[str, Any]]:
+        return self._many(
+            """
+            SELECT f.id,f.opportunity_id,f.content,f.next_action,f.next_follow_at,f.followed_at,
+                   o.title AS opportunity_title,o.status,o.stage,o.source_intelligence_id,
+                   i.title AS intelligence_title
+            FROM v06_follow_ups f
+            JOIN v06_opportunities o ON o.id=f.opportunity_id
+            LEFT JOIN v06_intelligence_items i ON i.id=o.source_intelligence_id
+            WHERE COALESCE(o.is_demo,0)=0 AND o.status='active'
+              AND (f.created_by=:user_id OR o.owner_id=:user_id)
+            ORDER BY CASE WHEN f.next_follow_at IS NULL THEN 1 ELSE 0 END,
+                     f.next_follow_at,f.followed_at DESC,f.id DESC
+            LIMIT :limit
+            """,
+            {"user_id": int(user_id), "limit": max(1, min(int(limit), 50))},
         )
 
     def _published_intelligence(self, item_id: int) -> dict[str, Any]:
@@ -776,15 +903,28 @@ class GoldenLoopService:
             "industry_event_not_opportunity": not bool(existing_opportunity),
         }
 
-    def priority_feed(self, limit: int = 4) -> list[dict[str, Any]]:
+    def priority_feed(self, limit: int = 4, *, user_id: int | None = None) -> list[dict[str, Any]]:
         rows = self._many(
-            """SELECT id,title,intel_type,importance,published_at,created_at
+            """SELECT id,title,summary,content,analysis_notes,source_name,source_url,
+                      intel_type,event_type,importance,published_at,created_at
                FROM v06_intelligence_items
                WHERE status='published' AND COALESCE(is_demo,0)=0
-               ORDER BY COALESCE(published_at,created_at) DESC LIMIT 30""",
+                 AND date(COALESCE(occurred_at,published_at,created_at)) >= date('now','-30 days')
+               ORDER BY COALESCE(published_at,created_at) DESC LIMIT 60""",
             {},
         )
+        visible_rows: list[dict[str, Any]] = []
         for row in rows:
+            if user_id is not None:
+                collection_id = self._collection_item_id(int(row["id"]))
+                latest = self._one(
+                    """SELECT feedback_type FROM v05h_intelligence_feedback
+                       WHERE collection_item_id=:collection_id AND user_id=:user_id
+                       ORDER BY id DESC LIMIT 1""",
+                    {"collection_id": collection_id or -1, "user_id": int(user_id)},
+                )
+                if latest and latest.get("feedback_type") == "dismissed_today":
+                    continue
             subjects = self.subjects(int(row["id"]))
             priority = self.priority_context(subjects)
             candidates = self.subject_candidates(int(row["id"])) if not subjects else []
@@ -798,30 +938,47 @@ class GoldenLoopService:
             opportunity_count = int(self.db.execute(text(
                 "SELECT COUNT(*) FROM v06_opportunities WHERE source_intelligence_id=:id AND COALESCE(is_demo,0)=0"
             ), {"id": int(row["id"])}).scalar() or 0)
-            if opportunity_count:
-                score, reason = 100, "已有待推进Opportunity"
-            elif priority.get("is_priority") and resource_count:
-                score, reason = 90, "Priority Subject + 可行动上下文"
-            elif priority.get("is_priority"):
-                score, reason = 80, "Priority Subject"
-            elif candidate_priority:
-                score, reason = 70, "待确认Priority Subject"
-            elif resource_count:
-                score, reason = 60, "已有Resource Signal"
-            elif int(row.get("importance") or 0) >= 4:
-                score, reason = 40, "高价值行业情报"
+            related = self.related_context(int(row["id"]), subjects=subjects)
+            relationship_count = len(related.get("relationships") or [])
+            related_resource_count = len(related.get("resources") or [])
+            has_qbay = any(
+                str(item.get("reason") or "").startswith("Q-BAY")
+                for item in priority.get("subjects") or []
+            )
+            if priority.get("is_priority") and (has_qbay or relationship_count or opportunity_count):
+                band, reason = 1, "重点主体且已有关系或Q-BAY上下文"
+            elif resource_count or related_resource_count:
+                band, reason = 2, "已有相关资源，可继续判断"
+            elif int(row.get("importance") or 0) >= 4 or str(row.get("event_type") or "") in {
+                "approval", "clinical", "financing", "merger", "policy", "expansion"
+            }:
+                band, reason = 3, "重要产业事件"
             else:
-                score, reason = 10, "普通行业情报"
-            row["priority_score"], row["priority_reason"] = score, reason
-        rows.sort(
+                band, reason = 4, "近期相关产业动态"
+            row["priority_band"], row["priority_reason"] = band, reason
+            row["subjects"] = subjects
+            row["relationship_count"] = relationship_count
+            row["resource_count"] = resource_count + related_resource_count
+            row["candidate_priority"] = candidate_priority
+            if row["resource_count"]:
+                row["next_action"] = "查看相关资源并确认下一步"
+            elif relationship_count:
+                row["next_action"] = "查看主体与现有关系"
+            elif subjects:
+                row["next_action"] = "查看主体并决定是否建立跟进"
+            else:
+                row["next_action"] = "打开情报并确认涉及主体"
+            row.update(self.reading_view(int(row["id"]), row))
+            visible_rows.append(row)
+        visible_rows.sort(
             key=lambda row: (
-                int(row["priority_score"]),
+                -int(row["priority_band"]),
                 str(row.get("published_at") or row.get("created_at") or ""),
                 int(row["id"]),
             ),
             reverse=True,
         )
-        return rows[:max(1, min(int(limit), 20))]
+        return visible_rows[:max(1, min(int(limit), 20))]
 
     def ignore_subject_candidate(
         self, intelligence_id: int, *, subject_type: str, subject_id: int, actor_user_id: int
@@ -1229,6 +1386,108 @@ class GoldenLoopService:
             "SELECT * FROM v06_follow_ups WHERE id=:id",
             {"id": follow_up_id},
         )
+
+    def create_follow_up_from_intelligence(
+        self,
+        intelligence_id: int,
+        *,
+        actor_user_id: int,
+        object_name: str,
+        matter: str,
+        reason: str,
+        next_action: str,
+        next_follow_at: str,
+    ) -> dict[str, Any]:
+        item = self._published_intelligence(intelligence_id)
+        values = {
+            "object_name": str(object_name or "").strip(),
+            "matter": str(matter or "").strip(),
+            "reason": str(reason or "").strip(),
+            "next_action": str(next_action or "").strip(),
+            "next_follow_at": str(next_follow_at or "").strip(),
+        }
+        missing = [key for key, value in values.items() if not value]
+        if missing:
+            raise HTTPException(status_code=400, detail="跟进对象、事项、原因、下一步和计划时间均不能为空")
+        source_type = f"followup_user_{int(actor_user_id)}"
+        opportunity = self._one(
+            """SELECT * FROM v06_opportunities
+               WHERE source_type=:source_type AND source_id=:source_id
+                 AND owner_id=:owner_id AND COALESCE(is_demo,0)=0
+               ORDER BY id LIMIT 1""",
+            {
+                "source_type": source_type,
+                "source_id": int(intelligence_id),
+                "owner_id": int(actor_user_id),
+            },
+        )
+        content = f"{values['matter']}；原因：{values['reason']}"
+        try:
+            if not opportunity:
+                created = UnifiedOpportunityService(self.db).create(
+                    actor_user_id=int(actor_user_id),
+                    commit=False,
+                    fields={
+                        "title": f"跟进｜{values['object_name']}｜{values['matter']}",
+                        "opp_type": "follow_up",
+                        "source_type": source_type,
+                        "source_id": int(intelligence_id),
+                        "description": f"由情报“{item['title']}”人工建立的跟进",
+                        "expected_outcome": values["matter"],
+                        "next_action": values["next_action"],
+                        "next_follow_at": values["next_follow_at"],
+                        "stage": "lead",
+                        "owner_id": int(actor_user_id),
+                        "status": "active",
+                        "visibility": "organization",
+                        "source_intelligence_id": int(intelligence_id),
+                        "human_confirmed": True,
+                    },
+                )
+                opportunity_id = int(created.id)
+            else:
+                opportunity_id = int(opportunity["id"])
+            existing = self._one(
+                """SELECT * FROM v06_follow_ups
+                   WHERE opportunity_id=:opportunity_id AND created_by=:actor
+                     AND content=:content AND COALESCE(next_action,'')=:next_action
+                   ORDER BY id DESC LIMIT 1""",
+                {
+                    "opportunity_id": opportunity_id,
+                    "actor": int(actor_user_id),
+                    "content": content,
+                    "next_action": values["next_action"],
+                },
+            )
+            if existing:
+                self.db.commit()
+                return {**existing, "opportunity_id": opportunity_id, "created": False}
+            follow = UnifiedOpportunityService(self.db).create_follow_up(
+                opp_id=opportunity_id,
+                actor_user_id=int(actor_user_id),
+                is_admin=True,
+                commit=False,
+                fields={
+                    "follow_type": "planned_action",
+                    "content": content,
+                    "next_action": values["next_action"],
+                    "next_follow_at": values["next_follow_at"],
+                    "visibility": "organization",
+                },
+            )
+            self._workflow_event(
+                intelligence_id,
+                action="follow_up_created",
+                actor_user_id=int(actor_user_id),
+                note=f"follow_up:{int(follow.id)}",
+            )
+            follow_up_id = int(follow.id)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        result = self._one("SELECT * FROM v06_follow_ups WHERE id=:id", {"id": follow_up_id}) or {}
+        return {**result, "opportunity_id": opportunity_id, "created": True}
 
     def create_task(
         self,

@@ -1,62 +1,98 @@
 {% extends "platform/base.html" %}
-{% set active_nav = "workspace" %}
-{% block platform_title %}产业协作工作台{% endblock %}
-{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a></span>{% endblock %}
-{% block page_header %}
-<section class="page-header">
-  <div class="page-header-top">
-    <div><h1>产业协作工作台</h1><p class="page-desc">从产业情报到合作结果的统一日常入口。</p></div>
+{% block platform_title %}工作台{% endblock %}
+{% block platform_page_header %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">工作台</h1>
+    <p class="page-desc">先处理今天最值得关注的产业动态，再推进自己的跟进。</p>
   </div>
-</section>
+</div>
 {% endblock %}
 {% block platform_content %}
-<section class="stats-bar stats-bar-4" aria-label="业务统计">
-<section aria-labelledby="today-title">
-  <div class="platform-card-header"><h2 id="today-title">今天值得处理</h2></div>
-  <div class="dashboard-grid-2">
-    <section class="platform-card">
-      <div class="platform-card-header"><h3>最新重要情报</h3><a class="btn btn-sm" href="/intelligence">查看情报</a></div>
-      {% for item in (feed|default([]))[:4] %}<p><a href="/intelligence/{{ item.id if item.id is defined else item.item.id }}">{{ item.title if item.title is defined else item.item.title }}</a>{% if item.priority_reason is defined %} <span class="text-muted">· {{ item.priority_reason }}</span>{% endif %}</p>{% else %}<p class="text-muted">暂无已发布情报，可进入情报页查看全部内容。</p>{% endfor %}
-    </section>
-    <section class="platform-card">
-      <div class="platform-card-header"><h3>待跟进合作机会</h3><a class="btn btn-sm" href="/opportunities">查看机会</a></div>
-      {% for item in (opps|default([]))[:4] %}<p><a href="/opportunities/{{ item.id }}">{{ item.title }}</a> <span class="badge">{{ item.stage|status_label }}</span></p>{% else %}<p class="text-muted">暂无待跟进合作机会。</p>{% endfor %}
-    </section>
-    <section class="platform-card">
-      <div class="platform-card-header"><h3>到期任务</h3><a class="btn btn-sm" href="/workspace?tab=todos">查看待办</a></div>
-      {% for item in (tasks|default([]))[:4] %}<p>{{ item.title }} · {{ item.status|status_label }}</p>{% else %}<p class="text-muted">暂无到期任务。</p>{% endfor %}
-    </section>
-    <section class="platform-card">
-      <div class="platform-card-header"><h3>快速入口</h3></div>
-      <div class="header-actions">
-        <a class="btn btn-sm" href="/intelligence">查看情报</a>
-        <a class="btn btn-sm" href="/resources/new">新建资源</a>
-        <a class="btn btn-sm" href="/opportunities">查看合作机会</a>
-        <a class="btn btn-sm" href="/search">搜索人物/企业</a>
-      </div>
-    </section>
+{% if request.query_params.get('message') %}
+<div class="success-box" role="status">{{ request.query_params.get('message') }}</div>
+{% endif %}
+
+<section class="platform-card" aria-labelledby="today-heading">
+  <div class="platform-card-header">
+    <div>
+      <h2 id="today-heading">今天值得处理</h2>
+      <p class="text-muted">仅展示近三十天内、按业务上下文排序的真实产业动态。</p>
+    </div>
+    <a class="btn btn-sm btn-outline" href="/intelligence">查看全部情报</a>
   </div>
+  {% if feed %}
+  <div class="card-grid">
+    {% for item in feed %}
+    <article class="intel-card" data-intelligence-id="{{ item.id }}">
+      <div class="intel-card-header">
+        <span class="badge">{{ item.priority_reason }}</span>
+        <span>{{ (item.published_at|string)[:10] if item.published_at else '近期' }}</span>
+      </div>
+      <h3 class="intel-card-title"><a href="/intelligence/{{ item.id }}">{{ item.display_title }}</a></h3>
+      <p class="intel-card-summary">{{ item.display_summary|truncate(150, True) }}</p>
+      <p><strong>涉及主体：</strong>
+        {% for subject in item.subjects %}{{ subject.subject_label }}{% if not loop.last %}、{% endif %}
+        {% else %}尚待人工确认{% endfor %}
+      </p>
+      <p><strong>业务上下文：</strong>
+        {% if item.relationship_count %}已有关系 {{ item.relationship_count }} 条{% else %}当前未发现直接关系{% endif %}；
+        {% if item.resource_count %}相关资源 {{ item.resource_count }} 项{% else %}暂无相关资源{% endif %}
+      </p>
+      <p><strong>建议：</strong>{{ item.next_action }}</p>
+      <div class="header-actions">
+        <a class="btn btn-primary btn-sm" href="/intelligence/{{ item.id }}">查看并决定下一步</a>
+        {% if user_id %}
+        <form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-dismiss">
+          <button class="btn btn-outline btn-sm" type="submit">暂不处理</button>
+        </form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>今天暂时没有需要优先处理的产业动态。</p>
+    <a class="btn btn-sm" href="/intelligence">查看全部情报</a>
+  </div>
+  {% endif %}
 </section>
 
-<section class="platform-card"><div class="platform-card-header"><h2>运营场景：Q-BAY</h2><a class="btn btn-sm" href="/club">进入场景</a></div><p>在统一平台内查看Q-BAY会员与活动。</p></section>
+<section class="platform-card" aria-labelledby="follow-heading">
+  <div class="platform-card-header">
+    <h2 id="follow-heading">我的待办</h2>
+    <a class="btn btn-sm btn-outline" href="/opportunities">查看全部跟进</a>
+  </div>
+  {% if my_follow_ups %}
+  <div class="relation-list">
+    {% for item in my_follow_ups %}
+    <article class="relation-item">
+      <div>
+        <a href="/opportunities/{{ item.opportunity_id }}"><strong>{{ item.opportunity_title }}</strong></a>
+        <p>{{ item.content }}</p>
+        <p><strong>下一步：</strong>{{ item.next_action or '继续人工跟进' }}</p>
+      </div>
+      <span>进行中 · {{ ((item.next_follow_at|string)[:16]|replace('T',' ')) if item.next_follow_at else '时间待确认' }}</span>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted">暂无进行中的跟进</p>
+  {% endif %}
+</section>
 
-  {% for label, value, url in [
-    ('今日新增', home_metrics.today_intelligence, '/intelligence?time_range=today'),
-    ('高价值情报', home_metrics.high_value_intelligence, '/intelligence?time_range=30d'),
-    ('可行动情报', home_metrics.actionable_intelligence, '/intelligence?workflow=actionable'),
-    ('待匹配资源', home_metrics.pending_matches, '/resources'),
-    ('待判断', home_metrics.pending_judgement, '/intelligence?workflow=pending_resource'),
-    ('待关联主体', home_metrics.pending_subjects, '/intelligence?workflow=pending_subject'),
-    ('有效需求', home_metrics.active_demands, '/resources?direction=demand&status=published'),
-    ('有效供给', home_metrics.active_supplies, '/resources?direction=supply&status=published'),
-    ('进行中机会', home_metrics.active_opportunities, '/opportunities?status=active'),
-    ('今日跟进', home_metrics.today_followups, '/opportunities?follow_scope=today'),
-    ('逾期跟进', home_metrics.overdue_followups, '/opportunities?follow_scope=overdue'),
-    ('本月达成', home_metrics.won_this_month, '/opportunities?status=all&outcome=won&closed_period=this_month'),
-    ('近期合作关系', home_metrics.recent_relationships, '/network?relationship_type=cooperates_with')
-  ] %}
-  <a class="stat-card" href="{{ url }}"><span class="stat-value">{{ value }}</span><span class="stat-label">{{ label }}</span></a>
+{% if dismissed_today %}
+<details class="platform-card">
+  <summary><strong>今天已忽略（{{ dismissed_today|length }}）</strong></summary>
+  {% for item in dismissed_today %}
+  <div class="relation-item">
+    <a href="/intelligence/{{ item.id }}">{{ item.display_title }}</a>
+    <form method="post" action="/golden-loop/intelligence/{{ item.id }}/today-restore">
+      <button class="btn btn-sm btn-outline" type="submit">恢复</button>
+    </form>
+  </div>
   {% endfor %}
-</section>
-
+</details>
+{% endif %}
 {% endblock %}

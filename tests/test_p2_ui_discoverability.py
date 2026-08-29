@@ -101,7 +101,7 @@ def test_lists_expose_clickable_p2_detail_links(monkeypatch):
         assert 'href="/processing/candidates/201"' in review_html
         assert 'action="/processing/candidates/201/review"' in review_html
         reports_html = client.get("/reports").text
-        assert 'href="/reports/products/401"' in reports_html
+        assert 'href="/intelligence/401"' in reports_html
 
 
 def test_p2_detail_pages_render_http_200(monkeypatch):
@@ -113,6 +113,9 @@ def test_p2_detail_pages_render_http_200(monkeypatch):
     monkeypatch.setattr("app.v05h_reports.UnifiedIntelligenceService.detail", lambda self, product_id: product)
     monkeypatch.setattr("app.v05h_reports.IntelligenceProductService.trace", lambda self, product_id: {"candidates": [CANDIDATE], "evidence": EVIDENCE})
     with TestClient(app) as client:
-        for url in ["/collection/items/101", "/collection/snapshots/301", "/processing/candidates/201", "/processing/candidates/201/matches", "/processing/candidates/201/evidence", "/reports/products/401"]:
+        for url in ["/collection/items/101", "/collection/snapshots/301", "/processing/candidates/201", "/processing/candidates/201/matches", "/processing/candidates/201/evidence"]:
             response = client.get(url)
             assert response.status_code == 200, (url, response.text[:500])
+        response = client.get("/reports/products/401", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/intelligence/401"

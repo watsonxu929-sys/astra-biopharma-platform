@@ -21,11 +21,11 @@ def test_non_admin_product_surface_is_exactly_fifteen_capabilities() -> None:
         assert len(visible) == 15
 
 
-def test_primary_navigation_is_the_five_business_domains() -> None:
+def test_primary_navigation_is_the_four_delivery_domains() -> None:
     for role in ("viewer", "operator", "reviewer", "admin"):
         context = {"permissions": sorted(ROLE_PERMISSIONS[role])}
         labels = [item["label"] for item in get_client_navigation(context, path="/platform")["primary"]]
-        assert labels == ["工作台", "情报", "关系", "资源", "协作"]
+        assert labels == ["工作台", "情报", "企业与人物", "跟进"]
 
 
 def test_legacy_product_entries_redirect_without_new_business_pages() -> None:

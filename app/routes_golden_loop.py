@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
+from urllib.parse import quote
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -31,7 +32,7 @@ def _writer(request: Request) -> tuple[int, str]:
 
 def _redirect(path: str, message: str) -> RedirectResponse:
     separator = "&" if "?" in path else "?"
-    return RedirectResponse(f"{path}{separator}message={message}", status_code=303)
+    return RedirectResponse(f"{path}{separator}message={quote(message)}", status_code=303)
 
 
 @router.get("/platform/golden-loop", response_class=HTMLResponse)
@@ -122,6 +123,56 @@ async def ignore_intelligence_subject_candidate(
         actor_user_id=user_id,
     )
     return _redirect(f"/intelligence/{intelligence_id}", "已忽略该主体候选")
+
+
+@router.post("/golden-loop/intelligence/{intelligence_id}/today-dismiss")
+def dismiss_intelligence_today(
+    intelligence_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id, _ = _writer(request)
+    GoldenLoopService(db).set_today_disposition(
+        intelligence_id, actor_user_id=user_id, dismissed=True
+    )
+    return _redirect("/platform", "已从今天值得处理中暂时隐藏")
+
+
+@router.post("/golden-loop/intelligence/{intelligence_id}/today-restore")
+def restore_intelligence_today(
+    intelligence_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id, _ = _writer(request)
+    GoldenLoopService(db).set_today_disposition(
+        intelligence_id, actor_user_id=user_id, dismissed=False
+    )
+    return _redirect("/platform", "已恢复到今天值得处理")
+
+
+@router.post("/golden-loop/intelligence/{intelligence_id}/follow-ups")
+async def create_intelligence_follow_up(
+    intelligence_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id, _ = _writer(request)
+    form = await request.form()
+    result = GoldenLoopService(db).create_follow_up_from_intelligence(
+        intelligence_id,
+        actor_user_id=user_id,
+        object_name=str(form.get("object_name") or ""),
+        matter=str(form.get("matter") or ""),
+        reason=str(form.get("reason") or ""),
+        next_action=str(form.get("next_action") or ""),
+        next_follow_at=str(form.get("next_follow_at") or ""),
+    )
+    return RedirectResponse(
+        f"/intelligence/{intelligence_id}?message={quote('跟进已创建')}"
+        f"&follow_up_id={int(result['id'])}&opportunity_id={int(result['opportunity_id'])}",
+        status_code=303,
+    )
 
 
 @router.post("/golden-loop/intelligence/{intelligence_id}/resources")

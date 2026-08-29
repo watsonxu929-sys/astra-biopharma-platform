@@ -166,9 +166,10 @@ def test_r6_subject_candidate_is_manual_confirm_or_ignore_only(temp_database: Pa
 def test_r6_intelligence_detail_exposes_explainable_candidate_actions() -> None:
     template = (ROOT / "app/templates/platform/intelligence_detail.html").read_text(encoding="utf-8")
     assert "为什么值得关注" in template
-    assert "可能涉及" in template
-    assert "确认关联" in template and "忽略" in template
+    assert "原文可能提及" in template
+    assert "确认关联" in template
     assert "/golden-loop/intelligence/{{ item.id }}/subjects" in template
+    assert "/processing/candidates/" not in template
     assert "AI" not in template
 
 

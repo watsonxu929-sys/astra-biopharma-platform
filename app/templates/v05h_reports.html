@@ -18,7 +18,7 @@
       <td><strong>{{ product.title }}</strong><div class="code">#{{ product.id }}</div></td>
       <td>{{ product.source_name or '人工发布' }}{% if product.is_pilot %} <span class="badge">P2.1 试点</span><div class="code">{{ product.pilot_batch_id or '' }}</div>{% endif %}</td>
       <td><span class="badge">已发布</span></td>
-      <td><a class="button primary" href="/reports/products/{{ product.id }}">查看正式产品详情</a></td>
+      <td><a class="button primary" href="/intelligence/{{ product.id }}">查看正式情报</a></td>
     </tr>
   {% else %}
     <tr><td colspan="4" class="empty">
@@ -38,4 +38,3 @@
 <section class="panel"><div class="section-head"><h2>报告生成任务</h2><a class="button" href="/reports">返回报告中心</a></div><div class="subject-table"><table><thead><tr><th>任务</th><th>类型</th><th>周期</th><th>状态</th><th>更新时间</th></tr></thead><tbody>{% for job in jobs.data %}<tr><td><span class="code">{{ job.job_no }}</span></td><td>{{ report_labels.get(job.report_type, job.report_type) }}</td><td>{{ job.period_start or "-" }} 至 {{ job.period_end or "-" }}</td><td><span class="badge">{{ status_labels.get(job.status, job.status) }}</span></td><td>{{ job.updated_at }}</td></tr>{% else %}<tr><td colspan="5" class="empty">暂无报告生成任务</td></tr>{% endfor %}</tbody></table></div></section>
 {% endif %}
 {% endblock %}
-

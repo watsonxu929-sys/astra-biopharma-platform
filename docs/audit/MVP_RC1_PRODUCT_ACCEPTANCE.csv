@@ -1,0 +1,6 @@
+record_type,intelligence_id,coverage,source,published_at,reading_mode,subject_result,relationship_context,resource_context,today_queue,golden_path_click_count,guess_count,completion_seconds,context_switch_count,result,evidence
+GOLDEN_PATH,33,Q-BAY关系且存在已有Resource,Q-BAY公开项目动态,2026-08-24T15:36:14,ORIGINAL_CHINESE,Canonical Organization已关联,已有Q-BAY关系上下文,已有1项来源Resource,YES,4,0,2.92,2,PASS,docs/audit/evidence/mvp_rc1/browser_acceptance.json
+REAL_SAMPLE,29,英文监管或政策情报,EMA News RSS,2026-07-24,MANUAL_CURATED_ACCEPTANCE_SAMPLE,EMA按Organization处理且未显示为Project,未作为此样本断言,未作为此样本断言,NO,,,,,PASS,docs/audit/evidence/mvp_rc1/browser_acceptance.json
+REAL_SAMPLE,30,无直接Relationship且无相关Resource,EMA News RSS,2026-07-30,MANUAL_CURATED_ACCEPTANCE_SAMPLE,机构名称保留且不猜错误类型,当前未发现直接关系,暂无相关资源,YES,,,,,PASS,docs/audit/evidence/mvp_rc1/browser_acceptance.json
+REAL_SAMPLE,32,英文监管安全动态,EMA News RSS,2026-07-10,MANUAL_CURATED_ACCEPTANCE_SAMPLE,EMA按Organization处理且未显示为Project,未作为此样本断言,未作为此样本断言,NO,,,,,PASS,docs/audit/evidence/mvp_rc1/browser_acceptance.json
+REAL_SAMPLE,34,明显较旧的真实情报,上海生物医药外资项目政策,2026-06-03,ORIGINAL_CHINESE,原始主体名称保留,未作为此样本断言,未作为此样本断言,NO,,,,,PASS,docs/audit/evidence/mvp_rc1/browser_acceptance.json

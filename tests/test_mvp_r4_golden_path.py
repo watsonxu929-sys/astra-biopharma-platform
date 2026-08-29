@@ -87,8 +87,8 @@ def test_r4_formal_pages_use_business_language_and_no_manual_id_fields() -> None
     compatibility = (ROOT / "app/templates/platform/golden_loop.html").read_text(encoding="utf-8")
     opportunities = (ROOT / "app/templates/platform/opportunities.html").read_text(encoding="utf-8")
 
-    assert "关联人物/企业" in intelligence
-    assert "创建需求" in intelligence and "创建供给" in intelligence
+    assert "人工确认正式主体" in intelligence
+    assert "建立跟进" in intelligence and "相关资源" in intelligence
     assert "匹配候选" in resource and "推荐理由" in resource
     assert "确认匹配" in resource and "暂不匹配" in resource
     assert "转为合作机会" in match

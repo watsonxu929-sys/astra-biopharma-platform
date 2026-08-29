@@ -1,5 +1,5 @@
 {% extends "platform/base.html" %}
-{% block platform_title %}主体治理与产业关系网络{% endblock %}
+{% block platform_title %}{% if mode == 'entity' %}{{ entity.canonical_label }}{% else %}主体治理与产业关系网络{% endif %}{% endblock %}
 {% block platform_content %}
 {% set ENTITY_TYPE_LABELS = ENTITY_TYPE_LABELS or {'person':'人物','organization':'机构','project':'项目','product':'产品'} %}
 {% set RELATION_TYPE_LABELS = RELATION_TYPE_LABELS or {} %}
@@ -8,7 +8,7 @@
 
 <nav class="breadcrumb">
   <a href="/platform">工作台</a><span class="sep">/</span>
-  <a href="/network">产业关系</a><span class="sep">/</span>
+  <a href="/network">企业与人物</a><span class="sep">/</span>
   {% if mode == 'governance' %}<span>主体治理</span>
   {% elif mode == 'entity' %}<span>{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}详情</span>
   {% elif mode == 'paths' %}<span>路径查询</span>
@@ -25,7 +25,7 @@
   <div class="page-header-left">
     <h1 class="page-title">
       {% if mode == 'governance' %}主体治理
-      {% elif mode == 'entity' %}{{ entity.canonical_label or ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}详情
+      {% elif mode == 'entity' %}{{ entity.canonical_label or ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}
       {% elif mode == 'paths' %}关系路径查询
       {% elif mode == 'graph' %}关系网络
       {% elif mode == 'connections' %}人脉推荐
@@ -37,7 +37,7 @@
     </h1>
     <p class="page-desc">
       {% if mode == 'governance' %}主体消歧、证据可追溯、关系有时态；路径和连接建议仅供人工研判。
-      {% elif mode == 'entity' %}查看{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}的详细信息和关系网络。
+      {% elif mode == 'entity' %}集中查看基础资料、我们的关系、联系人、产业动态、资源与正在跟进的事项。
       {% elif mode == 'paths' %}查询两个主体之间的关系路径，支持1-3跳深度。
       {% elif mode == 'graph' %}展开主体的关系网络，查看一跳至三跳连接。
       {% elif mode == 'connections' %}发现值得认识的产业人物，查看推荐理由和连接路径。
@@ -48,7 +48,7 @@
       {% else %}候选先审、证据可追溯、关系有时态；路径和连接建议仅供人工研判。{% endif %}
     </p>
   </div>
-  <div class="page-header-right">
+  <div class="page-header-right" {% if mode == 'entity' and not can_manage_monitoring %}hidden{% endif %}>
     {% if mode != 'governance' %}<a class="btn btn-outline" href="/network/governance">主体治理</a>{% endif %}
     {% if mode != 'relationship_queue' %}<a class="btn btn-outline" href="/network/relationship-candidates">关系审核</a>{% endif %}
     {% if mode != 'paths' %}<a class="btn btn-outline" href="/network/paths">路径查询</a>{% endif %}
@@ -114,61 +114,53 @@
 
 {% elif mode == 'entity' %}
 <section class="dashboard-card">
-  <h2>{{ entity.canonical_label }}{% if entity.is_pilot %} <span class="status-badge">试点</span>{% endif %}</h2>
-  <p>类型：{{ ENTITY_TYPE_LABELS.get(entity_type, entity_type) }}{% if entity.redirected %}；已从历史主体重定向{% endif %}</p>
-  <p>别名：{% for alias in entity.aliases %}{{ alias.alias }}{% if not loop.last %}、{% endif %}{% else %}暂无{% endfor %}</p>
-  <p>公开标识：{% for identifier in entity.external_identifiers %}{{ identifier.identifier_type }}={{ identifier.identifier_value }}{% if not loop.last %}；{% endif %}{% else %}暂无{% endfor %}</p>
-</section>
-{% if entity_type == 'organization' and monitoring %}
-{% if request.query_params.get('message') %}<div class="success-box">{{ request.query_params.get('message') }}</div>{% endif %}
-{% if request.query_params.get('error') %}<div class="warning-box">{{ request.query_params.get('error') }}</div>{% endif %}
-<section class="dashboard-card">
-  <h2>产业监测</h2>
-  <p><strong>监测状态：</strong>{{ {'COVERED_ACTIVE':'已建立官方监测','COVERED_CANDIDATE':'已有候选来源','MANUAL_DOMAIN_REQUIRED':'需要人工确认官网'}.get(monitoring.monitoring_status, monitoring.monitoring_status) }}</p>
-  {% if monitoring.active_sources %}<p>已覆盖 {{ monitoring.active_sources|length }} 个来源{% if monitoring.last_collection %}；最近更新：{{ monitoring.last_collection }}{% endif %}</p>{% else %}<p class="text-muted">尚未建立已启用的官方监测来源。</p>{% endif %}
-  {% if monitoring.official_domain %}<p>已确认官网：<a href="{{ monitoring.official_domain.identifier_value }}" target="_blank" rel="noopener">{{ monitoring.official_domain.identifier_value }}</a></p>{% endif %}
-  {% if monitoring.domain_candidate %}
-  <div class="warning-box"><strong>候选官网：</strong>{{ monitoring.domain_candidate.identifier_value }}<br>发现依据：{{ monitoring.domain_candidate.source or '管理员提交' }}<br>验证依据：{{ monitoring.domain_candidate.authority or '待人工核对' }}</div>
-  {% if can_manage_monitoring %}<div class="actions"><form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/domain-candidates/{{ monitoring.domain_candidate.id }}/review"><button class="btn btn-primary" name="decision" value="approved" type="submit">确认官网并发现来源</button></form><form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/domain-candidates/{{ monitoring.domain_candidate.id }}/review"><button class="btn btn-outline" name="decision" value="rejected" type="submit">忽略</button></form></div>{% endif %}
-  {% elif not monitoring.official_domain and can_manage_monitoring %}
-  <form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/domain-candidates" class="inline-form"><label>候选官网URL<input name="candidate_url" type="url" required placeholder="https://企业已核对官网/"></label><button class="btn btn-outline" type="submit">验证候选官网</button></form>
-  {% endif %}
-  {% if monitoring.sources %}<div class="relation-list">{% for source in monitoring.sources %}<div class="relation-item"><a href="/collection/sources/{{ source.id }}"><strong>{{ source.name }}</strong></a><span>{{ '已启用' if source.is_enabled else ('候选' if source.health_status == 'candidate' else '已停用') }}</span>{% set sample = ((source.discovery.get('test') or {}).get('recent_items') or []) %}{% if sample %}<span>样本：{{ sample[0].title }}{% if sample[0].published %} · {{ sample[0].published }}{% endif %}</span>{% endif %}</div>{% endfor %}</div>{% endif %}
-  {% if can_manage_monitoring %}<form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/discover"><button class="btn btn-primary" type="submit">发现官方来源</button></form>{% endif %}
-  {% if monitoring.latest_intelligence %}<p>最近关联情报：<a href="/intelligence/{{ monitoring.latest_intelligence.id }}">{{ monitoring.latest_intelligence.title }}</a></p>{% endif %}
-</section>
-{% endif %}<section class="dashboard-card"><h2>业务追溯</h2>
-  {% for item in business_trace.intelligence %}<p><a href="/intelligence/{{ item.id }}">情报：{{ item.title }}</a></p>{% endfor %}
-  {% for item in business_trace.resources %}<p><a href="/resources/{{ item.id }}">{{ '需求' if item.direction == 'demand' else '供给' }}：{{ item.title }}</a></p>{% endfor %}
-  {% for item in business_trace.opportunities %}<p><a href="/opportunities/{{ item.id }}">合作机会：{{ item.title }}</a></p>{% endfor %}
-  {% for item in business_trace.follow_ups %}<p>最近跟进：<a href="/opportunities/{{ item.opportunity_id }}">{{ item.opportunity_title }}</a> · {{ item.content }}</p>{% endfor %}
-  {% if not business_trace.intelligence and not business_trace.resources and not business_trace.opportunities %}
-  <p class="text-muted">该主体尚无关联的情报、资源或合作机会。</p>
-  {% endif %}
-  <p><strong>下一步：</strong>从当前主体创建供需，或查看已确认关系后推进合作。</p>
-  {% if entity_type in ['person','organization'] %}<p><a class="btn btn-sm" href="/resources/new?direction=demand&owner_type={{ entity_type }}&owner_id={{ entity.id }}">创建需求</a> <a class="btn btn-sm" href="/resources/new?direction=supply&owner_type={{ entity_type }}&owner_id={{ entity.id }}">创建供给</a> <a class="btn btn-sm" href="/opportunities">查看合作机会</a></p>{% endif %}
+  <h2>基础资料</h2>
+  <p><strong>{{ entity.canonical_label }}</strong> · {{ ENTITY_TYPE_LABELS.get(entity_type, '主体') }}</p>
+  {% if entity.aliases %}<p>常用名称：{% for alias in entity.aliases %}{{ alias.alias }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
+  {% if entity.external_identifiers %}<p>公开资料：{% for identifier in entity.external_identifiers %}{{ identifier.identifier_value }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
 </section>
 <section class="dashboard-card">
-  <h2>{{ '全部历史关系' if history else '当前关系' }}</h2>
-  <p><a href="?history={{ 'false' if history else 'true' }}">{{ '只看当前' if history else '查看历史' }}</a> · <a href="/network/graph?entity_type={{ entity_type }}&entity_id={{ entity.resolved_id }}">展开关系图</a></p>
+  <h2>我们的关系</h2>
   {% if relationships %}
-  <div class="relation-list">
     {% for item in relationships %}
-    <div class="relation-item">
-      <a href="/network/relationships/{{ item.id }}" class="relation-type">{{ RELATION_TYPE_LABELS.get(item.relationship_type, item.relationship_type) }}</a>
-      <a href="/network/entities/{{ item.subject_type }}/{{ item.subject_id }}">{{ item.subject_type }}: {{ item.subject_id }}</a>
-      <span class="relation-arrow">→</span>
-      <a href="/network/entities/{{ item.object_type }}/{{ item.object_id }}">{{ item.object_type }}: {{ item.object_id }}</a>
-      <span class="relation-status">{{ '当前' if item.is_current else '历史' }}</span>
-      <span class="relation-confidence">置信度 {{ item.confidence }}</span>
-      <span class="relation-evidence">{{ EVIDENCE_STATUS_LABELS.get(item.evidence_status, item.evidence_status) }}</span>
-    </div>
+    <p><a href="/network/relationships/{{ item.id }}">{{ RELATION_TYPE_LABELS.get(item.relationship_type, '已确认关系') }}</a> · {{ '当前关系' if item.is_current else '历史关系' }}</p>
     {% endfor %}
-  </div>
-  {% else %}
-  <div class="empty-state"><p>暂无已审核关系。请先在关系审核队列中确认候选。</p></div>
-  {% endif %}
+  {% else %}<p>当前未发现直接关系</p>{% endif %}
 </section>
+<section class="dashboard-card">
+  <h2>关键联系人</h2>
+  {% for item in business_trace.contacts %}
+  <p><a href="/network/entities/person/{{ item.external_id }}">{{ item.name }}</a>{% if item.public_role %} · {{ item.public_role }}{% endif %}</p>
+  {% else %}<p>暂无已记录联系人</p>{% endfor %}
+</section>
+<section class="dashboard-card">
+  <h2>最近产业动态</h2>
+  {% for item in business_trace.intelligence %}<p><a href="/intelligence/{{ item.id }}">{{ item.title }}</a></p>
+  {% else %}<p>近期暂无相关产业动态</p>{% endfor %}
+</section>
+<section class="dashboard-card">
+  <h2>资源 / 需求</h2>
+  {% for item in business_trace.resources %}<p><a href="/resources/{{ item.id }}">{{ '需求' if item.direction == 'demand' else '供给' }} · {{ item.title }}</a></p>
+  {% else %}<p>暂无相关资源</p>{% endfor %}
+</section>
+<section class="dashboard-card">
+  <h2>正在跟进</h2>
+  {% for item in business_trace.follow_ups %}<p><a href="/opportunities/{{ item.opportunity_id }}">{{ item.opportunity_title }}</a> · {{ item.content }}</p>
+  {% else %}<p>暂无进行中的跟进</p>{% endfor %}
+</section>
+<section class="dashboard-card">
+  <h2>历史合作证据</h2>
+  {% for item in relationships %}<p><a href="/network/relationships/{{ item.id }}">{{ RELATION_TYPE_LABELS.get(item.relationship_type, '合作证据') }}</a> · {{ EVIDENCE_STATUS_LABELS.get(item.evidence_status, '证据待核对') }}</p>
+  {% else %}<p>暂无已确认的合作证据</p>{% endfor %}
+</section>
+{% if entity_type == 'organization' and monitoring and can_manage_monitoring %}
+<section class="dashboard-card">
+  <h2>管理员：产业监测</h2>
+  <p>{{ {'COVERED_ACTIVE':'已建立官方监测','COVERED_CANDIDATE':'已有候选来源','MANUAL_DOMAIN_REQUIRED':'需要人工确认官网'}.get(monitoring.monitoring_status, '需要人工核对') }}</p>
+  {% if monitoring.official_domain %}<p>官网：<a href="{{ monitoring.official_domain.identifier_value }}" target="_blank" rel="noopener">{{ monitoring.official_domain.identifier_value }}</a></p>{% endif %}
+  <form method="post" action="/network/entities/organization/{{ entity.resolved_id }}/monitoring/discover"><button class="btn btn-primary" type="submit">发现官方来源</button></form>
+</section>
+{% endif %}
 
 {% elif mode == 'relationship_queue' %}
 <section class="dashboard-card">

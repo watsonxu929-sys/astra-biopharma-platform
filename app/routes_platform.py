@@ -206,7 +206,7 @@ def platform_home(request: Request, db: Session = Depends(get_db)):
         select(Person).where(Person.is_active == True).order_by(desc(Person.created_at)).limit(4)
     ).all())
     golden = GoldenLoopService(db)
-    feed = golden.priority_feed(limit=4)
+    feed = golden.priority_feed(limit=6, user_id=user_id)
     supplies = list(db.scalars(
         select(MarketResource).where(MarketResource.status == "published", MarketResource.direction == "supply").order_by(desc(MarketResource.created_at)).limit(4)
     ).all())
@@ -220,12 +220,14 @@ def platform_home(request: Request, db: Session = Depends(get_db)):
     workspace = get_workspace_for_role(request, db, user_id)
     tasks = list_user_tasks(db, user_id) if user_id else []
 
-    home_metrics = golden.workbench()["home_metrics"]
+    my_follow_ups = golden.current_user_follow_ups(user_id, limit=8) if user_id is not None else []
+    dismissed_today = golden.dismissed_today(user_id, limit=8) if user_id is not None else []
     return render(request, "platform/home.html",
         rec_people=rec_people, recent_people=recent_people,
         feed=feed, supplies=supplies, demands=demands,
         opps=opps, user_id=user_id,
-        workspace=workspace, tasks=tasks, home_metrics=home_metrics,
+        workspace=workspace, tasks=tasks, my_follow_ups=my_follow_ups,
+        dismissed_today=dismissed_today,
     )
 
 
@@ -469,6 +471,12 @@ def intelligence_center(
         intel_type=intel_type or None,
         industry_direction=industry_direction or None,
         q=q or None, source=source, time_range=time_range, workflow=workflow, page=page)
+    golden = GoldenLoopService(db)
+    for item in result["items"]:
+        view = golden.reading_view(int(item.id), item)
+        item.display_title = view["display_title"]
+        item.display_summary = view["display_summary"]
+        item.translation_mode = view["translation_mode"]
     feed = personalized_feed(db, user_id, limit=6) if user_id is not None else []
     intel_type_options = [v for v in db.scalars(select(IntelligenceItem.intel_type).where(IntelligenceItem.status == "published", IntelligenceItem.intel_type.is_not(None), IntelligenceItem.intel_type != "").distinct().order_by(IntelligenceItem.intel_type)).all() if v]
     industry_direction_options = [v for v in db.scalars(select(IntelligenceItem.industry_directions).where(IntelligenceItem.status == "published", IntelligenceItem.industry_directions.is_not(None), IntelligenceItem.industry_directions != "").distinct().order_by(IntelligenceItem.industry_directions)).all() if v]
@@ -485,13 +493,15 @@ def intelligence_center(
 @router.get("/intelligence/{item_id:int}", response_class=HTMLResponse)
 def intelligence_detail(
     item_id: int, request: Request, subject_q: str = Query(""),
-    message: str = Query(""), db: Session = Depends(get_db),
+    message: str = Query(""), follow_up_id: int | None = Query(None),
+    opportunity_id: int | None = Query(None), db: Session = Depends(get_db),
 ):
     item = UnifiedIntelligenceService(db).detail(item_id)
     evidence = IntelligenceProductService().trace(item_id)["evidence"]
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "intelligence", item_id) if user_id is not None else False
     golden = GoldenLoopService(db)
+    reading = golden.reading_view(item_id, item)
     trace = golden.trace(item_id)
     event_insight, subject_candidates = golden.event_insight(item_id), golden.subject_candidates(item_id)
     opportunity_context = golden.opportunity_discovery(
@@ -509,7 +519,8 @@ def intelligence_detail(
         people=people, organizations=organizations, projects=projects,
         event_insight=event_insight, subject_candidates=subject_candidates,
         opportunity_context=opportunity_context,
-        can_write=role in {"operator", "reviewer", "admin"}, message=message,
+        reading=reading, can_write=role in {"operator", "reviewer", "admin"},
+        message=message, follow_up_id=follow_up_id, opportunity_id=opportunity_id,
     )
 
 
@@ -1316,5 +1327,4 @@ def admin_publish_collection_item(collection_item_id: int, request: Request, db:
         raise HTTPException(403, "intelligence admin permission required")
     item = _v06e_publish_collection_item(db, int(collection_item_id), actor_user_id=get_current_user_id(request), status="published")
     return RedirectResponse(f"/admin/intelligence/{item.id}", 303)
-
 

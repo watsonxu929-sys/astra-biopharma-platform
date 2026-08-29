@@ -57,7 +57,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("workspace.favorites", "我的收藏", "收藏", "收藏和关注", "workspace", "workspace", "/workspace?tab=favorites", "/api/v1/collection", "bookmark", order=14),
     cap("workspace.recent", "最近访问", "访问", "最近访问记录", "workspace", "workspace", "/workspace?tab=recent", "/api/v1/client/bootstrap", "history", order=15),
 
-    cap("network", "关系", "关系", "人物、企业和已确认产业关系", "network", None, "/network", "/api/v1/network", "network", order=20),
+    cap("network", "企业与人物", "主体", "企业、人物和已确认产业关系", "network", None, "/network", "/api/v1/network", "network", order=20),
     cap("network.people", "人物与机构", "人物", "产业人物和机构发现", "network", "network", "/network/people", "/api/v1/network/people", "users", order=21, legacy=("/people",)),
     cap("network.graph", "关系网络", "图谱", "主体关系图谱、路径查询和时间线", "network", "network", "/network/graph", "/api/v1/relationships", "share-2", order=22),
     cap("network.governance", "主体治理", "治理", "主体消歧、重复合并和关系审核", "network", "network", "/network/governance", "/api/v1/subjects/people", "users-round", "edit_data", clients=("web", "admin"), order=23),
@@ -85,7 +85,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("resources.supply", "供给", "供给", "筛选资源供给", "resources", "resources", "/resources?direction=supply", "/api/v1/resources", "package-check", order=43),
     cap("resources.matching", "匹配推荐", "匹配", "供需匹配推荐", "resources", "resources", "/resources/matching", "/api/v1/resources", "shuffle", order=44),
 
-    cap("collaboration", "协作", "协作", "合作机会、跟进和任务", "collaboration", None, "/opportunities", "/api/v1/opportunities", "handshake", order=50, legacy=("/collaboration",)),
+    cap("collaboration", "跟进", "跟进", "我的跟进、合作机会和任务", "collaboration", None, "/opportunities", "/api/v1/opportunities", "handshake", order=50, legacy=("/collaboration",)),
     cap("collaboration.home", "协同首页", "首页", "业务协同工作台和任务队列", "collaboration", "collaboration", "/collaboration", "/api/v1/opportunities", "layout-dashboard", order=51),
     cap("collaboration.leads", "历史线索（已退役）", "已退役", "Legacy 线索入口已停用，统一使用合作机会", "collaboration", "collaboration", "/opportunities", "/api/v1/opportunities", "target", status="disabled", order=52),
     cap("collaboration.opportunities", "合作机会", "机会", "合作机会管理和阶段推进", "collaboration", "collaboration", "/collaboration/opportunities", "/api/v1/opportunities", "handshake", order=53),

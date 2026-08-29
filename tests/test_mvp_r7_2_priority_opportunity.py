@@ -224,10 +224,10 @@ def test_r7_2_workbench_priority_sort_and_product_copy() -> None:
         encoding="utf-8"
     )
     source = (ROOT / "app/services/golden_loop_service.py").read_text(encoding="utf-8")
-    assert "Priority Subject" in template
-    assert "Resource Signal" in template
-    assert "Opportunity Qualification" in template
-    assert "检查Match并人工创建Opportunity" in template
+    assert "为什么值得关注" in template
+    assert "与我们的关系" in template
+    assert "相关资源" in template
+    assert "建立跟进" in template
     assert "def priority_feed" in source
     assert "LEVEL_1_INDUSTRY_INFORMATION" in source
     assert "LEVEL_2_ACTIONABLE_SIGNAL" in source

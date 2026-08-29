@@ -163,8 +163,8 @@ def test_r7_intelligence_detail_uses_business_language_and_existing_review_path(
     template = (ROOT / "app/templates/platform/intelligence_detail.html").read_text(
         encoding="utf-8"
     )
-    assert "产业事件" in template and "业务机会" in template
-    assert "发现新主体候选" in template
-    assert "核对证据并决定是否新建" in template
-    assert "/processing/candidates/{{ candidate.candidate_id }}/review" in template
-    assert "关联上下文" in template
+    assert "发生了什么" in template and "为什么值得关注" in template
+    assert "原文可能提及" in template
+    assert "人工确认正式主体" in template
+    assert "/processing/candidates/" not in template
+    assert "与我们的关系" in template

@@ -58,13 +58,13 @@
     {% for item in items %}
     <article class="intel-card">
       <div class="intel-card-header">
-        <span class="badge badge-{{ item.intel_type or 'default' }}">{{ item.intel_type or '情报' }}</span>
-        {% if item.importance %}<span class="badge">重要度 {{ item.importance }}</span>{% endif %}
+        <span class="badge">产业动态</span>
+        {% if item.translation_mode == 'MANUAL_CURATED_ACCEPTANCE_SAMPLE' %}<span class="badge">中文人工整理样本</span>{% endif %}
       </div>
       <h3 class="intel-card-title">
-        <a href="/intelligence/{{ item.id }}">{{ item.title }}</a>
+        <a href="/intelligence/{{ item.id }}">{{ item.display_title }}</a>
       </h3>
-      <p class="intel-card-summary">{{ item.summary|default('', true)|truncate(120, True) }}</p>
+      <p class="intel-card-summary">{{ item.display_summary|truncate(120, True) }}</p>
       <div class="intel-card-meta">
         <span>{{ item.source_name or '' }}</span>
         <span>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '' }}</span>

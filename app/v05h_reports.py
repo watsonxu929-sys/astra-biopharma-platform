@@ -48,13 +48,7 @@ def report_jobs_page(request: Request, page: int = 1, status: str = "", message:
 
 @router.get("/reports/products/{product_id:int}", response_class=HTMLResponse)
 def intelligence_product_detail(request: Request, product_id: int, db: Session = Depends(get_db)):
-    item = UnifiedIntelligenceService(db).detail(product_id)
-    trace = IntelligenceProductService().trace(product_id)
-    return templates.TemplateResponse(
-        request,
-        "platform/intelligence_detail.html",
-        {"item": item, "evidence": trace["evidence"], "candidates": trace["candidates"], "is_favorited": False, "product_context": True},
-    )
+    return RedirectResponse(f"/intelligence/{int(product_id)}", status_code=303)
 
 def report_detail(request: Request, report_id: int, message: str = "", error: str = ""):
     report = get_report(report_id)
@@ -91,5 +85,4 @@ def report_archive(request: Request, report_id: int):
 def health():
     data = list_reports(page=1, page_size=1)
     return {"ok": True, "version": "0.5H", "report_count": data["pagination"]["total"]}
-
 

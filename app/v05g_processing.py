@@ -147,7 +147,7 @@ def processing_publish_candidate(request: Request, candidate_id: int):
             actor=current_username(request),
             permissions=set(context.get("permissions") or []),
         )
-        return RedirectResponse(f"/reports/products/{product['id']}", status_code=303)
+        return RedirectResponse(f"/intelligence/{product['id']}", status_code=303)
     except Exception as exc:
         return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
 
@@ -168,4 +168,3 @@ def processing_subject_matches(request: Request, page: int = 1, status: str = ""
 def health():
     data = dashboard()
     return {"ok": True, "version": "0.5G", "counts": data["counts"]}
-

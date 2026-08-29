@@ -109,6 +109,16 @@ def _business_trace(entity_type: str, internal_id: int) -> dict[str, list[dict]]
             (int(internal_id),),
         )] if resource_column else []
         if entity_type == "organization":
+            organization = conn.execute(
+                "SELECT standard_name FROM organizations WHERE id=?", (int(internal_id),)
+            ).fetchone()
+            organization_name = str(organization["standard_name"]) if organization else ""
+            contacts = [dict(row) for row in conn.execute(
+                """SELECT id,external_id,name,public_role FROM people
+                   WHERE COALESCE(is_active,1)=1 AND organization_network LIKE ?
+                   ORDER BY manually_confirmed DESC,id DESC LIMIT 20""",
+                (f"%{organization_name}%",),
+            )] if organization_name else []
             opportunities = [dict(row) for row in conn.execute(
                 """SELECT DISTINCT id,title,status,outcome_status FROM v06_opportunities
                    WHERE organization_id=? OR demand_organization_id=? OR supply_organization_id=?
@@ -116,13 +126,14 @@ def _business_trace(entity_type: str, internal_id: int) -> dict[str, list[dict]]
                 (int(internal_id),) * 4,
             )]
         elif entity_type == "person":
+            contacts = []
             opportunities = [dict(row) for row in conn.execute(
                 """SELECT DISTINCT id,title,status,outcome_status FROM v06_opportunities
                    WHERE target_person_id=? ORDER BY id DESC LIMIT 20""",
                 (int(internal_id),),
             )]
         else:
-            opportunities = []
+            opportunities, contacts = [], []
         opportunity_ids = [int(row["id"]) for row in opportunities]
         if opportunity_ids:
             placeholders = ",".join("?" for _ in opportunity_ids)
@@ -134,7 +145,13 @@ def _business_trace(entity_type: str, internal_id: int) -> dict[str, list[dict]]
             )]
         else:
             follow_ups = []
-    return {"intelligence": intelligence, "resources": resources, "opportunities": opportunities, "follow_ups": follow_ups}
+    return {
+        "intelligence": intelligence,
+        "resources": resources,
+        "opportunities": opportunities,
+        "follow_ups": follow_ups,
+        "contacts": contacts,
+    }
 
 
 
