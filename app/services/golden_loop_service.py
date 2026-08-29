@@ -178,8 +178,8 @@ class GoldenLoopService:
                 "original_summary": summary,
             }
         return {
-            "display_title": "产业动态（中文辅助加工待补充）",
-            "display_summary": "当前尚无可核验的中文辅助内容，请在页面底部查看原文与公开证据。",
+            "display_title": "英文产业动态（自动中文加工尚未配置）",
+            "display_summary": "自动中文加工尚未配置，可查看英文原文与公开证据。",
             "translation_mode": "MANUAL_ACCEPTANCE_FALLBACK",
             "has_chinese_reading": False,
             "original_title": title,

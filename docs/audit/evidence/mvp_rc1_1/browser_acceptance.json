@@ -1,0 +1,149 @@
+{
+  "browser": "151.0.7922.34",
+  "viewport_checks": [
+    {
+      "page": "工作台-1366",
+      "url": "http://127.0.0.1:8000/platform",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "情报详情-1366",
+      "url": "http://127.0.0.1:8000/intelligence/33",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "企业档案-1366",
+      "url": "http://127.0.0.1:8000/network/entities/organization/ORG-20260626-000001",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "跟进回到工作台-1366",
+      "url": "http://127.0.0.1:8000/platform",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "工作台-1920",
+      "url": "http://127.0.0.1:8000/platform?message=%E5%B7%B2%E6%81%A2%E5%A4%8D%E5%88%B0%E4%BB%8A%E5%A4%A9%E5%80%BC%E5%BE%97%E5%A4%84%E7%90%86",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "英文监管样本-1920",
+      "url": "http://127.0.0.1:8000/intelligence/29",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "真实样本-30",
+      "url": "http://127.0.0.1:8000/intelligence/30",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "真实样本-32",
+      "url": "http://127.0.0.1:8000/intelligence/32",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "真实样本-34",
+      "url": "http://127.0.0.1:8000/intelligence/34",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    },
+    {
+      "page": "viewer情报详情-1366",
+      "url": "http://127.0.0.1:8000/intelligence/33",
+      "overflow": false,
+      "forbidden_copy": [],
+      "undefined_visible": false,
+      "null_visible": false,
+      "replacement_character_visible": false
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "network_failures": [],
+  "http_errors": [],
+  "screenshots": [
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_1\\01_workbench_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_1\\02_intelligence_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_1\\03_organization_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_1\\04_follow_up_created_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_1\\05_workbench_1920.png"
+  ],
+  "operator_flow": {
+    "intelligence_id": 33,
+    "opportunity_url": "/opportunities/19",
+    "follow_up_created": true,
+    "dismiss_restore": true
+  },
+  "sample_coverage": [
+    {
+      "id": 29,
+      "coverage": "英文监管/政策情报",
+      "passed": true
+    },
+    {
+      "id": 30,
+      "coverage": "无直接关系且无相关资源",
+      "passed": true
+    },
+    {
+      "id": 32,
+      "coverage": "英文监管安全动态",
+      "passed": true
+    },
+    {
+      "id": 34,
+      "coverage": "明显较旧且不进入今天",
+      "passed": true
+    },
+    {
+      "id": 33,
+      "coverage": "Q-BAY关系且存在已有Resource",
+      "passed": true
+    }
+  ],
+  "viewer_write_status": 403,
+  "metrics": {
+    "click_count": 11,
+    "guess_count": 0,
+    "context_switch_count": 2,
+    "golden_path_click_count": 4,
+    "golden_path_completion_seconds": 2.94,
+    "completion_seconds": 14.48
+  },
+  "passed": true
+}

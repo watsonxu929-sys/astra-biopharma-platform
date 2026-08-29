@@ -1,0 +1,101 @@
+{
+  "run_acceptance": "PASS",
+  "run_window_flash_exit": "FIXED",
+  "formal_entry": "run_windows.bat",
+  "project_root_resolution": {
+    "called_from": "C:\\Windows",
+    "resolved_to_repository": true,
+    "chinese_path_supported": true
+  },
+  "runtime": {
+    "python": ".venv\\Scripts\\python.exe",
+    "host": "127.0.0.1",
+    "port": 8000,
+    "scheduler_enabled": false,
+    "worker_enabled": false,
+    "startup_timeout_seconds": 20
+  },
+  "cold_start": {
+    "exit_code": 0,
+    "completion_seconds": 6.33,
+    "run_status": "READY",
+    "login_status": 200,
+    "platform_status": 200,
+    "pid": 10372
+  },
+  "existing_instance": {
+    "exit_code": 0,
+    "message": "系统已经在运行",
+    "pid_before": 10372,
+    "pid_after": 10372,
+    "duplicate_instance_created": false
+  },
+  "restart": {
+    "first_stop_exit_code": 0,
+    "port_released": true,
+    "restart_exit_code": 0,
+    "completion_seconds": 5.53,
+    "login_status": 200,
+    "platform_status": 200,
+    "persistence_browser_passed": true
+  },
+  "failure_scenarios": {
+    "python_missing": {
+      "exit_code": 10,
+      "error": "PYTHON_NOT_FOUND",
+      "readable": true,
+      "logged": true
+    },
+    "database_missing": {
+      "exit_code": 12,
+      "error": "DATABASE_NOT_FOUND",
+      "readable": true,
+      "logged": true
+    },
+    "port_used_by_other_process": {
+      "exit_code": 13,
+      "error": "PORT_IN_USE_BY_OTHER_PROCESS",
+      "readable": true,
+      "logged": true,
+      "holder_cleaned": true
+    }
+  },
+  "browser": {
+    "engine": "Chromium",
+    "version": "151.0.7922.34",
+    "started_by_formal_run": true,
+    "golden_path_click_count": 4,
+    "golden_path_completion_seconds": 2.94,
+    "guess_count": 0,
+    "console_errors": 0,
+    "page_errors": 0,
+    "network_failures": 0,
+    "http_404_500": 0,
+    "horizontal_overflow": 0,
+    "viewer_write_status": 403
+  },
+  "logging": {
+    "path": "logs/startup.log",
+    "stages_verified": [
+      "preflight",
+      "process_started",
+      "ready",
+      "already_running",
+      "failed",
+      "stopped"
+    ],
+    "sensitive_value_matches": 0
+  },
+  "cleanup": {
+    "port_8000_listeners": 0,
+    "runtime_web_pid_exists": false,
+    "temporary_acceptance_directory_exists": false,
+    "formal_acceptance_accounts": 0
+  },
+  "formal_database": {
+    "sha256_before": "FED798300231934D170F104C4A4F4676AE90103C9888D29F6A0CD97AA6C1A3FB",
+    "sha256_after": "FED798300231934D170F104C4A4F4676AE90103C9888D29F6A0CD97AA6C1A3FB",
+    "integrity_check": "ok",
+    "business_counts_unchanged": true
+  }
+}

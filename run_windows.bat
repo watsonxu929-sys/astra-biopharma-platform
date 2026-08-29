@@ -1,12 +1,23 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-echo ============================================
-echo Biopharma Intelligence MVP-RC1 - Web only
-echo ============================================
+chcp 65001 >nul
+for %%I in ("%~dp0.") do set "PROJECT_ROOT=%%~fI"
+cd /d "%PROJECT_ROOT%"
+
+echo Starting Biopharma Intelligence...
 call scripts\windows\start_web_windows.bat
-if errorlevel 1 exit /b 1
-call scripts\windows\status_windows.bat
+set "RUN_RC=%ERRORLEVEL%"
+if not "%RUN_RC%"=="0" goto failed
+
 echo.
-echo Scheduler and Worker are disabled for the Web process.
-echo Use scripts\windows\start_scheduler_windows.bat or scripts\windows\start_worker_windows.bat when required.
+echo Startup completed. Closing this window will not stop the Web service.
+echo To stop: scripts\windows\web_service_windows.bat stop
+if /i not "%RC1_RUN_NONINTERACTIVE%"=="true" timeout /t 5 /nobreak >nul
+exit /b 0
+
+:failed
+echo.
+echo Startup failed. Follow the message above.
+echo Log: logs\startup.log
+if /i not "%RC1_RUN_NONINTERACTIVE%"=="true" pause
+exit /b %RUN_RC%
