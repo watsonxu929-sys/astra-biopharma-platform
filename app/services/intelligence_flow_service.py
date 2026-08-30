@@ -60,7 +60,7 @@ def run_collection_worker_with_cascade(
     db_path: str | Path | None = None,
     operator: str = "worker",
 ) -> dict[str, Any]:
-    """Claim pending collection jobs, then immediately enqueue processing for new items."""
+    """Run collection jobs, then advance the existing processing queue once."""
     ensure_schema(db_path)
     with db_connection(db_path) as conn:
         jobs = [dict(r) for r in conn.execute(
@@ -73,15 +73,63 @@ def run_collection_worker_with_cascade(
             (max(1, min(int(limit or 20), 200)),),
         ).fetchall()]
     results: list[dict[str, Any]] = []
-    processing_jobs = 0
+    completed_run_ids: list[int] = []
     for job in jobs:
         result = process_collection_job(int(job["id"]), db_path=db_path)
-        created = create_processing_jobs_for_collection_run(int(job["id"]), db_path=db_path, operator=operator)
-        processing_jobs += int(created["created"])
-        results.append({**result, "processing_jobs_created": created["created"]})
+        completed_run_ids.append(int(job["id"]))
+        results.append(result)
         if once:
             break
-    return {"processed": len(results), "processing_jobs_created": processing_jobs, "results": results}
+    automation = advance_processing_after_collection(
+        completed_run_ids, limit=limit, db_path=db_path, operator=operator,
+    )
+    return {
+        "processed": len(results),
+        "processing_jobs_created": automation["created"],
+        "processing_jobs_processed": automation["processing"]["processed"],
+        "processing_successful": automation["processing"]["successful"],
+        "processing_failed": automation["processing"]["failed"],
+        "results": results,
+        "processing": automation["processing"],
+    }
+
+
+def process_collection_job_with_automation(
+    run_id: int,
+    *,
+    limit: int = 20,
+    db_path: str | Path | None = None,
+    operator: str = "operator",
+) -> dict[str, Any]:
+    """Execute one explicit collection run through the same automatic handoff."""
+    result = process_collection_job(run_id, db_path=db_path)
+    automation = advance_processing_after_collection(
+        [run_id], limit=limit, db_path=db_path, operator=operator,
+    )
+    return {**result, "automation": automation}
+
+
+def advance_processing_after_collection(
+    run_ids: list[int],
+    *,
+    limit: int = 20,
+    db_path: str | Path | None = None,
+    operator: str = "worker",
+) -> dict[str, Any]:
+    """The single Collection-success -> existing Processing executor handoff."""
+    created = 0
+    skipped = 0
+    jobs: list[dict[str, Any]] = []
+    for run_id in dict.fromkeys(int(value) for value in run_ids):
+        result = create_processing_jobs_for_collection_run(
+            run_id, db_path=db_path, operator=operator,
+        )
+        created += int(result["created"])
+        skipped += int(result["skipped"])
+        jobs.extend(result["jobs"])
+    # Persisted pending jobs are recovered after restart even if no new Collection was produced.
+    processing = run_processing_worker_once(limit=limit, db_path=db_path, operator=operator)
+    return {"created": created, "skipped": skipped, "jobs": jobs, "processing": processing}
 
 
 def create_processing_jobs_for_collection_run(run_id: int, *, db_path: str | Path | None = None, operator: str = "worker") -> dict[str, Any]:
@@ -91,9 +139,25 @@ def create_processing_jobs_for_collection_run(run_id: int, *, db_path: str | Pat
     with db_connection(db_path) as conn:
         rows = [dict(r) for r in conn.execute(
             """
-            SELECT id FROM v05f_collection_items
-            WHERE monitoring_run_id=? AND processing_status='queued'
-            ORDER BY id
+            SELECT i.id
+            FROM v05f_collection_items i
+            JOIN v04g_monitoring_runs r ON r.id=i.monitoring_run_id
+            JOIN v04g_monitoring_sources s ON s.id=i.monitoring_source_id
+            JOIN v04g_source_snapshots sn ON sn.id=i.snapshot_id
+            WHERE i.monitoring_run_id=?
+              AND r.status IN ('success','partial')
+              AND s.is_enabled=1 AND s.deactivated_at IS NULL AND COALESCE(s.auto_paused,0)=0
+              AND i.processing_status='queued'
+              AND i.dedup_status IN ('new','changed')
+              AND i.duplicate_of_item_id IS NULL
+              AND COALESCE(sn.is_pilot,0)=0
+              AND length(trim(COALESCE(sn.cleaned_text,sn.raw_content,'')))>0
+              AND NOT EXISTS (
+                SELECT 1 FROM v05g_processing_jobs pj
+                WHERE pj.collection_item_id=i.id
+                  AND pj.status IN ('pending','running','success','needs_review')
+              )
+            ORDER BY i.id
             """,
             (run_id,),
         ).fetchall()]
@@ -118,7 +182,12 @@ def run_processing_worker_once(*, limit: int = 20, db_path: str | Path | None = 
             (max(1, min(int(limit or 20), 200)),),
         ).fetchall()]
     results = [process_processing_job(int(row["id"]), db_path=db_path) for row in rows]
-    return {"processed": len(results), "results": results}
+    return {
+        "processed": len(results),
+        "successful": sum(1 for row in results if row.get("status") in {"success", "needs_review"}),
+        "failed": sum(1 for row in results if row.get("status") == "failed"),
+        "results": results,
+    }
 
 
 def approve_candidate_to_formal_store(candidate_id: int, *, actor: str = "reviewer", note: str = "", db_path: str | Path | None = None) -> dict[str, Any]:

@@ -21,7 +21,6 @@ from app.services.collection_service import (
     list_items,
     list_jobs,
     list_sources,
-    process_job,
     preview_source_import,
     snapshot_detail,
     save_source_import,
@@ -30,6 +29,7 @@ from app.services.collection_service import (
     test_source_url,
     update_collection_source,
 )
+from app.services.intelligence_flow_service import process_collection_job_with_automation
 from app.services.collection_scheduler import (
     get_scheduler_info,
     get_sources_with_next_run,
@@ -267,9 +267,15 @@ def collection_jobs(request: Request, page: int = 1, status: str = "", message: 
 
 
 @router.post("/collection/jobs/{job_id}/run")
-def collection_process_job(job_id: int):
-    result = process_job(job_id)
-    return RedirectResponse(f"/collection/jobs?message=已执行 {job_id}: {result.get('status')}", status_code=303)
+def collection_process_job(request: Request, job_id: int):
+    result = process_collection_job_with_automation(
+        job_id, operator=current_username(request),
+    )
+    automation = result["automation"]
+    return RedirectResponse(
+        f"/collection/jobs?message=采集 {result.get('status')}；自动加工 {automation['processing']['processed']} 条",
+        status_code=303,
+    )
 
 
 @router.get("/collection/items", response_class=HTMLResponse)

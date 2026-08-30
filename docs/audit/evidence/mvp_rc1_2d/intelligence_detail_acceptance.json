@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "browser": "151.0.7922.34",
+  "intelligence_id": 29,
+  "console_errors": [],
+  "page_errors": [],
+  "network_failures": [],
+  "http_errors": [],
+  "overflow": false,
+  "database_isolated": true,
+  "formal_database_written": false,
+  "cleanup": {
+    "temporary_database_removed": true,
+    "cleanup_after_controller_exit": true,
+    "web_stopped": true
+  },
+  "screenshot": "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_2d\\07_intelligence_detail_1366.png",
+  "rendered": {
+    "h1_visible": true,
+    "body_characters": 488
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "passed": true,
+  "browser": "151.0.7922.34",
+  "database_isolated": true,
+  "formal_database_written": false,
+  "source_url_kind": "local_controlled_http",
+  "pages": [
+    {
+      "label": "Source详情-1366",
+      "url": "http://127.0.0.1:59812/collection/sources/19",
+      "overflow": false
+    },
+    {
+      "label": "采集自动加工结果-1366",
+      "url": "http://127.0.0.1:59812/collection/jobs?message=%E9%87%87%E9%9B%86%20success%EF%BC%9B%E8%87%AA%E5%8A%A8%E5%8A%A0%E5%B7%A5%201%20%E6%9D%A1",
+      "overflow": false
+    },
+    {
+      "label": "加工异常恢复-1366",
+      "url": "http://127.0.0.1:59812/processing/jobs",
+      "overflow": false
+    },
+    {
+      "label": "候选审核-1366",
+      "url": "http://127.0.0.1:59812/processing/candidates",
+      "overflow": false
+    },
+    {
+      "label": "正式情报-1366",
+      "url": "http://127.0.0.1:59812/intelligence",
+      "overflow": false
+    },
+    {
+      "label": "重启后待处理队列-1024",
+      "url": "http://127.0.0.1:59812/processing/jobs",
+      "overflow": false
+    },
+    {
+      "label": "调度周期恢复后-1024",
+      "url": "http://127.0.0.1:59812/processing/jobs",
+      "overflow": false
+    },
+    {
+      "label": "Viewer加工后台-1366",
+      "url": "http://127.0.0.1:59812/processing/jobs",
+      "overflow": false
+    }
+  ],
+  "screenshots": [
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_2d\\01_source_before_collection_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_2d\\02_collection_auto_processing_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_2d\\03_processing_failure_recovery_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_2d\\04_processing_candidates_1366.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_2d\\05_restart_recovery_1024.png",
+    "E:\\Codex项目设计\\招商一体化平台系统\\biopharma-intelligence-mvp-rc1\\docs\\audit\\evidence\\mvp_rc1_2d\\06_viewer_processing_readonly_1366.png"
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "network_failures": [],
+  "http_errors": [],
+  "viewer_write_statuses": {
+    "create": 403,
+    "retry": 403,
+    "worker": 403
+  },
+  "automatic": {
+    "processing_jobs": 1,
+    "status": "needs_review",
+    "manual_create_clicks": 0,
+    "repeat_processing_jobs": 1,
+    "duplicate_prevented": true
+  },
+  "retry": {
+    "from": "failed",
+    "to": "needs_review",
+    "error_cleared": true
+  },
+  "restart": {
+    "web_restarted": true,
+    "pending_persisted": true,
+    "scheduler_recovered": true,
+    "status": "needs_review"
+  },
+  "cleanup": {
+    "temporary_database_removed": true,
+    "cleanup_after_controller_exit": true,
+    "web_stopped": true,
+    "source_server_stopped": true
+  },
+  "collection_first": {
+    "status": "success",
+    "error_type": null,
+    "error_message": null,
+    "new": 1,
+    "changed": 0,
+    "duplicate": 0,
+    "items": 1,
+    "queued": 1,
+    "auto_message_visible": true
+  }
+}

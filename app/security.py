@@ -633,6 +633,8 @@ def required_permission(path: str, method: str) -> str | None:
         return "manage_club"
     if method in {"GET", "HEAD", "OPTIONS"}:
         return "view_internal"
+    if path.startswith("/processing/jobs") or path.startswith("/processing/worker"):
+        return "manage_monitoring"
     if path.startswith("/processing"):
         return "review_data"
     if path.startswith("/pipeline") and method in {"POST", "PUT", "PATCH", "DELETE"}:

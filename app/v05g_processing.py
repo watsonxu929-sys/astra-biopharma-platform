@@ -36,7 +36,12 @@ def processing_home(request: Request):
 @router.get("/processing/jobs", response_class=HTMLResponse)
 def processing_jobs(request: Request, page: int = 1, status: str = "", item_id: int = 0, message: str = "", error: str = ""):
     rows, total = list_jobs(page=page, status=status)
-    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "jobs", "jobs": rows, "total": total, "page": page, "status": status, "item_id": item_id, "message": message, "error": error})
+    recovery_jobs = [row for row in rows if row.get("status") in {"pending", "running", "failed"}]
+    return templates.TemplateResponse(request, "v05g_processing.html", {
+        "mode": "jobs", "jobs": rows, "recovery_jobs": recovery_jobs,
+        "total": total, "page": page, "status": status, "item_id": item_id,
+        "message": message, "error": error, **dashboard(),
+    })
 
 
 @router.post("/processing/jobs")

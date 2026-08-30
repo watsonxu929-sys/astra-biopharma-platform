@@ -105,6 +105,20 @@ def create_processing_job(
             item = conn.execute("SELECT * FROM v05f_collection_items WHERE id=?", (item_id,)).fetchone()
             if not item:
                 raise ValueError("collection_item_not_found")
+            if not reprocess:
+                existing = conn.execute(
+                    """
+                    SELECT * FROM v05g_processing_jobs
+                    WHERE collection_item_id=?
+                      AND status IN ('pending','running','success','needs_review')
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (item_id,),
+                ).fetchone()
+                if existing:
+                    result = dict(existing)
+                    result["idempotent"] = True
+                    return result
             if queued_only and item["processing_status"] not in {"queued", "failed", "needs_review"} and not reprocess:
                 raise RuntimeError("collection_item_not_queued")
             snapshot_id = int(item["snapshot_id"] or 0) or snapshot_id
@@ -211,7 +225,8 @@ def process_job(job_id: int, db_path: str | Path | None = None) -> dict[str, Any
                 """
                 UPDATE v05g_processing_jobs
                 SET status=?, structure_type=?, subject_count=?, block_count=?, candidate_count=?,
-                    matched_count=?, warning_count=?, finished_at=?, updated_at=?
+                    matched_count=?, warning_count=?, error_type=NULL, error_message=NULL,
+                    finished_at=?, updated_at=?
                 WHERE id=?
                 """,
                 (
@@ -736,6 +751,9 @@ def dashboard(db_path: str | Path | None = None) -> dict[str, Any]:
         counts = {
             "queued_items": conn.execute("SELECT COUNT(*) FROM v05f_collection_items WHERE processing_status='queued'").fetchone()[0],
             "jobs_today": conn.execute("SELECT COUNT(*) FROM v05g_processing_jobs WHERE date(created_at)=date('now','localtime')").fetchone()[0],
+            "success_today": conn.execute("SELECT COUNT(*) FROM v05g_processing_jobs WHERE date(created_at)=date('now','localtime') AND status IN ('success','needs_review')").fetchone()[0],
+            "pending_jobs": conn.execute("SELECT COUNT(*) FROM v05g_processing_jobs WHERE status IN ('pending','running')").fetchone()[0],
+            "failed_jobs": conn.execute("SELECT COUNT(*) FROM v05g_processing_jobs WHERE status='failed'").fetchone()[0],
             "pending_candidates": conn.execute("SELECT COUNT(*) FROM v05g_extraction_candidates WHERE review_status IN ('pending','needs_review')").fetchone()[0],
             "confirmed_matches": conn.execute("SELECT COUNT(*) FROM v05g_subject_match_candidates WHERE status='confirmed'").fetchone()[0],
             "ambiguous_matches": conn.execute("SELECT COUNT(*) FROM v05g_subject_match_candidates WHERE status='ambiguous'").fetchone()[0],
