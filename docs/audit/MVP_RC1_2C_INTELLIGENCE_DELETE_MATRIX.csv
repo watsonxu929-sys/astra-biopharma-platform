@@ -1,0 +1,19 @@
+object_type,table,reference_type,hard_delete_safe,withdraw_safe,archive_safe,cascade_risk,recommended_behavior
+Subject Link,core_intelligence_subject_links,FK intelligence_item_id ON DELETE CASCADE,NO,YES,YES,HIGH - hard delete would erase formal subject context,protect hard delete; retain on withdraw/archive
+Organization,organizations,indirect through Subject Link,YES only when no link,YES,YES,NONE,never delete Organization from Intelligence lifecycle
+Person,people,indirect through Subject Link,YES only when no link,YES,YES,NONE,never delete Person from Intelligence lifecycle
+Relationship,p3_canonical_relationships,source_intelligence_id without FK,NO,YES,YES,HIGH - orphaned provenance if product removed,protect hard delete
+Relationship Evidence,p3_relationship_evidence,through Relationship and candidate/snapshot evidence,NO,YES,YES,HIGH - business evidence history,protect hard delete and retain evidence
+Resource,v06_market_resources,source_intelligence_id without FK,NO,YES,YES,HIGH - source link would become ghost,protect hard delete
+Match,p4_resource_match_candidates,through source Resource,NO,YES,YES,HIGH - downstream business decision,protect hard delete
+Opportunity,v06_opportunities,source_intelligence_id without FK,NO,YES,YES,HIGH - business history,protect hard delete
+FollowUp,v06_follow_ups,through Opportunity,NO,YES,YES,HIGH - operating history,protect hard delete
+Report,v05h_generated_reports,citations/content materialized reference,NO,YES,YES,HIGH - historical report trace,protect hard delete; historical report remains immutable
+Favorite,v06_favorites,polymorphic target_type/target_id,YES,YES,YES,LOW - convenience ghost link,delete auxiliary favorite only during safe hard delete
+Dismissed Today,v05h_intelligence_feedback,collection_item_id,YES,YES,YES,LOW - user convenience state,retain with raw evidence; no product ghost link
+Workflow History,core_intelligence_workflow_events,FK intelligence_item_id ON DELETE CASCADE,YES when no business refs,YES,YES,MEDIUM - audit/history row,formal DELETE audit is persisted in p2 log
+Processing History,v05g_processing_jobs,indirect through candidate and collection,YES when no formal refs,YES,YES,MEDIUM,preserve by default; remove only explicit safe error-chain cleanup
+Candidate,v05g_extraction_candidates,product/evidence mappings use RESTRICT,YES only unconfirmed/unreferenced,YES,YES,HIGH when approved/applied,delete only rejected/pending/needs_review with zero formal refs
+Raw Collection,v05f_collection_items,processing/candidate/resource/workflow references,YES only zero downstream,YES,YES,HIGH when evidence exists,preview first; preserve Source and Snapshot
+Snapshot,v04g_source_snapshots,evidence and candidate FKs RESTRICT,NO by default,YES,YES,HIGH - immutable source evidence,preserve in RC1.2C including error-chain cleanup
+Source,v04g_monitoring_sources,collection configuration and history,INDEPENDENT,YES,YES,HIGH if coupled,manage independently; Intelligence actions never delete Source

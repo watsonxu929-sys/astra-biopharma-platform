@@ -98,9 +98,10 @@ def _business_trace(entity_type: str, internal_id: int) -> dict[str, list[dict]]
     with sqlite3.connect(service.db_path) as conn:
         conn.row_factory = sqlite3.Row
         intelligence = [dict(row) for row in conn.execute(
-            """SELECT DISTINCT i.id,i.title FROM core_intelligence_subject_links l
+            """SELECT DISTINCT i.id,i.title,i.status FROM core_intelligence_subject_links l
                JOIN v06_intelligence_items i ON i.id=l.intelligence_item_id
-               WHERE l.subject_type=? AND l.subject_id=? ORDER BY i.id DESC LIMIT 20""",
+               WHERE l.subject_type=? AND l.subject_id=? AND i.status IN ('published','archived')
+               ORDER BY CASE WHEN i.status='published' THEN 0 ELSE 1 END,i.id DESC LIMIT 20""",
             (entity_type, int(internal_id)),
         )]
         resource_column = {"organization": "organization_id", "person": "owner_person_id", "project": "project_id"}.get(entity_type)

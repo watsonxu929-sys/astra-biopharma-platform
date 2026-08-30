@@ -2,7 +2,9 @@
 {% block platform_title %}情报管理{% endblock %}
 {% block platform_content %}
 <h1 class="page-title">情报管理</h1>
-<p class="page-subtitle">人工情报、新采集情报审核、编辑、发布和下架。</p>
+<p class="page-subtitle">人工情报、新采集情报审核、编辑与生命周期管理。删除前必须检查业务引用。</p>
+{% if message %}<div class="success-box" role="status">{{ message }}</div>{% endif %}
+{% if bulk_result %}<div class="warning-box" role="status"><strong>批量操作结果</strong>：成功 {{ bulk_result.success }}，未处理 {{ bulk_result.failed }}。{% for row in bulk_result.results if not row.ok %}<div>INT-{{ row.id }}：{% if row.protected %}{% for key,count in row.protected.items() %}{{ key }} {{ count }}{% if not loop.last %}、{% endif %}{% endfor %}{% else %}{{ row.error or '当前状态不允许此操作' }}{% endif %}</div>{% endfor %}</div>{% endif %}
 <section class="platform-card">
   <h2>{{ '编辑情报' if item else '新增人工情报' }}</h2>
   <form method="post" action="{{ '/admin/intelligence/' ~ item.id ~ '/update' if item else '/admin/intelligence' }}" class="platform-form">
@@ -13,15 +15,18 @@
     <div class="grid-2"><label>企业<input name="companies" value="{{ item.companies if item else '' }}"></label><label>产业方向<input name="industry_directions" value="{{ item.industry_directions if item else '' }}"></label></div>
     <div class="grid-2"><label>标签<input name="tags" value="{{ item.tags if item else '' }}"></label><label>来源URL<input name="source_url" value="{{ item.source_url if item else '' }}"></label></div>
     <div class="grid-2"><label>可信度<input name="credibility" type="number" min="1" max="5" value="{{ item.credibility if item else 3 }}"></label><label>重要度<input name="importance" type="number" min="1" max="5" value="{{ item.importance if item else 2 }}"></label></div>
-    <label>状态<select name="status"><option value="draft" {% if item and item.status=='draft' %}selected{% endif %}>草稿</option><option value="pending_review" {% if item and item.status=='pending_review' %}selected{% endif %}>待审核</option><option value="published" {% if item and item.status=='published' %}selected{% endif %}>发布</option><option value="archived" {% if item and item.status=='archived' %}selected{% endif %}>下架</option></select></label>
+    {% if item %}<p>当前状态：<span class="badge">{{ item.status|status_label }}</span>。下架、归档与恢复请从情报详情执行，以保留审计记录。</p>{% endif %}
     <button class="btn btn-primary">保存情报</button>
-    {% if item %}<a class="btn" href="/intelligence/{{ item.id }}">查看前台</a>{% endif %}
+    {% if item %}<a class="btn" href="/intelligence/{{ item.id }}">查看详情与生命周期</a>{% endif %}
   </form>
 </section>
 <section class="platform-card mt-16">
-  <h2>情报列表</h2>
-  <table class="admin-table"><thead><tr><th>标题</th><th>类型</th><th>状态</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
-  {% for x in items %}<tr><td>{{ x.title }}</td><td>{{ x.intel_type }}</td><td>{{ x.status }}</td><td>{{ x.source_name or 'manual' }}</td><td>{{ x.updated_at }}</td><td><a href="/admin/intelligence/{{ x.id }}">编辑</a>{% if x.status != 'published' %}<form method="post" action="/admin/intelligence/{{ x.id }}/publish" style="display:inline"><button class="btn btn-sm">发布</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="empty">暂无情报</td></tr>{% endfor %}
-  </tbody></table>
+  <div class="section-header"><div><h2>情报列表</h2><p>管理模式最多显示最近100条；批量删除允许部分成功。</p></div></div>
+  <form method="post" action="/intelligence/manage/bulk">
+    <div class="bulk-action-bar"><label><span class="sr-only">批量操作</span><select name="action" required><option value="">选择批量操作</option><option value="withdraw">批量下架</option><option value="archive">批量归档</option><option value="restore">批量恢复</option><option value="delete">批量安全删除</option></select></label><button class="btn btn-secondary btn-sm" type="submit">执行所选操作</button><small>有正式业务引用的情报会保留并说明原因。</small></div>
+    <table class="admin-table"><thead><tr><th><span class="sr-only">选择</span></th><th>标题</th><th>类型</th><th>状态</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
+    {% for x in items %}<tr><td><input type="checkbox" name="item_ids" value="{{ x.id }}" aria-label="选择 {{ x.title }}"></td><td><a class="object-link" href="/intelligence/{{ x.id }}">{{ x.title }}</a></td><td>{{ x.intel_type }}</td><td><span class="badge">{{ x.status|status_label }}</span></td><td>{{ x.source_name or '人工录入' }}</td><td>{{ x.updated_at }}</td><td><a href="/admin/intelligence/{{ x.id }}">编辑</a> · <a href="/intelligence/{{ x.id }}/delete">删除前检查</a>{% if x.status not in ['published','withdrawn','archived'] %}<form method="post" action="/admin/intelligence/{{ x.id }}/publish" style="display:inline"><button class="btn btn-sm">发布</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="empty">暂无情报</td></tr>{% endfor %}
+    </tbody></table>
+  </form>
 </section>
 {% endblock %}

@@ -806,6 +806,17 @@ body { font-size: var(--font-body); line-height: 1.55; }
 .inline-tool .inline-form { margin-top: var(--space-3); align-items: end; }
 .source-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
 .evidence-row { padding: var(--space-3) 0; border-top: 1px solid var(--color-border); }
+.lifecycle-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid #cfd5db; border-radius: var(--radius-sm); background: #f7f8f9; }
+.lifecycle-bar > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.lifecycle-bar small { color: var(--color-text-secondary); }
+.lifecycle-actions, .lifecycle-confirm, .bulk-action-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.lifecycle-actions form, .lifecycle-confirm form { margin: 0; }
+.impact-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); margin: var(--space-4) 0 0; border-top: 1px solid var(--color-border); border-left: 1px solid var(--color-border); }
+.impact-grid div { padding: var(--space-3); border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); }
+.impact-grid dt { color: var(--color-text-secondary); font-size: var(--font-meta); }
+.impact-grid dd { margin: var(--space-1) 0 0; color: var(--product-navy); font-size: 20px; font-weight: 650; }
+.bulk-action-bar { margin-bottom: var(--space-3); padding: var(--space-3); background: #f4f5f6; border: 1px solid #d8dde2; }
+.bulk-action-bar small { color: var(--color-text-secondary); }
 
 .entity-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); margin-bottom: var(--space-6); padding: var(--space-4) var(--space-6); background: #fff; border: 1px solid var(--color-border); }
 .entity-summary strong { display: block; font-size: 20px; }
@@ -879,4 +890,6 @@ body { font-size: var(--font-body); line-height: 1.55; }
   .club-summary a:nth-child(-n+2) { border-bottom: 1px solid var(--color-border); }
   .entity-360-grid { grid-template-columns: 1fr; }
   .entity-span-2 { grid-column: auto; }
+  .lifecycle-bar { align-items: flex-start; flex-direction: column; }
+  .impact-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
 }

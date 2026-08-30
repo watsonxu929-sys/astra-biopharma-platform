@@ -100,6 +100,90 @@ def collection_explanation(*values: Any) -> str:
             return COLLECTION_EXPLANATIONS[key]
     return "暂无额外说明。"
 
+
+def _optional_count(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
+    try:
+        return int(conn.execute(sql, params).fetchone()[0] or 0)
+    except sqlite3.OperationalError as exc:
+        if "no such table" in str(exc).lower() or "no such column" in str(exc).lower():
+            return 0
+        raise
+
+
+def collection_item_delete_preview(item_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
+    """Return real downstream references before deleting one raw collection row."""
+    with db_connection(db_path) as conn:
+        item = conn.execute("SELECT * FROM v05f_collection_items WHERE id=?", (item_id,)).fetchone()
+        if not item:
+            raise ValueError("collection_item_not_found")
+        counts = {
+            "processing_jobs": int(conn.execute("SELECT COUNT(*) FROM v05g_processing_jobs WHERE collection_item_id=?", (item_id,)).fetchone()[0]),
+            "candidates": int(conn.execute("SELECT COUNT(*) FROM v05g_extraction_candidates WHERE collection_item_id=?", (item_id,)).fetchone()[0]),
+            "intelligence": int(conn.execute("SELECT COUNT(DISTINCT pc.product_id) FROM p2_intelligence_product_candidates pc JOIN v05g_extraction_candidates c ON c.id=pc.candidate_id WHERE c.collection_item_id=?", (item_id,)).fetchone()[0]),
+            "resources": int(conn.execute("SELECT COUNT(*) FROM v06_market_resources WHERE source_collection_item_id=?", (item_id,)).fetchone()[0]),
+            "workflow_events": int(conn.execute("SELECT COUNT(*) FROM core_intelligence_workflow_events WHERE collection_item_id=?", (item_id,)).fetchone()[0]),
+            "duplicate_children": int(conn.execute("SELECT COUNT(*) FROM v05f_collection_items WHERE duplicate_of_item_id=?", (item_id,)).fetchone()[0]),
+            "feedback": _optional_count(conn, "SELECT COUNT(*) FROM v05h_intelligence_feedback WHERE collection_item_id=?", (item_id,)),
+        }
+        protected_keys = ("processing_jobs", "candidates", "intelligence", "resources", "workflow_events", "duplicate_children")
+        protected = {key: counts[key] for key in protected_keys if counts[key]}
+        return {"item": dict(item), "counts": counts, "protected": protected, "safe_to_delete": not protected}
+
+
+def delete_collection_item_safely(item_id: int, *, actor: str, db_path: str | Path | None = None) -> dict[str, Any]:
+    preview = collection_item_delete_preview(item_id, db_path)
+    if not preview["safe_to_delete"]:
+        return {"deleted": False, **preview}
+    with db_connection(db_path) as conn:
+        conn.execute("INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,before_json,note,created_at) VALUES ('collection_item',?,'DELETE',?,?,'SAFE_RAW_DELETE',?)", (item_id, actor, json.dumps(preview["item"], ensure_ascii=False, default=str), datetime.now().replace(microsecond=0).isoformat()))
+        try:
+            conn.execute("DELETE FROM v05h_intelligence_feedback WHERE collection_item_id=?", (item_id,))
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc).lower():
+                raise
+        conn.execute("DELETE FROM v05f_collection_items WHERE id=?", (item_id,))
+    return {"deleted": True, **preview}
+
+
+def collection_chain_delete_preview(item_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
+    preview = collection_item_delete_preview(item_id, db_path)
+    with db_connection(db_path) as conn:
+        formal = {
+            "confirmed_candidates": int(conn.execute("SELECT COUNT(*) FROM v05g_extraction_candidates WHERE collection_item_id=? AND COALESCE(NULLIF(pipeline_review_status,''),review_status) IN ('approved','applied','published','merged')", (item_id,)).fetchone()[0]),
+            "product_candidates": int(conn.execute("SELECT COUNT(*) FROM p2_intelligence_product_candidates WHERE candidate_id IN (SELECT id FROM v05g_extraction_candidates WHERE collection_item_id=?)", (item_id,)).fetchone()[0]),
+            "relationship_evidence": int(conn.execute("SELECT COUNT(*) FROM p3_relationship_evidence WHERE fact_candidate_id IN (SELECT id FROM v05g_extraction_candidates WHERE collection_item_id=?)", (item_id,)).fetchone()[0]),
+            "signals": _optional_count(conn, "SELECT COUNT(*) FROM v05h_signal_evidence WHERE candidate_id IN (SELECT id FROM v05g_extraction_candidates WHERE collection_item_id=?)", (item_id,)),
+            "application_logs": int(conn.execute("SELECT COUNT(*) FROM v05g_candidate_application_logs WHERE candidate_id IN (SELECT id FROM v05g_extraction_candidates WHERE collection_item_id=?)", (item_id,)).fetchone()[0]),
+            "resources": preview["counts"]["resources"],
+            "workflow_events": preview["counts"]["workflow_events"],
+            "duplicate_children": preview["counts"]["duplicate_children"],
+        }
+    protected = {key: count for key, count in formal.items() if count}
+    return {**preview, "chain_counts": formal, "chain_protected": protected, "chain_safe_to_delete": not protected}
+
+
+def delete_collection_chain_safely(item_id: int, *, actor: str, db_path: str | Path | None = None) -> dict[str, Any]:
+    preview = collection_chain_delete_preview(item_id, db_path)
+    if not preview["chain_safe_to_delete"]:
+        return {"deleted": False, **preview}
+    with db_connection(db_path) as conn:
+        before = preview["item"]
+        candidate_subquery = "SELECT id FROM v05g_extraction_candidates WHERE collection_item_id=?"
+        conn.execute(f"DELETE FROM v05g_subject_match_candidates WHERE collection_item_id=? OR extraction_candidate_id IN ({candidate_subquery})", (item_id, item_id))
+        conn.execute(f"DELETE FROM v05g_candidate_review_history WHERE candidate_id IN ({candidate_subquery})", (item_id,))
+        conn.execute(f"DELETE FROM p2_fact_candidate_evidence WHERE candidate_id IN ({candidate_subquery})", (item_id,))
+        conn.execute("DELETE FROM v05g_extraction_candidates WHERE collection_item_id=?", (item_id,))
+        conn.execute("DELETE FROM v05g_processing_blocks WHERE collection_item_id=?", (item_id,))
+        conn.execute("DELETE FROM v05g_processing_jobs WHERE collection_item_id=?", (item_id,))
+        try:
+            conn.execute("DELETE FROM v05h_intelligence_feedback WHERE collection_item_id=?", (item_id,))
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc).lower():
+                raise
+        conn.execute("DELETE FROM v05f_collection_items WHERE id=?", (item_id,))
+        conn.execute("INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,before_json,note,created_at) VALUES ('collection_item',?,'DELETE',?,?,'SAFE_ERROR_CHAIN_DELETE',?)", (item_id, actor, json.dumps(before, ensure_ascii=False, default=str), datetime.now().replace(microsecond=0).isoformat()))
+    return {"deleted": True, **preview}
+
 def _decorate_source(row: dict[str, Any], conn: sqlite3.Connection) -> dict[str, Any]:
     latest = conn.execute(
         """

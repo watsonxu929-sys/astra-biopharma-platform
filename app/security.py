@@ -556,7 +556,10 @@ def required_permission(path: str, method: str) -> str | None:
     if path.startswith("/admin/data-integrity"):
         return "review_data"
     if path.startswith("/admin/intelligence"):
-        return "review_data"
+        # The route handlers apply the existing intelligence capability check.
+        # Keeping middleware at internal-view level lets both Operator (edit_data)
+        # and Reviewer (review_data) reach their existing, distinct actions.
+        return "view_internal"
     if path.startswith("/admin/people") or path.startswith("/admin/organizations"):
         return "edit_data"
     if path.startswith("/admin/"):

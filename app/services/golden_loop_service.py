@@ -138,7 +138,6 @@ class GoldenLoopService:
     def reading_view(self, intelligence_id: int, item: dict[str, Any] | None = None) -> dict[str, Any]:
         item = item or self._published_intelligence(intelligence_id)
         if not isinstance(item, dict):
-            canonical = self._published_intelligence(intelligence_id)
             item = {
                 key: getattr(item, key, None)
                 for key in (
@@ -146,7 +145,6 @@ class GoldenLoopService:
                     "source_url", "published_at", "created_at",
                 )
             }
-            item["analysis_notes"] = canonical.get("analysis_notes")
         title = str(item.get("title") or "").strip()
         summary = str(item.get("summary") or item.get("content") or "").strip()
         notes: dict[str, Any] = {}

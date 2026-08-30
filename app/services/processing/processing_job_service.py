@@ -564,6 +564,47 @@ def candidate_detail(candidate_id: int, db_path: str | Path | None = None) -> di
     return {"candidate": data, "matches": matches, "history": history, "logs": logs, "evidence": evidence}
 
 
+def candidate_delete_preview(candidate_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
+    """Classify a processing candidate without confusing it with formal intelligence."""
+    ensure_schema(db_path)
+    with db_connection(db_path) as conn:
+        row = conn.execute("SELECT * FROM v05g_extraction_candidates WHERE id=?", (candidate_id,)).fetchone()
+        if not row:
+            raise ValueError("candidate_not_found")
+        counts = {
+            "products": int(conn.execute("SELECT COUNT(*) FROM p2_intelligence_product_candidates WHERE candidate_id=?", (candidate_id,)).fetchone()[0]),
+            "product_evidence": int(conn.execute("SELECT COUNT(*) FROM p2_intelligence_product_evidence WHERE candidate_id=?", (candidate_id,)).fetchone()[0]),
+            "relationship_evidence": int(conn.execute("SELECT COUNT(*) FROM p3_relationship_evidence WHERE fact_candidate_id=?", (candidate_id,)).fetchone()[0]),
+            "signals": int(conn.execute("SELECT COUNT(*) FROM v05h_signal_evidence WHERE candidate_id=?", (candidate_id,)).fetchone()[0]),
+            "application_logs": int(conn.execute("SELECT COUNT(*) FROM v05g_candidate_application_logs WHERE candidate_id=?", (candidate_id,)).fetchone()[0]),
+            "subject_matches": int(conn.execute("SELECT COUNT(*) FROM v05g_subject_match_candidates WHERE extraction_candidate_id=?", (candidate_id,)).fetchone()[0]),
+            "evidence": int(conn.execute("SELECT COUNT(*) FROM p2_fact_candidate_evidence WHERE candidate_id=?", (candidate_id,)).fetchone()[0]),
+            "review_history": int(conn.execute("SELECT COUNT(*) FROM v05g_candidate_review_history WHERE candidate_id=?", (candidate_id,)).fetchone()[0]),
+        }
+        state = str(row["pipeline_review_status"] or row["review_status"] or "pending")
+        protected = {key: counts[key] for key in ("products", "product_evidence", "relationship_evidence", "signals", "application_logs") if counts[key]}
+        if state in {"approved", "applied", "published", "merged"}:
+            protected["confirmed_status"] = 1
+        return {"candidate": dict(row), "counts": counts, "protected": protected, "safe_to_delete": not protected}
+
+
+def delete_candidate_safely(candidate_id: int, *, actor: str, db_path: str | Path | None = None) -> dict[str, Any]:
+    preview = candidate_delete_preview(candidate_id, db_path)
+    if not preview["safe_to_delete"]:
+        return {"deleted": False, **preview}
+    with db_connection(db_path) as conn:
+        before = preview["candidate"]
+        conn.execute("DELETE FROM v05g_subject_match_candidates WHERE extraction_candidate_id=?", (candidate_id,))
+        conn.execute("DELETE FROM v05g_candidate_review_history WHERE candidate_id=?", (candidate_id,))
+        conn.execute("DELETE FROM p2_fact_candidate_evidence WHERE candidate_id=?", (candidate_id,))
+        conn.execute("DELETE FROM v05g_extraction_candidates WHERE id=?", (candidate_id,))
+        conn.execute(
+            "INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,before_json,note,created_at) VALUES ('fact_candidate',?,'DELETE',?,?,'SAFE_CANDIDATE_DELETE',?)",
+            (candidate_id, actor, _json(before), now()),
+        )
+    return {"deleted": True, **preview}
+
+
 def review_candidate(candidate_id: int, *, decision: str, actor: str, note: str = "", final_value: str = "", db_path: str | Path | None = None) -> dict[str, Any]:
     if decision not in {"approved", "rejected", "needs_review"}:
         raise ValueError("unsupported_decision")

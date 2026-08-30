@@ -20,7 +20,7 @@
 {% set match_method_labels = {"exact":"精确匹配","fuzzy":"模糊匹配","phonetic":"拼音匹配","keyword":"关键词匹配","entity":"实体匹配","manual":"人工匹配"} %}
 <nav class="module-tabs">
   <a class="{{ 'active' if mode in ['home','jobs'] else '' }}" href="/processing/jobs">数据处理</a>
-  <a class="{{ 'active' if mode in ['candidates','candidate_detail','candidate_matches','candidate_evidence'] else '' }}" href="/processing/candidates">候选匹配</a>
+  <a class="{{ 'active' if mode in ['candidates','candidate_detail','candidate_delete','candidate_matches','candidate_evidence'] else '' }}" href="/processing/candidates">候选匹配</a>
   <a class="{{ 'active' if mode == 'review_queue' else '' }}" href="/processing/review-queue">情报审核</a>
 </nav>
 {% if message %}<div class="warning-box soft-delete-note">{{ message }}</div>{% endif %}
@@ -121,8 +121,17 @@
       {% if (candidate.pipeline_review_status or candidate.review_status) == 'approved' and evidence %}
       <form method="post" action="/processing/candidates/{{ candidate.id }}/publish"><button class="button primary" type="submit">发布并查看正式产品</button></form>
       {% else %}<form method="post" action="/processing/candidates/{{ candidate.id }}/submit"><button class="button primary" type="submit">提交审核</button></form>{% endif %}
+      <a class="button secondary" href="/processing/candidates/{{ candidate.id }}/delete">删除前检查</a>
     {% else %}<div class="warning-box">当前账号无审核权限，只能查看候选、匹配和证据。</div>{% endif %}
   </article>
+</section>
+{% elif mode == "candidate_delete" %}
+{% set candidate = preview.candidate %}{% set c = preview.counts %}
+<section class="panel">
+  <p class="eyebrow">候选生命周期</p><h2>删除前检查 · {{ candidate.candidate_no }}</h2>
+  {% if preview.safe_to_delete %}<div class="success-box"><strong>SAFE_TO_DELETE</strong><p>该候选尚未形成正式业务对象，可以安全删除；原始采集与Snapshot证据仍保留。</p></div>{% else %}<div class="warning-box"><strong>PROTECTED_BY_FORMAL_REFERENCES</strong><p>该候选已确认、已入库或被正式业务对象引用，不能硬删除。</p></div>{% endif %}
+  <dl class="impact-grid"><div><dt>正式情报</dt><dd>{{ c.products }}</dd></div><div><dt>产品证据</dt><dd>{{ c.product_evidence }}</dd></div><div><dt>关系证据</dt><dd>{{ c.relationship_evidence }}</dd></div><div><dt>信号</dt><dd>{{ c.signals }}</dd></div><div><dt>入库记录</dt><dd>{{ c.application_logs }}</dd></div><div><dt>主体匹配</dt><dd>{{ c.subject_matches }}</dd></div></dl>
+  <div class="actions"><a class="button secondary" href="/processing/candidates/{{ candidate.id }}">取消</a>{% if preview.safe_to_delete %}<form method="post" action="/processing/candidates/{{ candidate.id }}/delete"><button class="btn btn-danger" type="submit">确认安全删除</button></form>{% endif %}</div>
 </section>
 {% elif mode == "candidate_detail_legacy" %}
 <section class="profile-sections"><article class="panel"><h2>{{ candidate.candidate_no }}</h2><dl class="info-list"><dt>类型</dt><dd>{{ type_labels.get(candidate.candidate_type, candidate.candidate_type) }} / {{ field_labels.get(candidate.field_name, candidate.field_name) or '' }}</dd><dt>主体</dt><dd>{{ type_labels.get(candidate.subject_type, candidate.subject_type or '') }} {{ candidate.subject_label or '' }} <span class="code">{{ candidate.subject_id or candidate.matched_subject_id or '' }}</span></dd><dt>候选值</dt><dd>{{ candidate.normalized_value or candidate.raw_value or '' }}</dd><dt>证据</dt><dd>{{ candidate.evidence_excerpt or '' }}</dd><dt>质量</dt><dd>{{ candidate.confidence_score }} / {{ status_labels.get(candidate.confidence_level, candidate.confidence_level) }} / {{ status_labels.get(candidate.validation_status, candidate.validation_status) }}</dd><dt>提醒</dt><dd>{{ candidate.warning_list|join(', ') }}</dd><dt>来源</dt><dd>{% if candidate.source_url %}<a href="{{ candidate.source_url }}">{{ candidate.source_title or candidate.source_url }}</a>{% else %}{{ candidate.source_title or '' }}{% endif %}</dd></dl></article><article class="panel"><h2>人工审核</h2><form method="post" action="/processing/candidates/{{ candidate.id }}/review"><label>审核结论<select name="decision"><option value="approved">已批准</option><option value="needs_review">需要复核</option><option value="rejected">已拒绝</option></select></label><label>最终值<textarea name="final_value">{{ candidate.normalized_value or '' }}</textarea></label><label>审核备注<input name="note"></label><button class="primary">保存审核</button></form><form method="post" action="/processing/candidates/{{ candidate.id }}/apply"><button class="button secondary">写入已批准字段</button></form></article></section>

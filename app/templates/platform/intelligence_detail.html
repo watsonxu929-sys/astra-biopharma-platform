@@ -9,6 +9,24 @@
 {% endblock %}
 {% block platform_content %}
 {% if message %}<div class="success-box" role="status"><strong>{{ message }}</strong>{% if opportunity_id %} <a class="text-link" href="/opportunities/{{ opportunity_id }}">查看跟进</a>{% endif %} <a class="text-link" href="/platform">返回工作台</a></div>{% endif %}
+{% if can_manage_lifecycle %}
+<section class="lifecycle-bar" aria-label="情报管理">
+  <div><strong>管理情报</strong><span class="badge">{{ lifecycle_status|status_label }}</span><small>生命周期操作会保留 Source；删除前必须检查业务引用。</small></div>
+  <div class="lifecycle-actions">
+    <a class="btn btn-secondary btn-sm" href="/admin/intelligence/{{ item.id }}">编辑</a>
+    {% if lifecycle_status == 'published' %}
+    <form method="post" action="/intelligence/{{ item.id }}/lifecycle"><input type="hidden" name="action" value="withdraw"><button class="btn btn-tertiary btn-sm" type="submit">下架</button></form>
+    <form method="post" action="/intelligence/{{ item.id }}/lifecycle"><input type="hidden" name="action" value="archive"><button class="btn btn-tertiary btn-sm" type="submit">归档</button></form>
+    {% elif lifecycle_status == 'withdrawn' %}
+    <form method="post" action="/intelligence/{{ item.id }}/lifecycle"><input type="hidden" name="action" value="restore"><button class="btn btn-secondary btn-sm" type="submit">恢复上架</button></form>
+    <form method="post" action="/intelligence/{{ item.id }}/lifecycle"><input type="hidden" name="action" value="archive"><button class="btn btn-tertiary btn-sm" type="submit">归档</button></form>
+    {% elif lifecycle_status == 'archived' %}
+    <form method="post" action="/intelligence/{{ item.id }}/lifecycle"><input type="hidden" name="action" value="restore"><button class="btn btn-secondary btn-sm" type="submit">恢复</button></form>
+    {% endif %}
+    <a class="btn btn-danger btn-sm" href="/intelligence/{{ item.id }}/delete">删除前检查</a>
+  </div>
+</section>
+{% endif %}
 <div class="intelligence-detail-layout">
   <div class="intelligence-main">
     <section class="content-section" aria-labelledby="happened-heading"><div class="section-header"><div><span class="section-index">01</span><h2 id="happened-heading">发生了什么</h2></div></div><p class="lead-copy">{{ reading.display_summary }}</p>{% if not reading.has_chinese_reading %}<div class="warning-box">中文辅助内容尚未完成，作出业务判断前请核对页面底部原文。</div>{% endif %}</section>

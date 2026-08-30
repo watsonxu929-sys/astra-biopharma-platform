@@ -1,0 +1,157 @@
+{
+  "browser": "151.0.7922.34",
+  "pages": [
+    {
+      "label": "admin intelligence detail",
+      "url": "http://127.0.0.1:8765/intelligence/35",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "safe delete preview",
+      "url": "http://127.0.0.1:8765/intelligence/35/delete",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "protected delete preview",
+      "url": "http://127.0.0.1:8765/intelligence/40/delete",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "archived history detail",
+      "url": "http://127.0.0.1:8765/intelligence/36",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "bulk partial success",
+      "url": "http://127.0.0.1:8765/intelligence/manage/bulk",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "collection overview",
+      "url": "http://127.0.0.1:8765/collection",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "source list",
+      "url": "http://127.0.0.1:8765/collection/sources",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "source discovery",
+      "url": "http://127.0.0.1:8765/collection/sources/discovery",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "collection jobs",
+      "url": "http://127.0.0.1:8765/collection/jobs",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "raw collection",
+      "url": "http://127.0.0.1:8765/collection/items",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "processing jobs",
+      "url": "http://127.0.0.1:8765/processing/jobs",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "intelligence home",
+      "url": "http://127.0.0.1:8765/intelligence",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "raw collection 1024",
+      "url": "http://127.0.0.1:8765/collection/items",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "operator lifecycle controls",
+      "url": "http://127.0.0.1:8765/intelligence/40",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    },
+    {
+      "label": "viewer no dangerous controls",
+      "url": "http://127.0.0.1:8765/intelligence/41",
+      "overflow": false,
+      "replacement": false,
+      "undefined": false,
+      "null": false
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "network_failures": [],
+  "http_errors": [],
+  "viewer_status": {
+    "withdraw": 403,
+    "archive": 403,
+    "restore": 403,
+    "delete": 403,
+    "bulk_delete": 403,
+    "raw_delete": 403,
+    "candidate_delete": 403
+  },
+  "screenshots": [
+    "docs\\audit\\evidence\\mvp_rc1_2c\\01_admin_intelligence_detail.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\02_safe_delete_preview.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\03_protected_delete_preview.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\04_archived_history.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\05_bulk_partial_success.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\06_collection_overview.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\07_source_list.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\08_raw_collection.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\09_operator_controls.png",
+    "docs\\audit\\evidence\\mvp_rc1_2c\\10_viewer_detail.png"
+  ],
+  "flows": {
+    "safe_delete": true,
+    "protected_delete_blocked_and_withdrawn": true,
+    "archive_restore": true,
+    "bulk_partial_success": true
+  },
+  "passed": true
+}

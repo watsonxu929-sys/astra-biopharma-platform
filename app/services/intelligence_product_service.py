@@ -72,6 +72,8 @@ class IntelligenceProductService:
             if not current:
                 raise ValueError("product_not_found")
             requested_status = str(fields.get("status") or current["status"])
+            if requested_status != current["status"]:
+                raise ValueError("use_publish_or_lifecycle_action")
             if current["status"] != "published" and requested_status == "published":
                 raise ValueError("approved_candidate_publication_required")
             values = {key: fields.get(key, current[key]) for key in (
@@ -249,8 +251,100 @@ class IntelligenceProductService:
                 candidates, evidence = [], []
             return {"product": dict(product), "candidates": candidates, "evidence": evidence}
 
-    def delete(self, product_id: int, *, actor: str, permissions: set[str]) -> None:
-        if "review_data" not in permissions:
-            raise PermissionError("review_data_required")
+    @staticmethod
+    def _require_lifecycle_permission(permissions: set[str]) -> None:
+        if not ({"edit_data", "review_data"} & set(permissions)):
+            raise PermissionError("intelligence_lifecycle_permission_required")
+
+    @staticmethod
+    def _count(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
+        try:
+            return int(conn.execute(sql, params).fetchone()[0] or 0)
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower() or "no such column" in str(exc).lower():
+                return 0
+            raise
+
+    def _impact_from_conn(self, conn: sqlite3.Connection, product_id: int) -> dict:
+        product = conn.execute("SELECT * FROM v06_intelligence_items WHERE id=?", (product_id,)).fetchone()
+        if not product:
+            raise ValueError("product_not_found")
+        candidate_ids = "SELECT candidate_id FROM p2_intelligence_product_candidates WHERE product_id=?"
+        collection_ids = f"SELECT DISTINCT collection_item_id FROM v05g_extraction_candidates WHERE id IN ({candidate_ids}) AND collection_item_id IS NOT NULL"
+        resource_ids = "SELECT id FROM v06_market_resources WHERE source_intelligence_id=?"
+        opportunity_ids = "SELECT id FROM v06_opportunities WHERE source_intelligence_id=?"
+        counts = {
+            "raw_collections": self._count(conn, f"SELECT COUNT(*) FROM v05f_collection_items WHERE id IN ({collection_ids})", (product_id,)),
+            "processing_jobs": self._count(conn, f"SELECT COUNT(*) FROM v05g_processing_jobs WHERE collection_item_id IN ({collection_ids})", (product_id,)),
+            "candidates": self._count(conn, f"SELECT COUNT(*) FROM v05g_extraction_candidates WHERE id IN ({candidate_ids})", (product_id,)),
+            "subject_links": self._count(conn, "SELECT COUNT(*) FROM core_intelligence_subject_links WHERE intelligence_item_id=?", (product_id,)),
+            "relationships": self._count(conn, "SELECT COUNT(*) FROM p3_canonical_relationships WHERE source_intelligence_id=?", (product_id,)),
+            "relationship_evidence": self._count(conn, "SELECT COUNT(*) FROM p3_relationship_evidence WHERE relationship_id IN (SELECT id FROM p3_canonical_relationships WHERE source_intelligence_id=?)", (product_id,)),
+            "resources": self._count(conn, "SELECT COUNT(*) FROM v06_market_resources WHERE source_intelligence_id=?", (product_id,)),
+            "matches": self._count(conn, f"SELECT COUNT(*) FROM p4_resource_match_candidates WHERE demand_resource_id IN ({resource_ids}) OR supply_resource_id IN ({resource_ids})", (product_id, product_id)),
+            "opportunities": self._count(conn, "SELECT COUNT(*) FROM v06_opportunities WHERE source_intelligence_id=?", (product_id,)),
+            "follow_ups": self._count(conn, f"SELECT COUNT(*) FROM v06_follow_ups WHERE opportunity_id IN ({opportunity_ids})", (product_id,)),
+            "reports": self._count(conn, "SELECT COUNT(*) FROM v05h_generated_reports WHERE COALESCE(citations_json,'') LIKE ? OR COALESCE(content_markdown,'') LIKE ? OR COALESCE(content_html,'') LIKE ?", (f'%\"intelligence_id\": {product_id}%', f'%/intelligence/{product_id}%', f'%/intelligence/{product_id}%')),
+            "favorites": self._count(conn, "SELECT COUNT(*) FROM v06_favorites WHERE target_type='intelligence' AND target_id=?", (product_id,)),
+            "dismissals": self._count(conn, f"SELECT COUNT(*) FROM v05h_intelligence_feedback WHERE collection_item_id IN ({collection_ids})", (product_id,)),
+            "workflow_events": self._count(conn, "SELECT COUNT(*) FROM core_intelligence_workflow_events WHERE intelligence_item_id=?", (product_id,)),
+        }
+        protected_keys = ("subject_links", "relationships", "relationship_evidence", "resources", "matches", "opportunities", "follow_ups", "reports")
+        protected = {key: counts[key] for key in protected_keys if counts[key]}
+        return {"product": dict(product), "counts": counts, "protected": protected, "safe_to_delete": not protected}
+
+    def impact_preview(self, product_id: int) -> dict:
+        with closing(self._read_connection()) as conn:
+            return self._impact_from_conn(conn, product_id)
+
+    def transition(self, product_id: int, action: str, *, actor: str, permissions: set[str]) -> dict:
+        self._require_lifecycle_permission(permissions)
+        action = str(action or "").strip().lower()
+        target_status = {"withdraw": "withdrawn", "archive": "archived", "restore": "published"}.get(action)
+        if not target_status:
+            raise ValueError("unsupported_lifecycle_action")
         with db_connection(self.db_path) as conn:
+            current = conn.execute("SELECT * FROM v06_intelligence_items WHERE id=?", (product_id,)).fetchone()
+            if not current:
+                raise ValueError("product_not_found")
+            current_status = str(current["status"] or "")
+            allowed = {"withdraw": {"published", "archived"}, "archive": {"published", "withdrawn"}, "restore": {"withdrawn", "archived"}}
+            if current_status not in allowed[action]:
+                raise ValueError(f"invalid_lifecycle_transition:{current_status}->{target_status}")
+            ts = now()
+            conn.execute("UPDATE v06_intelligence_items SET status=?,updated_at=? WHERE id=?", (target_status, ts, product_id))
+            conn.execute(
+                "INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,before_json,after_json,created_at) VALUES ('intelligence_product',?,?,?,?,?,?)",
+                (product_id, action.upper(), actor, json.dumps({"status": current_status}, ensure_ascii=False), json.dumps({"status": target_status}, ensure_ascii=False), ts),
+            )
+            return dict(conn.execute("SELECT * FROM v06_intelligence_items WHERE id=?", (product_id,)).fetchone())
+
+    def delete(self, product_id: int, *, actor: str, permissions: set[str]) -> dict:
+        self._require_lifecycle_permission(permissions)
+        with db_connection(self.db_path) as conn:
+            impact = self._impact_from_conn(conn, product_id)
+            if not impact["safe_to_delete"]:
+                return {"deleted": False, **impact}
+            ts = now()
+            conn.execute(
+                "INSERT INTO p2_intelligence_audit_log(entity_type,entity_id,action,actor,before_json,after_json,note,created_at) VALUES ('intelligence_product',?,'DELETE',?,?,?,'SAFE_HARD_DELETE',?)",
+                (product_id, actor, json.dumps(impact["product"], ensure_ascii=False, default=str), json.dumps({"deleted": True}, ensure_ascii=False), ts),
+            )
+            conn.execute("DELETE FROM v06_favorites WHERE target_type='intelligence' AND target_id=?", (product_id,))
             conn.execute("DELETE FROM v06_intelligence_items WHERE id=?", (product_id,))
+            return {"deleted": True, **impact}
+
+    def bulk(self, product_ids: list[int], action: str, *, actor: str, permissions: set[str]) -> dict:
+        self._require_lifecycle_permission(permissions)
+        results = []
+        for product_id in list(dict.fromkeys(int(value) for value in product_ids))[:100]:
+            try:
+                if action == "delete":
+                    result = self.delete(product_id, actor=actor, permissions=permissions)
+                    results.append({"id": product_id, "ok": bool(result["deleted"]), "protected": result.get("protected", {})})
+                else:
+                    self.transition(product_id, action, actor=actor, permissions=permissions)
+                    results.append({"id": product_id, "ok": True, "protected": {}})
+            except (ValueError, PermissionError) as exc:
+                results.append({"id": product_id, "ok": False, "error": str(exc), "protected": {}})
+        return {"action": action, "success": sum(1 for row in results if row["ok"]), "failed": sum(1 for row in results if not row["ok"]), "results": results}

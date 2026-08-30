@@ -55,7 +55,7 @@ STATUS_LABELS = {
     # 任务状态
     "completed": "已完成", "in_progress": "进行中", "todo": "待办", "cancelled": "已取消",
     # 资源/情报状态
-    "published": "有效", "draft": "草稿", "archived": "已归档", "matched": "已匹配",
+    "published": "有效", "draft": "草稿", "withdrawn": "已下架", "archived": "已归档", "matched": "已匹配",
     "expired": "已过期", "supply": "供给", "demand": "需求",
     # 会员等级
     "standard": "标准", "premium": "高级", "exited": "已退出",
@@ -100,6 +100,10 @@ def get_current_user_id(request: Request) -> int | None:
 def get_user_role(request: Request) -> str:
     sec = request.scope.get("security_context", {})
     return sec.get("user", {}).get("role", "viewer")
+
+
+def _can_manage_intelligence_lifecycle(request: Request) -> bool:
+    return get_user_role(request) in {"admin", "operator"}
 
 
 def get_workspace_for_role(request: Request, db: Session, user_id: int | None):
@@ -390,9 +394,10 @@ def person_card(request: Request, person_id: int, history: bool = False, db: Ses
         pass
     
     intelligence = db.execute(text("""
-        SELECT i.id,i.title FROM core_intelligence_subject_links l
+        SELECT i.id,i.title,i.status FROM core_intelligence_subject_links l
         JOIN v06_intelligence_items i ON i.id=l.intelligence_item_id
-        WHERE l.subject_type='person' AND l.subject_id=:person_id ORDER BY i.id DESC LIMIT 10
+        WHERE l.subject_type='person' AND l.subject_id=:person_id AND i.status IN ('published','archived')
+        ORDER BY CASE WHEN i.status='published' THEN 0 ELSE 1 END,i.id DESC LIMIT 10
     """), {"person_id": int(person_id)}).mappings().all()
     resources = db.execute(text("SELECT id,title,direction FROM v06_market_resources WHERE owner_person_id=:person_id ORDER BY id DESC LIMIT 10"), {"person_id": int(person_id)}).mappings().all()
     opportunities = db.execute(text("SELECT id,title,status,outcome_status FROM v06_opportunities WHERE target_person_id=:person_id ORDER BY id DESC LIMIT 10"), {"person_id": int(person_id)}).mappings().all()
@@ -486,17 +491,45 @@ def intelligence_detail(
     message: str = Query(""), follow_up_id: int | None = Query(None),
     opportunity_id: int | None = Query(None), db: Session = Depends(get_db),
 ):
-    item = UnifiedIntelligenceService(db).detail(item_id)
-    evidence = IntelligenceProductService().trace(item_id)["evidence"]
+    stored_item = db.get(IntelligenceItem, item_id)
+    if not stored_item:
+        raise HTTPException(404, "intelligence not found")
+    lifecycle_manager = _can_manage_intelligence_lifecycle(request)
+    if stored_item.status == "published":
+        item = UnifiedIntelligenceService(db).detail(item_id)
+    elif stored_item.status == "archived" or lifecycle_manager:
+        item = stored_item
+    else:
+        raise HTTPException(404, "intelligence not available")
+    product_service = IntelligenceProductService(db.get_bind().url.database)
+    evidence = product_service.trace(item_id)["evidence"]
     user_id = get_current_user_id(request)
     fav = is_favorited(db, user_id, "intelligence", item_id) if user_id is not None else False
     golden = GoldenLoopService(db)
     reading = golden.reading_view(item_id, item)
-    trace = golden.trace(item_id)
-    event_insight, subject_candidates = golden.event_insight(item_id), golden.subject_candidates(item_id)
-    opportunity_context = golden.opportunity_discovery(
-        item_id, trace=trace, has_subject_candidate=bool(subject_candidates),
-    )
+    if item.status == "published":
+        trace = golden.trace(item_id)
+        event_insight, subject_candidates = golden.event_insight(item_id), golden.subject_candidates(item_id)
+        opportunity_context = golden.opportunity_discovery(
+            item_id, trace=trace, has_subject_candidate=bool(subject_candidates),
+        )
+    else:
+        subjects = golden.subjects(item_id)
+        direct_resources = [dict(row) for row in db.execute(text(
+            "SELECT id,title,direction FROM v06_market_resources WHERE source_intelligence_id=:id ORDER BY id"
+        ), {"id": item_id}).mappings().all()]
+        trace = {
+            "subjects": subjects, "resources": direct_resources,
+            "related_context": golden.related_context(item_id, subjects=subjects),
+        }
+        event_insight = {"importance_reason": "该内容保留为历史记录；恢复上架前不参与新的业务判断。"}
+        subject_candidates = []
+        opportunity_context = {
+            "value_reason": "该情报当前已下架或归档，仅保留历史上下文。",
+            "priority": {"is_priority": False, "subjects": []},
+            "next_action": "如需继续处理，请先由管理员或运营人员恢复上架。",
+            "next_action_url": None,
+        }
     query = subject_q.strip()
     pattern = f"%{query}%"
     people = db.execute(text("SELECT id,name FROM people WHERE COALESCE(is_active,1)=1 AND instr(name,'�')=0 AND (:q='' OR name LIKE :pattern) ORDER BY name LIMIT 80"), {"q": query, "pattern": pattern}).mappings().all()
@@ -509,9 +542,73 @@ def intelligence_detail(
         people=people, organizations=organizations, projects=projects,
         event_insight=event_insight, subject_candidates=subject_candidates,
         opportunity_context=opportunity_context,
-        reading=reading, can_write=role in {"operator", "reviewer", "admin"},
+        reading=reading, can_write=item.status == "published" and role in {"operator", "reviewer", "admin"},
+        can_manage_lifecycle=lifecycle_manager, lifecycle_status=item.status,
         message=message, follow_up_id=follow_up_id, opportunity_id=opportunity_id,
     )
+
+
+def _lifecycle_context(request: Request) -> tuple[str, set[str]]:
+    if not _can_manage_intelligence_lifecycle(request):
+        raise HTTPException(403, "仅管理员或运营人员可以管理情报生命周期")
+    sec = request.scope.get("security_context", {})
+    actor = str(sec.get("user", {}).get("username") or "admin")
+    return actor, set(sec.get("permissions") or [])
+
+
+@router.get("/intelligence/{item_id:int}/delete", response_class=HTMLResponse)
+def intelligence_delete_preview(item_id: int, request: Request, db: Session = Depends(get_db)):
+    _lifecycle_context(request)
+    service = IntelligenceProductService(db.get_bind().url.database)
+    try:
+        impact = service.impact_preview(item_id)
+    except ValueError as exc:
+        raise HTTPException(404, "情报不存在") from exc
+    return render(request, "platform/intelligence_lifecycle.html", impact=impact, attempted=False)
+
+
+@router.post("/intelligence/{item_id:int}/lifecycle")
+async def intelligence_lifecycle(item_id: int, request: Request, db: Session = Depends(get_db)):
+    actor, permissions = _lifecycle_context(request)
+    form = await request.form()
+    action = str(form.get("action") or "")
+    try:
+        IntelligenceProductService(db.get_bind().url.database).transition(
+            item_id, action, actor=actor, permissions=permissions,
+        )
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    labels = {"withdraw": "情报已下架", "archive": "情报已归档", "restore": "情报已恢复上架"}
+    return RedirectResponse(f"/intelligence/{item_id}?message={labels.get(action, '生命周期已更新')}", 303)
+
+
+@router.post("/intelligence/{item_id:int}/delete")
+def intelligence_delete(item_id: int, request: Request, db: Session = Depends(get_db)):
+    actor, permissions = _lifecycle_context(request)
+    service = IntelligenceProductService(db.get_bind().url.database)
+    try:
+        result = service.delete(item_id, actor=actor, permissions=permissions)
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if result["deleted"]:
+        return RedirectResponse("/admin/intelligence?message=情报已安全删除，Source与核心业务对象均未删除", 303)
+    return _templates.TemplateResponse(
+        request=request, name="platform/intelligence_lifecycle.html",
+        context={"impact": result, "attempted": True}, status_code=409,
+    )
+
+
+@router.post("/intelligence/manage/bulk", response_class=HTMLResponse)
+async def intelligence_bulk(request: Request, db: Session = Depends(get_db)):
+    actor, permissions = _lifecycle_context(request)
+    form = await request.form()
+    ids = [int(raw) for raw in form.getlist("item_ids") if str(raw).isdigit()]
+    action = str(form.get("action") or "")
+    if action not in {"delete", "withdraw", "archive", "restore"}:
+        raise HTTPException(400, "请选择有效的批量操作")
+    result = IntelligenceProductService(db.get_bind().url.database).bulk(ids, action, actor=actor, permissions=permissions)
+    items = list(db.scalars(select(IntelligenceItem).order_by(desc(IntelligenceItem.updated_at), desc(IntelligenceItem.created_at)).limit(100)).all())
+    return render(request, "platform/admin_intelligence.html", items=items, item=None, bulk_result=result)
 
 
 @router.get("/intelligence/subscriptions", response_class=HTMLResponse)
@@ -1231,11 +1328,11 @@ async def admin_update_organization(org_id: int, request: Request, db: Session =
     return RedirectResponse(f"/admin/organizations/{org_id}?message=机构主数据已保存", 303)
 
 @router.get("/admin/intelligence", response_class=HTMLResponse)
-def admin_intelligence(request: Request, db: Session = Depends(get_db)):
+def admin_intelligence(request: Request, message: str = Query(""), db: Session = Depends(get_db)):
     if not _can_manage_intelligence(request):
         raise HTTPException(403, "intelligence admin permission required")
     items = list(db.scalars(select(IntelligenceItem).order_by(desc(IntelligenceItem.updated_at), desc(IntelligenceItem.created_at)).limit(100)).all())
-    return render(request, "platform/admin_intelligence.html", items=items, item=None)
+    return render(request, "platform/admin_intelligence.html", items=items, item=None, message=message)
 
 
 @router.post("/admin/intelligence")

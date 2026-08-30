@@ -11,8 +11,10 @@ from app.services.intelligence_review_service import IntelligenceReviewService
 from app.services.intelligence_product_service import IntelligenceProductService
 from app.services.processing import (
     apply_candidate,
+    candidate_delete_preview,
     candidate_detail,
     create_processing_job,
+    delete_candidate_safely,
     dashboard,
     list_candidates,
     list_jobs,
@@ -95,6 +97,36 @@ def processing_candidate_detail(request: Request, candidate_id: int, message: st
     if not detail:
         raise HTTPException(status_code=404, detail="候选数据不存在")
     return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidate_detail", "message": message, "error": error, **detail})
+
+
+def _require_candidate_delete_permission(request: Request) -> None:
+    security = request.scope.get("security_context", {})
+    permissions = set(security.get("permissions") or [])
+    if not (security.get("can_manage_users") or "manage_users" in permissions or "review_data" in permissions):
+        raise HTTPException(403, "仅管理员或审核人员可以删除未确认候选")
+
+
+@router.get("/processing/candidates/{candidate_id:int}/delete", response_class=HTMLResponse)
+def processing_candidate_delete_page(request: Request, candidate_id: int):
+    _require_candidate_delete_permission(request)
+    try:
+        preview = candidate_delete_preview(candidate_id)
+    except ValueError as exc:
+        raise HTTPException(404, "候选数据不存在") from exc
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "candidate_delete", "preview": preview})
+
+
+@router.post("/processing/candidates/{candidate_id:int}/delete")
+def processing_candidate_delete_confirm(request: Request, candidate_id: int):
+    _require_candidate_delete_permission(request)
+    try:
+        result = delete_candidate_safely(candidate_id, actor=current_username(request))
+    except ValueError as exc:
+        raise HTTPException(404, "候选数据不存在") from exc
+    if not result["deleted"]:
+        reasons = "、".join(f"{key}={value}" for key, value in result["protected"].items())
+        return RedirectResponse(f"/processing/candidates/{candidate_id}?error=候选已有正式引用，不能删除：{reasons}", 303)
+    return RedirectResponse("/processing/candidates?message=未确认候选已安全删除，原始证据仍保留", 303)
 
 
 @router.get("/processing/candidates/{candidate_id}/matches", response_class=HTMLResponse)

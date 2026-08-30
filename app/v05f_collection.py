@@ -9,9 +9,13 @@ from fastapi.templating import Jinja2Templates
 
 from app.security import current_username
 from app.services.collection_service import (
+    collection_item_delete_preview,
+    collection_chain_delete_preview,
     create_collection_source,
     create_job,
     dashboard,
+    delete_collection_item_safely,
+    delete_collection_chain_safely,
     delete_or_retire_source,
     discover_source_candidates,
     list_items,
@@ -288,6 +292,51 @@ def collection_item_detail(request: Request, item_id: int):
     return templates.TemplateResponse(request, "v05f_collection.html", {"mode": "item_detail", "item": item, "snapshot": snapshot})
 
 
+def _require_collection_delete_permission(request: Request) -> None:
+    security = request.scope.get("security_context", {})
+    permissions = set(security.get("permissions") or [])
+    if not (security.get("can_manage_users") or "manage_users" in permissions or "manage_monitoring" in permissions):
+        raise HTTPException(403, "仅管理员或采集运营人员可以删除原始采集记录")
+
+
+@router.get("/collection/items/{item_id:int}/delete", response_class=HTMLResponse)
+def collection_item_delete_page(request: Request, item_id: int, error: str = ""):
+    _require_collection_delete_permission(request)
+    try:
+        preview = collection_chain_delete_preview(item_id)
+    except ValueError as exc:
+        raise HTTPException(404, "原始采集记录不存在") from exc
+    return templates.TemplateResponse(request, "v05f_collection.html", {"mode": "item_delete", "preview": preview, "error": error})
+
+
+@router.post("/collection/items/{item_id:int}/delete")
+def collection_item_delete_confirm(request: Request, item_id: int):
+    _require_collection_delete_permission(request)
+    try:
+        result = delete_collection_item_safely(item_id, actor=current_username(request))
+    except ValueError as exc:
+        raise HTTPException(404, "原始采集记录不存在") from exc
+    if not result["deleted"]:
+        reasons = "、".join(f"{key}={value}" for key, value in result["protected"].items())
+        return RedirectResponse(f"/collection/items/{item_id}/delete?error=存在下游引用：{reasons}", 303)
+    return RedirectResponse("/collection/items?message=原始采集记录已安全删除；Source和Snapshot均保留", 303)
+
+
+@router.post("/collection/items/{item_id:int}/cleanup-chain")
+def collection_item_cleanup_chain(request: Request, item_id: int, confirm: str = Form("")):
+    _require_collection_delete_permission(request)
+    if confirm != "1":
+        raise HTTPException(400, "必须确认这是错误或测试采集链")
+    try:
+        result = delete_collection_chain_safely(item_id, actor=current_username(request))
+    except ValueError as exc:
+        raise HTTPException(404, "原始采集记录不存在") from exc
+    if not result["deleted"]:
+        reasons = "、".join(f"{key}={value}" for key, value in result["chain_protected"].items())
+        return RedirectResponse(f"/collection/items/{item_id}/delete?error=整条链已有正式引用，不能清理：{reasons}", 303)
+    return RedirectResponse("/collection/items?message=错误采集链已安全清理；Source和Snapshot均保留", 303)
+
+
 @router.get("/collection/snapshots/{snapshot_id}", response_class=HTMLResponse)
 def collection_snapshot(request: Request, snapshot_id: int):
     snapshot = snapshot_detail(snapshot_id)
@@ -308,4 +357,3 @@ def collection_run_now(request: Request):
 def health():
     data = dashboard()
     return {"ok": True, "version": "0.5F", "counts": data["counts"]}
-

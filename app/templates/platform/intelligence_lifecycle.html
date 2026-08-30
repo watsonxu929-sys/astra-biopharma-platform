@@ -1,0 +1,33 @@
+{% extends "platform/base.html" %}
+{% set active_nav = "intelligence" %}
+{% set p = impact.product %}
+{% set c = impact.counts %}
+{% block platform_title %}删除前影响检查{% endblock %}
+{% block platform_breadcrumb %}<nav class="breadcrumb"><a href="/intelligence">情报</a><span class="sep">/</span><a href="/intelligence/{{ p.id }}">情报详情</a><span class="sep">/</span><span>删除前检查</span></nav>{% endblock %}
+{% block platform_page_header %}<div class="page-header"><div class="page-header-left"><p class="eyebrow">管理操作</p><h1 class="page-title">删除前影响检查</h1><p class="page-desc">先核对正式业务引用，再决定删除、下架或归档。</p></div></div>{% endblock %}
+{% block platform_content %}
+<section class="content-section impact-summary">
+  <div class="section-header"><div><h2>{{ p.title }}</h2><p class="row-meta">{{ p.published_at or p.created_at or '日期待核对' }} · {{ p.source_name or '人工录入' }} · <span class="badge">{{ p.status|status_label }}</span></p></div></div>
+  {% if impact.safe_to_delete %}
+  <div class="success-box"><strong>SAFE_TO_DELETE</strong><p>该情报没有正式业务引用，可以安全删除。删除不会删除 Source、企业、人物、资源、关系、机会或跟进。</p></div>
+  {% else %}
+  <div class="warning-box"><strong>PROTECTED_BY_BUSINESS_REFERENCES</strong><p>该情报已经形成业务历史，不能直接删除。请下架以停止产品展示，或归档为历史记录。</p></div>
+  {% endif %}
+</section>
+<section class="content-section">
+  <h2>实际引用</h2>
+  <dl class="impact-grid">
+    <div><dt>原始采集记录</dt><dd>{{ c.raw_collections }}</dd></div><div><dt>加工任务</dt><dd>{{ c.processing_jobs }}</dd></div><div><dt>候选</dt><dd>{{ c.candidates }}</dd></div>
+    <div><dt>主体关联</dt><dd>{{ c.subject_links }}</dd></div><div><dt>关系</dt><dd>{{ c.relationships }}</dd></div><div><dt>关系证据</dt><dd>{{ c.relationship_evidence }}</dd></div>
+    <div><dt>资源</dt><dd>{{ c.resources }}</dd></div><div><dt>匹配</dt><dd>{{ c.matches }}</dd></div><div><dt>机会</dt><dd>{{ c.opportunities }}</dd></div>
+    <div><dt>跟进</dt><dd>{{ c.follow_ups }}</dd></div><div><dt>报告引用</dt><dd>{{ c.reports }}</dd></div><div><dt>收藏</dt><dd>{{ c.favorites }}</dd></div>
+  </dl>
+</section>
+<section class="content-section lifecycle-confirm">
+  <a class="btn btn-tertiary" href="/intelligence/{{ p.id }}">取消</a>
+  {% if impact.safe_to_delete %}<form method="post" action="/intelligence/{{ p.id }}/delete"><button class="btn btn-danger" type="submit">确认安全删除</button></form>{% endif %}
+  {% if p.status != 'withdrawn' %}<form method="post" action="/intelligence/{{ p.id }}/lifecycle"><input type="hidden" name="action" value="withdraw"><button class="btn btn-secondary" type="submit">下架情报</button></form>{% endif %}
+  {% if p.status != 'archived' %}<form method="post" action="/intelligence/{{ p.id }}/lifecycle"><input type="hidden" name="action" value="archive"><button class="btn btn-tertiary" type="submit">归档情报</button></form>{% endif %}
+</section>
+{% if attempted and not impact.safe_to_delete %}<div class="warning-box" role="alert">硬删除已被阻止：{% for key, count in impact.protected.items() %}{{ key }} {{ count }}{% if not loop.last %}；{% endif %}{% endfor %}。</div>{% endif %}
+{% endblock %}

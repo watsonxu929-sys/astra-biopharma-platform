@@ -1,7 +1,9 @@
 from .processing_job_service import (
     apply_candidate,
+    candidate_delete_preview,
     candidate_detail,
     create_processing_job,
+    delete_candidate_safely,
     dashboard,
     list_candidates,
     list_jobs,
@@ -14,8 +16,10 @@ from .processing_job_service import (
 
 __all__ = [
     "apply_candidate",
+    "candidate_delete_preview",
     "candidate_detail",
     "create_processing_job",
+    "delete_candidate_safely",
     "dashboard",
     "list_candidates",
     "list_review_queue",

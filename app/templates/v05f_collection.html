@@ -20,7 +20,7 @@
   <a class="{{ 'active' if mode == 'home' else '' }}" href="/collection">采集概览</a>
   <a class="{{ 'active' if mode in ['sources','source_detail'] else '' }}" href="/collection/sources">采集来源</a>
   <a class="{{ 'active' if mode == 'jobs' else '' }}" href="/collection/jobs">采集任务</a>
-  <a class="{{ 'active' if mode in ['items','item_detail','snapshot'] else '' }}" href="/collection/items">原始情报</a>
+  <a class="{{ 'active' if mode in ['items','item_detail','item_delete','snapshot'] else '' }}" href="/collection/items">原始情报</a>
 </nav>
 {% if message %}<div class="warning-box soft-delete-note">{{ message }} <a href="/collection/jobs">查看任务</a> · <a href="/collection/items">查看采集内容</a></div>{% endif %}
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
@@ -160,8 +160,18 @@
     {% if item.snapshot_id %}<a class="button secondary" href="/collection/snapshots/{{ item.snapshot_id }}">查看原始证据</a>{% endif %}
     <a class="button primary" href="/processing/jobs?item_id={{ item.id }}">进入处理</a>
     {% if item.first_candidate_id %}<a class="button primary" href="/processing/candidates/{{ item.first_candidate_id }}">进入候选详情</a>{% endif %}
+    {% if can_manage_source %}<a class="button secondary" href="/collection/items/{{ item.id }}/delete">删除前检查</a>{% endif %}
   </div>
   {% if snapshot %}<h3>原文预览</h3><pre class="source-text">{{ snapshot.cleaned_text[:6000] }}</pre>{% else %}<div class="empty">暂无来源快照，不能查看原始证据。</div>{% endif %}
+</section>
+{% elif mode == "item_delete" %}
+{% set item = preview.item %}{% set c = preview.counts %}
+<section class="panel">
+  <p class="eyebrow">原始采集生命周期</p><h2>删除前检查 · {{ item.title or item.item_no }}</h2>
+  {% if preview.safe_to_delete %}<div class="success-box"><strong>SAFE_TO_DELETE</strong><p>没有加工、候选或正式业务引用，可以删除该原始采集记录。Source和Snapshot仍保留。</p></div>{% else %}<div class="warning-box"><strong>PROTECTED_BY_PIPELINE_REFERENCES</strong><p>该记录已经进入加工链或形成正式业务引用，不能单独硬删除。</p></div>{% endif %}
+  <dl class="impact-grid"><div><dt>加工任务</dt><dd>{{ c.processing_jobs }}</dd></div><div><dt>候选</dt><dd>{{ c.candidates }}</dd></div><div><dt>正式情报</dt><dd>{{ c.intelligence }}</dd></div><div><dt>资源</dt><dd>{{ c.resources }}</dd></div><div><dt>流程历史</dt><dd>{{ c.workflow_events }}</dd></div><div><dt>重复子记录</dt><dd>{{ c.duplicate_children }}</dd></div></dl>
+  <div class="actions"><a class="button secondary" href="/collection/items/{{ item.id }}">取消</a>{% if preview.safe_to_delete %}<form method="post" action="/collection/items/{{ item.id }}/delete"><button class="btn btn-danger" type="submit">确认安全删除</button></form>{% elif preview.chain_safe_to_delete %}<form method="post" action="/collection/items/{{ item.id }}/cleanup-chain"><input type="hidden" name="confirm" value="1"><button class="btn btn-danger" type="submit">确认清理错误采集链</button></form>{% endif %}</div>
+  {% if preview.chain_safe_to_delete and not preview.safe_to_delete %}<p class="muted">该操作仅清理本条Raw Collection、加工任务与未确认候选；Source和Snapshot继续保留。请仅用于明确的测试、错误或垃圾采集。</p>{% endif %}
 </section>
 {% elif mode == "item_detail_legacy" %}
 <section class="panel"><h2>{{ item.title or item.item_no }}</h2><p class="muted">{{ item.source_name }} · {{ item.captured_at }} · {{ item.page_structure }}</p><p><a href="{{ item.normalized_url }}">{{ item.normalized_url }}</a></p><p><span class="badge">{{ status_labels.get(item.dedup_status, item.dedup_status) }}</span> <span class="badge">{{ status_labels.get(item.processing_status, item.processing_status) }}</span></p>{% if snapshot %}<pre class="source-text">{{ snapshot.cleaned_text[:6000] }}</pre>{% endif %}</section>
