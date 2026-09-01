@@ -402,17 +402,29 @@ def club_home(request: Request):
                 "SELECT id, event_no, '' as event_date, venue, status, registration_status FROM v05c_club_event_profiles WHERE status='published' LIMIT 5",
             ).fetchall()]
     my_membership = None
-    user_id = request.scope.get("user", {}).get("id")
+    my_application = None
+    user = current_user(request) or {}
+    user_id = user.get("id")
     if user_id:
         with db_connection() as conn:
             member = conn.execute(
-                "SELECT * FROM v04f_club_memberships WHERE user_id=? AND status IN ('active','pending') ORDER BY id DESC LIMIT 1",
+                """SELECT m.*,p.name AS person_name,o.standard_name AS organization_name
+                   FROM v04f_club_memberships m
+                   LEFT JOIN people p ON p.id=m.person_id LEFT JOIN organizations o ON o.id=m.organization_id
+                   WHERE m.user_id=? AND m.status IN ('active','pending') ORDER BY m.id DESC LIMIT 1""",
                 (user_id,),
             ).fetchone()
             if member:
                 my_membership = dict(member)
+            application = conn.execute(
+                "SELECT * FROM v04f_club_applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            if application:
+                my_application = dict(application)
     return templates.TemplateResponse(
-        request, "club_home.html", {"stats": stats, "upcoming_events": upcoming_events, "my_membership": my_membership}
+        request, "club_home.html", {"stats": stats, "upcoming_events": upcoming_events,
+                                    "my_membership": my_membership, "my_application": my_application}
     )
 
 
@@ -496,8 +508,19 @@ def club_operations(request: Request, tab: str = "dashboard"):
 
 
 @router.get("/club/apply", response_class=HTMLResponse)
-def club_apply(request: Request, submitted: str = ""):
-    return templates.TemplateResponse(request, "v04f_club_apply.html", {"error": None, "submitted": submitted})
+def club_apply(request: Request, submitted: str = "", edit: str = ""):
+    user = current_user(request) or {}
+    if not user.get("id"):
+        return RedirectResponse("/account/login?next=/club/apply", status_code=303)
+    with db_connection() as conn:
+        existing = conn.execute(
+            "SELECT * FROM v04f_club_applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (int(user["id"]),),
+        ).fetchone()
+    return templates.TemplateResponse(request, "v04f_club_apply.html", {
+        "error": None, "submitted": submitted, "application": dict(existing) if existing else None,
+        "editing": bool(edit and existing and existing["status"] == "need_more_info"),
+    })
 
 
 @router.post("/club/apply", response_class=HTMLResponse)
@@ -518,6 +541,8 @@ def submit_application(
     referral_source: str = Form(""),
     referrer_name: str = Form(""),
     preferred_contact_method: str = Form(""),
+    member_type: str = Form("individual"),
+    application_reason: str = Form(""),
     consent_to_store: str | None = Form(None),
     consent_to_contact: str | None = Form(None),
     website: str = Form(""),
@@ -529,44 +554,70 @@ def submit_application(
         return templates.TemplateResponse(request, "v04f_club_apply.html", {"error": "请先勾选信息保存和后续联系同意。", "submitted": ""}, status_code=400)
     if not mobile.strip() and not email.strip():
         return templates.TemplateResponse(request, "v04f_club_apply.html", {"error": "手机号或邮箱至少填写一项。", "submitted": ""}, status_code=400)
+    user = current_user(request) or {}
+    if not user.get("id"):
+        return RedirectResponse("/account/login?next=/club/apply", status_code=303)
+    if member_type not in {"individual", "organization"}:
+        return templates.TemplateResponse(request, "v04f_club_apply.html", {"error": "请选择个人会员或企业/机构会员。", "submitted": "", "application": None}, status_code=400)
+    if member_type == "organization" and not organization_name.strip():
+        return templates.TemplateResponse(request, "v04f_club_apply.html", {"error": "企业/机构会员必须填写企业或机构名称。", "submitted": "", "application": None}, status_code=400)
     with db_connection() as conn:
-        duplicate = conn.execute(
-            """
-            SELECT application_no FROM v04f_club_applications
-            WHERE status IN ('submitted','under_review','need_more_info')
-              AND ((mobile<>'' AND mobile=?) OR (email<>'' AND email=?))
-            ORDER BY id DESC LIMIT 1
-            """,
-            (mobile.strip(), email.strip()),
+        people = conn.execute(
+            "SELECT id FROM people WHERE lower(trim(name))=lower(trim(?)) ORDER BY id",
+            (applicant_name.strip(),),
+        ).fetchall()
+        organizations = conn.execute(
+            "SELECT id FROM organizations WHERE lower(trim(standard_name))=lower(trim(?)) OR lower(trim(COALESCE(short_name,'')))=lower(trim(?)) ORDER BY id",
+            (organization_name.strip(), organization_name.strip()),
+        ).fetchall() if organization_name.strip() else []
+    fields = {
+        "person_id": int(people[0][0]) if len(people) == 1 else None,
+        "organization_id": int(organizations[0][0]) if len(organizations) == 1 else None,
+        "user_id": int(user["id"]), "applicant_name": applicant_name.strip(),
+        "organization_name": organization_name.strip(), "mobile": mobile.strip(), "email": email.strip(),
+        "wechat": wechat.strip(), "title": title.strip(), "city": city.strip(),
+        "industry_tags": industry_tags.strip(), "expertise_tags": expertise_tags.strip(),
+        "offered_resources": offered_resources.strip(), "cooperation_needs": cooperation_needs.strip(),
+        "self_introduction": self_introduction.strip(), "referral_source": referral_source.strip(),
+        "referrer_name": referrer_name.strip(), "preferred_contact_method": preferred_contact_method.strip(),
+        "member_type": member_type, "application_reason": application_reason.strip(),
+    }
+    try:
+        application = ClubMembershipService().submit_application(fields, actor_user_id=int(user["id"]))
+    except ClubOperationError as exc:
+        return templates.TemplateResponse(request, "v04f_club_apply.html", {"error": exc.message, "submitted": "", "application": None}, status_code=exc.status_code)
+    return RedirectResponse(f"/club/application?submitted={application['application_no']}", status_code=303)
+
+
+@router.get("/club/application", response_class=HTMLResponse)
+def my_club_application(request: Request, submitted: str = ""):
+    user = current_user(request) or {}
+    if not user.get("id"):
+        return RedirectResponse("/account/login?next=/club/application", status_code=303)
+    with db_connection() as conn:
+        application = conn.execute(
+            "SELECT * FROM v04f_club_applications WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (int(user["id"]),),
         ).fetchone()
-        if duplicate:
-            return templates.TemplateResponse(request, "v04f_club_apply.html", {"error": f"已有待处理申请：{duplicate['application_no']}", "submitted": ""}, status_code=400)
-        ts = now()
-        app_no = _next_no(conn, "QBA")
-        conn.execute(
-            """
-            INSERT INTO v04f_club_applications(
-                application_no, applicant_name, mobile, email, wechat, organization_name, title, city,
-                industry_tags, expertise_tags, offered_resources, cooperation_needs, self_introduction,
-                referral_source, referrer_name, preferred_contact_method, consent_to_store, consent_to_contact,
-                submitted_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
-            """,
-            (app_no, applicant_name.strip(), mobile.strip(), email.strip(), wechat.strip(), organization_name.strip(), title.strip(), city.strip(), industry_tags.strip(), expertise_tags.strip(), offered_resources.strip(), cooperation_needs.strip(), self_introduction.strip(), referral_source.strip(), referrer_name.strip(), preferred_contact_method.strip(), ts, ts, ts),
-        )
-    return RedirectResponse(f"/club/apply?submitted={app_no}", status_code=303)
+    if not application:
+        return RedirectResponse("/club/apply", status_code=303)
+    return templates.TemplateResponse(request, "v04f_club_apply.html", {
+        "error": None, "submitted": submitted, "application": dict(application),
+    })
 
 
 def _application_matches(conn: sqlite3.Connection, app: sqlite3.Row) -> dict[str, list[dict[str, Any]]]:
     name_like = f"%{app['applicant_name']}%"
-    org_like = f"%{app['organization_name']}%" if app["organization_name"] else "%"
+    org_like = f"%{app['organization_name']}%" if app["organization_name"] else ""
     people = [dict(r) for r in conn.execute("SELECT id, external_id, name, public_role, organization_network FROM people WHERE name LIKE ? LIMIT 10", (name_like,)).fetchall()]
-    orgs = [dict(r) for r in conn.execute("SELECT id, external_id, standard_name, org_type, region FROM organizations WHERE standard_name LIKE ? LIMIT 10", (org_like,)).fetchall()]
+    orgs = [dict(r) for r in conn.execute("SELECT id, external_id, standard_name, org_type, region FROM organizations WHERE standard_name LIKE ? LIMIT 10", (org_like,)).fetchall()] if org_like else []
     return {"people": people, "organizations": orgs}
 
 
 @router.get("/club/admin/applications", response_class=HTMLResponse)
 def applications_page(request: Request, status: str = ""):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部管理权限")
     ensure_schema()
     with db_connection() as conn:
         if status:
@@ -578,6 +629,8 @@ def applications_page(request: Request, status: str = ""):
 
 @router.get("/club/admin/applications/{application_id}", response_class=HTMLResponse)
 def application_detail(application_id: int, request: Request):
+    if not can(request, "manage_club"):
+        raise HTTPException(403, "需要俱乐部管理权限")
     with db_connection() as conn:
         app = conn.execute("SELECT * FROM v04f_club_applications WHERE id=?", (application_id,)).fetchone()
         if not app:
@@ -594,15 +647,21 @@ def review_application(request: Request, application_id: int, decision: str = Fo
     reviewer = current_username(request)
     user = current_user(request) or {}
     try:
-        ClubMembershipService().review_application(
+        result = ClubMembershipService().review_application(
             application_id, decision=decision, actor=reviewer,
             actor_user_id=int(user["id"]) if user.get("id") else None,
             note=note, owner=reviewer, person_id=person_id or None,
             organization_id=organization_id or None, user_id=user_id or None,
         )
+        if decision == "approved" and result.get("membership"):
+            ClubMembershipService().transition_membership(
+                int(result["membership"]["id"]), action="activate", actor=reviewer,
+                actor_user_id=int(user["id"]) if user.get("id") else None,
+                reason="会员申请审核通过",
+            )
     except ClubOperationError as exc:
-        raise HTTPException(exc.status_code, exc.message) from exc
-    return RedirectResponse(f"/club/admin/applications/{application_id}", status_code=303)
+        return RedirectResponse(f"/club/admin/applications/{application_id}?error={exc.message}", status_code=303)
+    return RedirectResponse(f"/club/admin/applications/{application_id}?message=审核结果已保存", status_code=303)
 
 
 @router.post("/club/members/{member_id}/lifecycle")

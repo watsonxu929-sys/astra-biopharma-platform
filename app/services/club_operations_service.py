@@ -87,8 +87,8 @@ class ClubMembershipService:
         person_id = int(fields.get("person_id") or 0)
         user_id = int(fields.get("user_id") or actor_user_id or 0)
         organization_id = int(fields.get("organization_id") or 0)
-        if not person_id or not user_id or not organization_id:
-            raise ClubOperationError(400, "IDENTITY_LINKS_REQUIRED", "申请必须关联现有人物、登录账号和机构")
+        if not user_id:
+            raise ClubOperationError(401, "LOGIN_REQUIRED", "请先登录后提交会员申请")
         ts = now_iso()
         pilot = fields.get("pilot_batch_id")
         with db_connection(self.db_path) as conn:
@@ -96,6 +96,8 @@ class ClubMembershipService:
                 ("people", person_id, "人物"), ("v05a_users", user_id, "账号"),
                 ("organizations", organization_id, "机构"),
             ):
+                if not object_id and table != "v05a_users":
+                    continue
                 if not conn.execute(f"SELECT 1 FROM {table} WHERE id=?", (object_id,)).fetchone():
                     raise ClubOperationError(404, "LINKED_OBJECT_NOT_FOUND", f"{label}不存在")
             existing = conn.execute(
@@ -106,9 +108,26 @@ class ClubMembershipService:
                 """, (user_id,),
             ).fetchone()
             if existing:
+                if existing["status"] == "need_more_info":
+                    conn.execute(
+                        """
+                        UPDATE v04f_club_applications SET applicant_name=?,mobile=?,email=?,wechat=?,
+                          organization_name=?,title=?,city=?,industry_tags=?,expertise_tags=?,offered_resources=?,
+                          cooperation_needs=?,self_introduction=?,preferred_contact_method=?,member_type=?,
+                          application_reason=?,matched_person_id=?,matched_organization_id=?,status='under_review',
+                          review_note=NULL,reviewed_at=NULL,reviewed_by=NULL,updated_at=? WHERE id=?
+                        """,
+                        (fields.get("applicant_name"), fields.get("mobile"), fields.get("email"), fields.get("wechat"),
+                         fields.get("organization_name"), fields.get("title"), fields.get("city"), fields.get("industry_tags"),
+                         fields.get("expertise_tags"), fields.get("offered_resources"), fields.get("cooperation_needs"),
+                         fields.get("self_introduction"), fields.get("preferred_contact_method"),
+                         fields.get("member_type") or "individual", fields.get("application_reason"),
+                         person_id or None, organization_id or None, ts, existing["id"]),
+                    )
+                    return dict(conn.execute("SELECT * FROM v04f_club_applications WHERE id=?", (existing["id"],)).fetchone())
                 return dict(existing)
-            person = conn.execute("SELECT name FROM people WHERE id=?", (person_id,)).fetchone()
-            org = conn.execute("SELECT standard_name FROM organizations WHERE id=?", (organization_id,)).fetchone()
+            person = conn.execute("SELECT name FROM people WHERE id=?", (person_id,)).fetchone() if person_id else None
+            org = conn.execute("SELECT standard_name FROM organizations WHERE id=?", (organization_id,)).fetchone() if organization_id else None
             application_no = _number("QBA")
             cur = conn.execute(
                 """
@@ -120,12 +139,12 @@ class ClubMembershipService:
                   professional_direction,application_reason,source_event_id,pilot_batch_id,created_at,updated_at
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,1,'under_review',?,?,?,?,?,?,?,?,?,?,?)
                 """,
-                (application_no, person["name"], fields.get("mobile"), fields.get("email"), fields.get("wechat"),
-                 org["standard_name"], fields.get("title"), fields.get("city"), fields.get("industry_tags"),
+                (application_no, person["name"] if person else fields.get("applicant_name"), fields.get("mobile"), fields.get("email"), fields.get("wechat"),
+                 org["standard_name"] if org else fields.get("organization_name"), fields.get("title"), fields.get("city"), fields.get("industry_tags"),
                  fields.get("professional_direction") or fields.get("expertise_tags"), fields.get("offered_resources"),
                  fields.get("cooperation_needs"), fields.get("self_introduction"), fields.get("referral_source"),
-                 fields.get("referrer_name"), fields.get("preferred_contact_method"), ts, person_id,
-                 organization_id, user_id, fields.get("member_type") or "standard",
+                 fields.get("referrer_name"), fields.get("preferred_contact_method"), ts, person_id or None,
+                 organization_id or None, user_id, fields.get("member_type") or "individual",
                  fields.get("professional_direction"), fields.get("application_reason"), fields.get("source_event_id"),
                  pilot, ts, ts),
             )
@@ -162,9 +181,13 @@ class ClubMembershipService:
             resolved_user_id = int(user_id or application.get("user_id") or 0)
             membership = None
             if target == "approved":
-                if not resolved_person_id or not resolved_org_id or not resolved_user_id:
-                    raise ClubOperationError(400, "IDENTITY_LINKS_REQUIRED", "批准前必须确认人物、账号和机构")
+                organization_required = application.get("member_type") == "organization"
+                if not resolved_person_id or not resolved_user_id or (organization_required and not resolved_org_id):
+                    required = "人物、账号和机构" if organization_required else "人物和账号"
+                    raise ClubOperationError(400, "IDENTITY_LINKS_REQUIRED", f"批准前必须确认{required}")
                 for table, object_id in (("people", resolved_person_id), ("organizations", resolved_org_id), ("v05a_users", resolved_user_id)):
+                    if not object_id and table == "organizations":
+                        continue
                     if not conn.execute(f"SELECT 1 FROM {table} WHERE id=?", (object_id,)).fetchone():
                         raise ClubOperationError(404, "LINKED_OBJECT_NOT_FOUND", "关联主体不存在")
                 existing = conn.execute(
@@ -183,8 +206,8 @@ class ClubMembershipService:
                           source,owner,industry_tags,expertise_tags,cooperation_preferences,pilot_batch_id,created_at,updated_at
                         ) VALUES (?,?,?,?,?,?,'pending',?,?,?,?,?,?,?,?,?)
                         """,
-                        (_number("QBM"), resolved_person_id, resolved_org_id, resolved_user_id,
-                         application.get("title"), application.get("member_type") or "standard", ts,
+                        (_number("QBM"), resolved_person_id, resolved_org_id or None, resolved_user_id,
+                         application.get("title"), application.get("member_type") if application.get("member_type") in {"standard", "premium", "vip", "founding"} else "standard", ts,
                          application["application_no"], owner or actor, application.get("industry_tags"),
                          application.get("professional_direction") or application.get("expertise_tags"),
                          application.get("cooperation_needs"), application.get("pilot_batch_id"), ts, ts),

@@ -11,7 +11,7 @@ VALID_CLIENTS = {"web", "app", "miniprogram", "admin"}
 MVP_PRODUCT_KEYS = {
     "workspace", "workspace.todos", "workspace.recent_followups", "workspace.favorites",
     "network", "network.organizations", "network.people", "network.graph", "network.recommendations",
-    "intelligence", "intelligence.feed", "intelligence.reports", "intelligence.subscriptions",
+    "intelligence", "intelligence.feed", "intelligence.collection", "intelligence.reports", "intelligence.subscriptions",
     "resources", "resources.demand", "resources.supply",
     "collaboration", "collaboration.opportunities", "collaboration.tasks", "collaboration.meetings",
     "club", "club.members", "club.events", "club.matching",

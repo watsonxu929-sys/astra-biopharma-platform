@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block main_class %}platform-shell{% endblock %}
 {% block title %}{{ '报告生成' if mode == 'jobs' else '情报报告' }}{% endblock %}
 {% block content %}
 {% set status_labels = {"draft":"草稿","under_review":"待审核","submitted":"待审核","approved":"已批准","published":"已发布","archived":"已归档","failed":"生成失败","generated":"已生成","pending":"待处理","running":"生成中"} %}

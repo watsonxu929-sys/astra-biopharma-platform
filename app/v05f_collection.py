@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import sqlite3
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -39,6 +41,53 @@ from app.services.collection_scheduler import (
 
 router = APIRouter(tags=["信息采集"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+
+SOURCE_ERROR_LABELS = {
+    "name_and_url_required": "来源名称和URL不能为空",
+    "invalid_source_settings": "来源设置无效，请检查采集方式和频率",
+    "source_not_found": "采集来源不存在",
+    "source_url_exists": "该URL对应的来源已存在",
+    "source_import_choose_one": "请选择文件导入或粘贴导入其中一种方式。",
+    "source_import_empty": "请选择.csv/.txt文件，或粘贴需要导入的URL。",
+    "source_import_empty_file": "上传文件为空，请重新选择。",
+    "source_import_invalid_encoding": "文件不是有效的UTF-8文本，请使用UTF-8或UTF-8 BOM保存后重试。",
+    "source_import_invalid_file_type": "仅支持.csv或.txt文本文件。",
+    "source_import_parse_failed": "文件内容无法解析，请检查CSV字段或TXT每行URL格式。",
+    "source_import_too_many_rows": "单次最多导入2000行，请分批处理。",
+}
+
+
+def _source_error(exc: Exception) -> str:
+    return SOURCE_ERROR_LABELS.get(str(exc), str(exc) or "来源操作失败，请检查输入")
+
+
+def _decode_source_import_file(filename: str, content_type: str, payload: bytes) -> str:
+    suffix = Path(str(filename or "")).suffix.casefold()
+    mime = str(content_type or "").split(";", 1)[0].strip().casefold()
+    if suffix not in {".csv", ".txt"}:
+        if suffix or mime not in {"text/csv", "text/plain"}:
+            raise ValueError("source_import_invalid_file_type")
+    if not payload:
+        raise ValueError("source_import_empty_file")
+    try:
+        text_value = payload.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError("source_import_invalid_encoding") from exc
+    if not text_value.strip():
+        raise ValueError("source_import_empty_file")
+    if "\x00" in text_value:
+        raise ValueError("source_import_parse_failed")
+    return text_value
+
+
+def _source_import_summary(rows: list[dict]) -> dict[str, int]:
+    statuses = [str(row.get("status") or "") for row in rows]
+    return {
+        "valid": sum(status in {"READY", "BROWSER_READY"} for status in statuses),
+        "existing": sum(status in {"EXISTS", "DUPLICATE_IN_FILE"} for status in statuses),
+        "invalid": statuses.count("INVALID_URL"),
+        "failed": statuses.count("FETCH_FAILED"),
+    }
 
 
 @router.get("/collection", response_class=HTMLResponse)
@@ -104,6 +153,9 @@ def collection_create_source(
     if tested != "1":
         return RedirectResponse("/collection/sources/new?error=请先测试来源URL", status_code=303)
     try:
+        existing = preview_source_import(url)
+        if existing and existing[0].get("status") == "EXISTS":
+            return RedirectResponse("/collection/sources/new?error=该URL对应的来源已存在", status_code=303)
         row = create_collection_source(
             name=name,
             source_type=source_type,
@@ -119,8 +171,8 @@ def collection_create_source(
             check_frequency=check_frequency,
             is_enabled=bool(is_enabled),
         )
-    except Exception as exc:
-        return RedirectResponse(f"/collection/sources?error={str(exc)[:200]}", status_code=303)
+    except (ValueError, RuntimeError) as exc:
+        return RedirectResponse(f"/collection/sources/new?error={_source_error(exc)[:200]}", status_code=303)
     return RedirectResponse(f"/collection/sources?message=来源已保存：{row['source_no']}", status_code=303)
 
 
@@ -147,7 +199,7 @@ def collection_source_detail(request: Request, source_id: int):
 def collection_source_edit(request: Request, source_id: int):
     try:
         source = source_detail(source_id)
-    except ValueError as exc:
+    except (ValueError, sqlite3.IntegrityError) as exc:
         raise HTTPException(404, "采集来源不存在") from exc
     return templates.TemplateResponse(
         request, "v05f_collection.html",
@@ -161,7 +213,7 @@ async def collection_update_source(request: Request, source_id: int):
     try:
         update_collection_source(source_id, dict(form))
     except ValueError as exc:
-        return RedirectResponse(f"/collection/sources/{source_id}?error={str(exc)}", status_code=303)
+        return RedirectResponse(f"/collection/sources/{source_id}?error={_source_error(exc)}", status_code=303)
     return RedirectResponse(f"/collection/sources/{source_id}?message=来源已更新", status_code=303)
 
 @router.post("/collection/sources/{source_id:int}/test", response_class=HTMLResponse)
@@ -175,42 +227,91 @@ def collection_test_existing_source(request: Request, source_id: int):
 
 @router.post("/collection/sources/{source_id:int}/enabled")
 def collection_toggle_source(source_id: int, enabled: str = Form("")):
-    row = set_source_enabled(source_id, bool(enabled))
+    try:
+        row = set_source_enabled(source_id, bool(enabled))
+    except ValueError as exc:
+        return RedirectResponse(f"/collection/sources?error={_source_error(exc)}", status_code=303)
     message = "来源已启用" if row["is_enabled"] else "来源已停用"
     return RedirectResponse(f"/collection/sources?message={message}", status_code=303)
 
 @router.post("/collection/sources/{source_id:int}/delete")
 def collection_delete_source(source_id: int, confirm: str = Form("")):
     if confirm != "1":
-        raise HTTPException(400, "请确认删除或退役")
-    result = delete_or_retire_source(source_id)
+        return RedirectResponse(f"/collection/sources/{source_id}?error=请确认删除或退役", status_code=303)
+    try:
+        result = delete_or_retire_source(source_id)
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        return RedirectResponse(f"/collection/sources?error={_source_error(exc)}", status_code=303)
     message = "来源已退役，历史情报保留" if result["action"] == "retired" else "来源已删除"
     return RedirectResponse(f"/collection/sources?message={message}", status_code=303)
 
+
+@router.post("/collection/sources/bulk-delete")
+async def collection_bulk_delete_sources(request: Request):
+    form = await request.form()
+    deleted = retired = failed = 0
+    errors: list[str] = []
+    for raw_id in form.getlist("source_ids")[:100]:
+        try:
+            result = delete_or_retire_source(int(raw_id))
+            if result["action"] == "retired":
+                retired += 1
+            else:
+                deleted += 1
+        except (TypeError, ValueError, sqlite3.IntegrityError) as exc:
+            failed += 1
+            errors.append(_source_error(exc))
+    detail = f"；错误：{'；'.join(errors[:5])}" if errors else ""
+    return RedirectResponse(f"/collection/sources?message=已删除：{deleted}；已退役：{retired}；失败：{failed}{detail}", status_code=303)
+
 @router.get("/collection/sources/import", response_class=HTMLResponse)
-def collection_import_page(request: Request):
+def collection_import_page(request: Request, error: str = ""):
     return templates.TemplateResponse(
         request, "v05f_collection.html",
-        {"mode": "source_import", "preview": [], "source_text": ""},
+        {"mode": "source_import", "preview": [], "source_text": "", "error": error,
+         "preview_summary": None, "selected_filename": "", "import_origin": ""},
     )
 
 @router.post("/collection/sources/import/preview", response_class=HTMLResponse)
 async def collection_import_preview(
     request: Request, source_text: str = Form(""), csv_file: UploadFile | None = File(None),
 ):
+    has_file = bool(csv_file and csv_file.filename)
+    has_text = bool(source_text.strip())
+    selected_filename = str(csv_file.filename or "") if csv_file else ""
+    error = ""
     raw = source_text
-    if csv_file and csv_file.filename:
-        raw = (await csv_file.read()).decode("utf-8-sig", errors="replace")
-    preview = preview_source_import(raw)
+    preview: list[dict] = []
+    import_origin = "file" if has_file else "paste"
+    try:
+        if has_file and has_text:
+            raise ValueError("source_import_choose_one")
+        if not has_file and not has_text:
+            raise ValueError("source_import_empty")
+        if has_file and csv_file:
+            raw = _decode_source_import_file(
+                selected_filename, str(csv_file.content_type or ""), await csv_file.read()
+            )
+        preview = preview_source_import(raw)
+        if not preview:
+            raise ValueError("source_import_empty")
+    except (ValueError, csv.Error) as exc:
+        error = _source_error(exc if isinstance(exc, ValueError) else ValueError("source_import_parse_failed"))
+        preview = []
     return templates.TemplateResponse(
         request, "v05f_collection.html",
-        {"mode": "source_import", "preview": preview, "source_text": raw},
+        {"mode": "source_import", "preview": preview, "source_text": raw, "error": error,
+         "preview_summary": _source_import_summary(preview) if preview else None,
+         "selected_filename": selected_filename, "import_origin": import_origin},
     )
 
 @router.post("/collection/sources/import/confirm")
 def collection_import_confirm(request: Request, source_text: str = Form(...)):
-    preview = preview_source_import(source_text)
-    result = save_source_import(preview, current_username(request))
+    try:
+        preview = preview_source_import(source_text)
+        result = save_source_import(preview, current_username(request))
+    except (ValueError, RuntimeError) as exc:
+        return RedirectResponse(f"/collection/sources/import?error={_source_error(exc)}", status_code=303)
     message = (
         f"成功新增：{result['created']}；已存在：{result['exists']}；"
         f"无效URL：{result['invalid']}；测试失败：{result['failed']}"

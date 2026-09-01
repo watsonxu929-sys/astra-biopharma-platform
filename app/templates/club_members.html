@@ -23,7 +23,7 @@
 
 {% if tab == 'directory' %}
 <section class="search-bar">
-  <form method="get" action="/club/members">
+  <form method="get" action="/club/members" class="club-member-filter">
     <input name="q" value="{{ filters.q }}" placeholder="会员编号、姓名、机构">
     <select name="status">
       <option value="">全部状态</option>

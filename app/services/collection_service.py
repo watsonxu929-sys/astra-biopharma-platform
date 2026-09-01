@@ -32,6 +32,7 @@ _logger = logging.getLogger(__name__)
 TRACKING_PARAMS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "from", "share", "spm"}
 SOURCE_TYPES = {"rss", "api", "webpage", "list_page", "dynamic_page", "manual_url_list"}
 COLLECTION_MODES = {"http", "rss", "api", "playwright", "auto"}
+SOURCE_IMPORT_MAX_ROWS = 2000
 JOB_STATUSES = {"pending", "running", "success", "partial", "unchanged", "failed", "skipped", "cancelled"}
 COLLECTION_STATUS_LABELS = {
     "pending": "排队中",
@@ -198,6 +199,12 @@ def _decorate_source(row: dict[str, Any], conn: sqlite3.Connection) -> dict[str,
     ).fetchone()
     item_count = int(conn.execute("SELECT COUNT(*) FROM v05f_collection_items WHERE monitoring_source_id=?", (row["id"],)).fetchone()[0] or 0)
     row["collected_item_count"] = item_count
+    row["history_count"] = sum(int(conn.execute(sql, (row["id"],)).fetchone()[0] or 0) for sql in (
+        "SELECT COUNT(*) FROM v04g_monitoring_runs WHERE monitoring_source_id=?",
+        "SELECT COUNT(*) FROM v04g_source_snapshots WHERE monitoring_source_id=?",
+        "SELECT COUNT(*) FROM v05f_discovered_links WHERE monitoring_source_id=?",
+        "SELECT COUNT(*) FROM v05f_collection_items WHERE monitoring_source_id=?",
+    ))
     row["source_status_label"] = "已暂停" if row.get("auto_paused") else ("已启用" if row.get("is_enabled") else "已停用")
     row["domain"] = urlparse(str(row.get("url") or "")).netloc
     row["discovery"] = {}
@@ -684,7 +691,7 @@ def set_source_enabled(source_id: int, enabled: bool, db_path: str | Path | None
 def delete_or_retire_source(source_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
     detail = source_detail(source_id, db_path)
     with db_connection(db_path) as conn:
-        if detail["collected_item_count"] or detail["intelligence_count"]:
+        if detail["history_count"] or detail["intelligence_count"]:
             ts = now()
             conn.execute("""
                 UPDATE v04g_monitoring_sources SET is_enabled=0,auto_paused=1,health_status='retired',
@@ -695,14 +702,88 @@ def delete_or_retire_source(source_id: int, db_path: str | Path | None = None) -
         return {"action": "deleted", "history_preserved": False, **detail}
 
 
-def test_source_url(url: str) -> dict[str, Any]:
-    url = str(url or "").strip()
-    if not url.startswith(("http://", "https://", "inline:")):
-        return {"ok": False, "status": "INVALID_URL", "url": url}
+def _http_probe_failure(exc: RuntimeError) -> tuple[int | None, str]:
+    cause = exc.__cause__
+    if isinstance(cause, httpx.HTTPStatusError):
+        status = int(cause.response.status_code)
+        return status, f"目标站点返回 HTTP {status}"
+    if isinstance(cause, httpx.TimeoutException):
+        return None, "HTTP访问超时"
+    if isinstance(cause, httpx.TransportError):
+        return None, f"HTTP连接失败（{cause.__class__.__name__}）"
+    return None, "HTTP访问失败"
+
+
+def _playwright_probe_failure(exc: Exception) -> str:
+    code = str(getattr(exc, "code", "") or exc)
+    matched = re.fullmatch(r"playwright_http_(\d{3})", code)
+    if matched:
+        return f"浏览器采集返回 HTTP {matched.group(1)}"
+    if isinstance(exc, PlaywrightUnavailable):
+        return "当前环境未启用Playwright浏览器"
+    if code == "playwright_timeout":
+        return "浏览器访问超时"
+    return "浏览器采集访问失败"
+
+
+def _probe_source_access(url: str, timeout: int = 8) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "ok": False, "body": "", "content_type": "", "headers": {},
+        "http_accessible": False, "http_status": None, "http_error": "",
+        "browser_attempted": False, "browser_accessible": False, "browser_error": "",
+        "recommended_mode": "unavailable", "failure_reason": "", "final_url": url,
+    }
     try:
-        body, status, content_type, headers = _http_get(url, timeout=8, retries=0)
-    except RuntimeError:
-        return {"ok": False, "status": "FETCH_FAILED", "url": url}
+        body, status, content_type, headers = _http_get(url, timeout=timeout, retries=0)
+        result.update({
+            "ok": True, "body": body, "content_type": content_type, "headers": headers,
+            "http_accessible": True, "http_status": status, "recommended_mode": "http",
+        })
+        return result
+    except RuntimeError as exc:
+        status, reason = _http_probe_failure(exc)
+        result.update({"http_status": status, "http_error": reason})
+
+    adapter = PlaywrightAdapter()
+    result["browser_attempted"] = True
+    try:
+        rendered = adapter.fetch(url, dynamic=True, timeout_ms=max(8000, timeout * 1000))
+        result.update({
+            "ok": True, "body": rendered.html, "content_type": "text/html; charset=utf-8",
+            "browser_accessible": True, "recommended_mode": "playwright",
+            "final_url": rendered.url,
+        })
+    except (PlaywrightUnavailable, PlaywrightCollectionError) as exc:
+        result["browser_error"] = _playwright_probe_failure(exc)
+        result["failure_reason"] = "；".join(filter(None, [result["http_error"], result["browser_error"]]))
+    except Exception as exc:
+        result["browser_error"] = _playwright_probe_failure(exc)
+        result["failure_reason"] = "；".join(filter(None, [result["http_error"], result["browser_error"]]))
+    return result
+
+
+def _source_test_result(url: str, probe: dict[str, Any]) -> dict[str, Any]:
+    common = {
+        "url": normalize_url(url) if not url.startswith("inline:") else url,
+        "http_status": probe.get("http_status"),
+        "http_accessible": bool(probe.get("http_accessible")),
+        "http_error": str(probe.get("http_error") or ""),
+        "browser_attempted": bool(probe.get("browser_attempted")),
+        "browser_accessible": bool(probe.get("browser_accessible")),
+        "browser_error": str(probe.get("browser_error") or ""),
+        "failure_reason": str(probe.get("failure_reason") or ""),
+        "recommended_mode": str(probe.get("recommended_mode") or "unavailable"),
+    }
+    if not probe.get("ok"):
+        return {
+            **common, "ok": False, "status": "FETCH_FAILED", "is_rss": False,
+            "is_html": False, "needs_playwright": False, "extractable": False,
+            "recommendation": "暂不可采集", "recent_titles": [], "recent_items": [],
+        }
+
+    body = str(probe.get("body") or "")
+    content_type = str(probe.get("content_type") or "")
+    headers = probe.get("headers") or {}
     feed = feedparser.parse(body) if ("xml" in content_type or "rss" in content_type or "atom" in content_type) else None
     soup = BeautifulSoup(body, "html.parser")
     feed_link = soup.find("link", rel=lambda value: value and "alternate" in value,
@@ -721,16 +802,32 @@ def test_source_url(url: str) -> dict[str, Any]:
     if not recent:
         recent = [node.get_text(" ", strip=True) for node in soup.select("h1,h2,h3")[:3]]
         recent_items = [{"title": title, "published": ""} for title in recent]
+    browser_ready = bool(probe.get("browser_accessible"))
+    needs_playwright = browser_ready or (len(text_value) < 120 and len(soup.find_all("script")) >= 5)
+    recommended_mode = "rss" if feed and feed.entries else ("playwright" if needs_playwright else "http")
+    recommendation = {"rss": "RSS", "playwright": "Browser/Playwright", "http": "HTTP列表页"}[recommended_mode]
     return {
-        "ok": True, "status": "READY", "url": normalize_url(url) if not url.startswith("inline:") else url,
-        "http_status": status, "is_rss": bool(feed and feed.entries),
+        **common, "ok": True, "status": "BROWSER_READY" if browser_ready else "READY",
+        "url": normalize_url(str(probe.get("final_url") or url)) if not url.startswith("inline:") else url,
+        "is_rss": bool(feed and feed.entries),
         "rss_url": urljoin(url, feed_link.get("href")) if feed_link else "",
-        "is_html": bool(soup.find()), "needs_playwright": len(text_value) < 120 and len(soup.find_all("script")) >= 5,
+        "is_html": bool(soup.find()), "needs_playwright": needs_playwright,
         "extractable": len(text_value) >= 80, "extractor": extractor,
         "recent_titles": recent, "recent_items": recent_items,
-        "content_type": content_type, "canonical_url": urljoin(url, canonical_link.get("href"))
+        "content_type": content_type, "recommended_mode": recommended_mode, "recommendation": recommendation,
+        "canonical_url": urljoin(url, canonical_link.get("href"))
         if canonical_link else headers.get("content-location", ""),
     }
+
+
+def test_source_url(url: str) -> dict[str, Any]:
+    url = str(url or "").strip()
+    if not url.startswith(("http://", "https://", "inline:")):
+        return {
+            "ok": False, "status": "INVALID_URL", "url": url,
+            "recommendation": "暂不可采集", "failure_reason": "URL必须使用http或https",
+        }
+    return _source_test_result(url, _probe_source_access(url))
 
 
 def _source_identity(url: str) -> str:
@@ -744,32 +841,56 @@ def preview_source_import(text_value: str, db_path: str | Path | None = None) ->
     raw = str(text_value or "").strip()
     if not raw:
         return []
-    if "," in raw.splitlines()[0]:
-        parsed = list(csv.DictReader(io.StringIO(raw)))
-        rows = [(str(item.get("name") or "").strip(), str(item.get("url") or "").strip()) for item in parsed]
-    else:
-        rows = [(urlparse(line.strip()).netloc or line.strip(), line.strip()) for line in raw.splitlines() if line.strip()]
+    rows: list[tuple[int, str, str]] = []
+    for line_no, raw_line in enumerate(raw.splitlines(), 1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        delimiter = "\t" if "\t" in line else ("," if "," in line else "")
+        values = next(csv.reader(io.StringIO(line), delimiter=delimiter)) if delimiter else [line]
+        if not delimiter:
+            named_url = re.match(r"^(.+?)\s+(https?://\S+)$", line)
+            if named_url:
+                values = [named_url.group(1), named_url.group(2)]
+        values = [value.strip() for value in values]
+        if line_no == 1 and values[0].casefold() in {"name", "source_name", "名称", "来源名称"}:
+            continue
+        if len(values) == 1:
+            url = values[0]
+            name = urlparse(url).netloc or url
+        else:
+            name, url = values[0], values[1]
+        rows.append((line_no, name, url))
+    if len(rows) > SOURCE_IMPORT_MAX_ROWS:
+        raise ValueError("source_import_too_many_rows")
     with db_connection(db_path) as conn:
         existing = {_source_identity(row[0]) for row in conn.execute(
             "SELECT url FROM v04g_monitoring_sources WHERE deactivated_at IS NULL"
         )}
     seen: set[str] = set()
     preview = []
-    for name, url in rows[:100]:
+    for line_no, name, url in rows:
         if not url.startswith(("http://", "https://", "inline:")):
-            preview.append({"name": name, "url": url, "kind": "NEW", "status": "INVALID_URL"})
+            reason = "缺少URL" if not url else "URL必须使用http或https"
+            preview.append({"line": line_no, "name": name, "url": url, "kind": "NEW", "status": "INVALID_URL", "reason": reason})
             continue
         identity = _source_identity(url) if not url.startswith("inline:") else url
         if identity in seen:
-            preview.append({"name": name, "url": url, "kind": "NEW", "status": "DUPLICATE_IN_FILE"})
+            preview.append({"line": line_no, "name": name, "url": url, "kind": "NEW", "status": "DUPLICATE_IN_FILE", "reason": "本次导入中URL重复"})
             continue
         seen.add(identity)
         if identity in existing:
-            preview.append({"name": name, "url": url, "kind": "EXISTS", "status": "EXISTS"})
+            preview.append({"line": line_no, "name": name, "url": url, "kind": "EXISTS", "status": "EXISTS", "reason": "来源已存在，已跳过"})
             continue
         tested = test_source_url(url)
-        preview.append({"name": name or urlparse(url).netloc, "url": tested.get("url", url),
-                        "kind": "NEW", "status": tested["status"]})
+        preview.append({"line": line_no, "name": name or urlparse(url).netloc, "url": tested.get("url", url),
+                        "kind": "NEW", "status": tested["status"],
+                        "recommended_mode": tested.get("recommended_mode", ""),
+                        "reason": (
+                            f"可新增，建议{tested.get('recommendation') or 'HTTP列表页'}"
+                            if tested["status"] in {"READY", "BROWSER_READY"}
+                            else tested.get("failure_reason") or "来源连接测试失败"
+                        )})
     return preview
 
 
@@ -777,15 +898,21 @@ def save_source_import(rows: list[dict[str, Any]], owner: str, db_path: str | Pa
     counts = {"created": 0, "exists": 0, "invalid": 0, "failed": 0}
     for row in rows:
         status = row.get("status")
-        if status == "READY":
-            created = create_collection_source(
-                name=str(row.get("name") or "导入来源"), source_type="webpage",
-                url=str(row["url"]), owner=owner, is_enabled=False, db_path=db_path,
-            )
-            with db_connection(db_path) as conn:
-                conn.execute("UPDATE v04g_monitoring_sources SET health_status='candidate',note='R7.1 BATCH IMPORT' WHERE id=?", (created["id"],))
-            counts["created"] += 1
-        elif status == "EXISTS":
+        if status in {"READY", "BROWSER_READY"}:
+            try:
+                recommended_mode = str(row.get("recommended_mode") or "http")
+                created = create_collection_source(
+                    name=str(row.get("name") or "导入来源"),
+                    source_type="dynamic_page" if recommended_mode == "playwright" else "webpage",
+                    collection_mode=recommended_mode if recommended_mode in COLLECTION_MODES else "http",
+                    url=str(row["url"]), owner=owner, is_enabled=False, db_path=db_path,
+                )
+                with db_connection(db_path) as conn:
+                    conn.execute("UPDATE v04g_monitoring_sources SET health_status='candidate',note='BATCH IMPORT' WHERE id=?", (created["id"],))
+                counts["created"] += 1
+            except (ValueError, sqlite3.Error):
+                counts["failed"] += 1
+        elif status in {"EXISTS", "DUPLICATE_IN_FILE"}:
             counts["exists"] += 1
         elif status == "INVALID_URL":
             counts["invalid"] += 1
@@ -1121,16 +1248,22 @@ def discover_source_candidates(
     homepage_url: str, organization_id: int | str | None = None, organization_name: str = "",
     owner: str = "", db_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    tested = test_source_url(homepage_url)
+    homepage_url = str(homepage_url or "").strip()
+    if homepage_url.startswith(("http://", "https://")):
+        probe = _probe_source_access(homepage_url)
+        tested = _source_test_result(homepage_url, probe)
+    else:
+        probe = {"body": ""}
+        tested = test_source_url(homepage_url)
     result = {
         "domain": urlparse(homepage_url).netloc, "homepage_ok": tested["ok"], "rss": 0,
         "sitemap": 0, "newsroom": 0, "created": 0, "duplicates": 0, "invalid": 0,
-        "candidates": [],
+        "candidates": [], "homepage_test": tested,
     }
     if not tested["ok"]:
         result["invalid"] = 1
         return result
-    body, _, _, _ = _http_get(homepage_url, timeout=8, retries=0)
+    body = str(probe.get("body") or "")
     soup = BeautifulSoup(body, "html.parser")
     found: list[tuple[str, str, str, str]] = []
     for node in soup.find_all("link", href=True):
@@ -1192,7 +1325,8 @@ def discover_source_candidates(
         }
         created = create_collection_source(
             name=name[:200] or result["domain"], source_type="rss" if check.get("is_rss") else source_type,
-            url=canonical_url, collection_mode="rss" if check.get("is_rss") else "http",
+            url=canonical_url,
+            collection_mode="rss" if check.get("is_rss") else str(check.get("recommended_mode") or "http"),
             subject_type="organization" if organization_id else "", subject_id=str(organization_id or ""),
             owner=owner, compliance_note=json.dumps(
                 {"organization": organization_name, "method": method, "test": persisted_test}, ensure_ascii=False

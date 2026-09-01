@@ -75,7 +75,7 @@ DETAIL = {"candidate": CANDIDATE, "matches": [], "history": [], "logs": [], "evi
 def test_intelligence_product_navigation_excludes_admin_operations():
     context = {"permissions": ["view_internal", "review_data", "manage_monitoring"], "auth_disabled": True}
     items = get_secondary_navigation(context, "intelligence", "/processing/candidates/201")
-    assert [item["label"] for item in items] == ["情报首页", "报告", "我的订阅"]
+    assert [item["label"] for item in items] == ["情报首页", "采集与数据源", "报告", "我的订阅"]
     assert resolve_active_capability("/processing/candidates/201/evidence")["capability_key"] == "intelligence.candidates"
     assert resolve_active_capability("/collection/snapshots/301")["capability_key"] == "intelligence.raw_items"
 

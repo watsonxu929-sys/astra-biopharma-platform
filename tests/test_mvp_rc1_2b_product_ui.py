@@ -19,7 +19,17 @@ def test_rc1_2b_primary_and_secondary_navigation_are_frozen() -> None:
         assert [item["label"] for item in get_client_navigation(context, path="/platform")["primary"]] == EXPECTED_PRIMARY
     admin_context = {"permissions": sorted(ROLE_PERMISSIONS["admin"])}
     assert [item["label"] for item in get_secondary_navigation(admin_context, "intelligence", "/intelligence")] == [
-        "情报首页", "报告", "我的订阅",
+        "情报首页", "采集与数据源", "报告", "我的订阅",
+    ]
+    operator_context = {"permissions": sorted(ROLE_PERMISSIONS["operator"])}
+    assert [item["label"] for item in get_secondary_navigation(operator_context, "intelligence", "/collection")] == [
+        "情报首页", "采集与数据源", "报告", "我的订阅",
+    ]
+    source_navigation = get_client_navigation(operator_context, path="/collection/sources")["secondary"]
+    assert next(item for item in source_navigation if item["label"] == "采集与数据源")["active"] is True
+    viewer_context = {"permissions": sorted(ROLE_PERMISSIONS["viewer"])}
+    assert "采集与数据源" not in [
+        item["label"] for item in get_secondary_navigation(viewer_context, "intelligence", "/intelligence")
     ]
     assert [item["label"] for item in get_secondary_navigation(admin_context, "club", "/club")] == [
         "俱乐部首页", "会员", "活动", "供需与匹配",
@@ -60,6 +70,10 @@ def test_shared_shell_separates_product_and_admin_surfaces() -> None:
     assert "surface-admin" in shell
     assert "管理控制台" in shell
     assert "返回业务产品" in shell
+    assert "path.startswith('/admin') or path.startswith('/system') or path.startswith('/collection')" not in shell
+    collection = (ROOT / "app/templates/v05f_collection.html").read_text(encoding="utf-8")
+    for label in ("采集概览", "采集来源", "采集任务", "原始情报"):
+        assert label in collection
     processing = (ROOT / "app/templates/v05g_processing.html").read_text(encoding="utf-8")
     assert "管理员工具" in processing
     assert "管理控制台" in processing

@@ -470,10 +470,22 @@ def permissions_for(user: dict[str, Any] | None) -> set[str]:
 
 
 def auth_disabled_user(db_path: str | Path | None = None) -> dict[str, Any]:
-    """Return a real positive-id local principal for APP_AUTH_DISABLED mode."""
-    ensure_security_schema(db_path)
+    """Use a real local user when the database exists, without creating a missing database."""
+    path = Path(db_path) if db_path else default_db_path()
+    if not path.exists():
+        return {
+            "id": 0,
+            "username": "development-bypass",
+            "display_name": "本地开发模式",
+            "role": "admin",
+            "status": "active",
+            "must_change_password": 0,
+            "session_version": 1,
+            "is_development_identity": True,
+        }
+    ensure_security_schema(path)
     ts = now_iso()
-    with db_connection(db_path) as conn:
+    with db_connection(path) as conn:
         row = conn.execute("SELECT * FROM v05a_users WHERE username='auth_disabled_system'").fetchone()
         if row:
             return dict(row)
@@ -621,7 +633,9 @@ def required_permission(path: str, method: str) -> str | None:
         return "view_internal"
     if path.startswith("/api/v1/network/people/"):
         return "view_internal"
-    if path in {"/club", "/club/members", "/club/matches"} and method in {"GET", "HEAD", "OPTIONS"}:
+    if path in {"/club", "/club/members", "/club/matches", "/club/application"} and method in {"GET", "HEAD", "OPTIONS"}:
+        return "view_internal"
+    if method in {"GET", "HEAD", "OPTIONS"} and bool(re.fullmatch(r"/club/members/[0-9]+", path)):
         return "view_internal"
     if method in {"GET", "HEAD", "OPTIONS"} and (path == "/club/events" or bool(re.fullmatch(r"/club/events/[0-9]+", path))):
         return "view_internal"
@@ -762,15 +776,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         user: dict[str, Any] | None = None
         total_users = 1
         if disabled:
-            user = {
-                "id": 0,
-                "username": "auth-disabled",
-                "display_name": "楠岃瘉妯″紡",
-                "role": "admin",
-                "status": "active",
-                "must_change_password": 0,
-                "session_version": 1,
-            }
+            user = auth_disabled_user()
         else:
             ensure_security_schema()
             total_users = user_count()

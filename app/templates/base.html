@@ -17,7 +17,7 @@
 {% set authenticated = sec.get('authenticated', false) %}
 {% set nav = request.app.state.navigation_for(sec, path) if authenticated else {'primary': [], 'secondary': [], 'account': [], 'admin': []} %}
 {% set is_admin_surface = authenticated and (
-  path.startswith('/admin') or path.startswith('/system') or path.startswith('/collection') or
+  path.startswith('/admin') or path.startswith('/system') or
   path.startswith('/processing') or path.startswith('/review') or
   path.startswith('/intelligence/operations') or path.startswith('/intelligence/monitoring') or
   path.startswith('/network/governance') or path.startswith('/network/relationship-candidates') or
@@ -73,9 +73,9 @@
   {% endif %}
 </header>
 {% if authenticated and nav.secondary and not is_admin_surface %}<nav class="secondary-nav" aria-label="二级导航">{% for item in nav.secondary %}<a class="{{ 'active' if item.active else '' }}" href="{{ item.endpoint }}">{{ item.label }}</a>{% endfor %}</nav>{% endif %}
-<main class="{{ 'public-main' if not authenticated else '' }}">{% block content %}{% endblock %}</main>
+<main class="{{ 'public-main' if not authenticated else 'app-content' }} {% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
 <footer>生物医药产业连接与情报平台 · 内部使用</footer>
 {% block scripts %}{% endblock %}
-<script>(function(){var b=document.querySelector('.menu-button');var menus=document.querySelectorAll('.user-nav');if(b){b.addEventListener('click',function(){document.body.classList.toggle('menu-open');b.setAttribute('aria-expanded',document.body.classList.contains('menu-open')?'true':'false');});}document.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false;});});document.addEventListener('keydown',function(e){if(e.key==='Escape'){menus.forEach(function(m){m.open=false;});document.body.classList.remove('menu-open');if(b)b.setAttribute('aria-expanded','false');}});})();</script>
+<script>(function(){var b=document.querySelector('.menu-button');var menus=document.querySelectorAll('.user-nav');if(b){b.addEventListener('click',function(){document.body.classList.toggle('menu-open');b.setAttribute('aria-expanded',document.body.classList.contains('menu-open')?'true':'false');});}document.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false;});});document.addEventListener('keydown',function(e){if(e.key==='Escape'){menus.forEach(function(m){m.open=false;});document.body.classList.remove('menu-open');if(b)b.setAttribute('aria-expanded','false');}});document.querySelectorAll('[data-bulk-delete]').forEach(function(form){var boxes=form.querySelectorAll('[data-select-item]');var count=form.querySelector('[data-selected-count]');var button=form.querySelector('[data-bulk-delete-button]');function update(){var selected=form.querySelectorAll('[data-select-item]:checked').length;if(count)count.textContent=String(selected);if(button)button.disabled=selected===0;}boxes.forEach(function(box){box.addEventListener('change',update);});update();});})();</script>
 </body>
 </html>

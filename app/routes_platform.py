@@ -1,9 +1,12 @@
 """v0.6 Platform routes -- product pages for the industry connection platform."""
+import csv
+import io
 from datetime import datetime
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, select, func, text
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models import Organization, Person
@@ -25,6 +28,11 @@ from app.services.collection_service import (
 )
 from app.services.entity_governance_service import (
     EntityRegistryService, classify_identity, organization_duplicate_candidates,
+)
+from app.services.data_quality import (
+    check_organization_duplicates, check_person_duplicates,
+    organization_reference_reasons, person_reference_reasons,
+    resolve_organization_for_person,
 )
 from app.services.organization_access_service import OrganizationAccessError, update_organization
 from app.services.platform_service import (
@@ -1094,6 +1102,100 @@ def _next_external_id(prefix: str) -> str:
     return f"{prefix}-{datetime.now():%Y%m%d%H%M%S%f}"
 
 
+def _bulk_rows(source_text: str, expected: int = 4) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for line_no, raw_line in enumerate(str(source_text or "").splitlines(), 1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        delimiter = "\t" if "\t" in line else ","
+        values = next(csv.reader(io.StringIO(line), delimiter=delimiter))
+        values = [value.strip() for value in values]
+        if line_no == 1 and values and values[0].casefold() in {
+            "name", "standard_name", "organization_name", "姓名", "企业名称", "机构名称",
+        }:
+            continue
+        values.extend([""] * max(0, expected - len(values)))
+        rows.append({"line": line_no, "values": values[:expected]})
+    return rows[:100]
+
+
+def _organization_bulk_preview(source_text: str, db: Session) -> list[dict[str, object]]:
+    preview = []
+    seen_names: set[str] = set()
+    seen_websites: set[str] = set()
+    for row in _bulk_rows(source_text):
+        name, short_name, website, region = row["values"]
+        name_key = "".join(str(name).casefold().split())
+        website_key = str(website).casefold().rstrip("/")
+        status = "NEW"
+        candidates: list[str] = []
+        reason = "可新增"
+        if not name:
+            status, reason = "INVALID", "企业/机构名称不能为空"
+        elif name_key in seen_names or (website_key and website_key in seen_websites):
+            status, reason = "EXACT_DUPLICATE", "本次批量输入中主体或官网重复"
+        elif website and not str(website).startswith(("http://", "https://")):
+            status, reason = "INVALID", "官网必须使用http或https"
+        else:
+            duplicate = check_organization_duplicates(db, str(name))
+            exact = [*duplicate.exact, *duplicate.normalized]
+            if exact:
+                status, reason = "EXACT_DUPLICATE", "主体已存在"
+                candidates = [item.standard_name for item in exact[:5]]
+            elif duplicate.similar:
+                status, reason = "POSSIBLE_DUPLICATE", "发现可能重复主体，需管理员确认"
+                candidates = [item.standard_name for item in duplicate.similar[:5]]
+        if status in {"NEW", "POSSIBLE_DUPLICATE"}:
+            seen_names.add(name_key)
+            if website_key:
+                seen_websites.add(website_key)
+        preview.append({
+            "line": row["line"], "name": name, "short_name": short_name,
+            "website": website, "region": region, "status": status,
+            "reason": reason, "candidates": candidates,
+        })
+    return preview
+
+
+def _person_bulk_preview(source_text: str, db: Session) -> list[dict[str, object]]:
+    preview = []
+    seen_people: set[tuple[str, str, str]] = set()
+    for row in _bulk_rows(source_text, expected=3):
+        name, organization_name, public_role = row["values"]
+        person_key = tuple("".join(str(value).casefold().split()) for value in (name, organization_name, public_role))
+        status = "NEW"
+        candidates: list[str] = []
+        reason = "可新增"
+        resolved_org = ""
+        if not name:
+            status, reason = "INVALID", "姓名不能为空"
+        elif person_key in seen_people:
+            status, reason = "EXACT_DUPLICATE", "本次批量输入中人物重复"
+        else:
+            resolved_org, org_candidates = resolve_organization_for_person(db, str(organization_name))
+            if organization_name and not resolved_org:
+                status = "ORGANIZATION_NOT_UNIQUE"
+                reason = "所属企业不存在或无法唯一匹配"
+                candidates = [item.standard_name for item in org_candidates]
+            else:
+                duplicate = check_person_duplicates(db, str(name), resolved_org, str(public_role))
+                if duplicate.exact:
+                    status, reason = "EXACT_DUPLICATE", "人物已存在"
+                    candidates = [f"{item.name} · {item.organization_network or '未关联机构'} · {item.public_role or '未填写职位'}" for item in duplicate.exact]
+                elif duplicate.possible:
+                    status, reason = "POSSIBLE_DUPLICATE", "存在同名人物，需管理员确认"
+                    candidates = [f"{item.name} · {item.organization_network or '未关联机构'} · {item.public_role or '未填写职位'}" for item in duplicate.possible]
+        if status in {"NEW", "POSSIBLE_DUPLICATE"}:
+            seen_people.add(person_key)
+        preview.append({
+            "line": row["line"], "name": name, "organization_name": organization_name,
+            "resolved_organization": resolved_org, "public_role": public_role,
+            "status": status, "reason": reason, "candidates": candidates,
+        })
+    return preview
+
+
 @router.get("/intelligence/operations", response_class=HTMLResponse)
 def intelligence_operations(request: Request):
     if not _can_manage_intelligence(request):
@@ -1121,16 +1223,47 @@ def admin_people(request: Request, q: str = Query(""), db: Session = Depends(get
     return render(request, "platform/admin_people.html", people=people, person=None, q=q)
 
 
+@router.get("/admin/people/new", response_class=HTMLResponse)
+def admin_new_person(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    organization_options = list(db.scalars(
+        select(Organization.standard_name)
+        .where(Organization.is_active.is_(True))
+        .order_by(Organization.standard_name)
+        .limit(500)
+    ).all())
+    return render(
+        request, "platform/admin_people.html", people=[], person=None, q="", create_only=True,
+        organization_options=organization_options,
+    )
+
+
 @router.post("/admin/people")
 async def admin_create_person(request: Request, db: Session = Depends(get_db)):
     if not _can_manage_people_orgs(request):
         raise HTTPException(403, "people admin permission required")
     form = await request.form()
+    name = str(form.get("name", "")).strip()
+    organization_input = str(form.get("organization_network", "")).strip()
+    public_role = str(form.get("public_role", "")).strip()
+    if not name:
+        return RedirectResponse("/admin/people/new?error=姓名不能为空", 303)
+    organization_name, org_candidates = resolve_organization_for_person(db, organization_input)
+    if organization_input and not organization_name:
+        labels = "、".join(item.standard_name for item in org_candidates) or "无匹配主体"
+        return RedirectResponse(f"/admin/people/new?error=所属企业无法唯一匹配：{labels}", 303)
+    duplicate = check_person_duplicates(db, name, organization_name, public_role)
+    if duplicate.exact:
+        return RedirectResponse("/admin/people/new?error=人物已存在，请编辑现有记录", 303)
+    if duplicate.possible and form.get("confirm_possible") != "1":
+        labels = "、".join(item.name for item in duplicate.possible)
+        return RedirectResponse(f"/admin/people/new?error=存在同名人物：{labels}；核对机构和职位后可勾选确认新增&possible=1", 303)
     person = Person(
         external_id=_next_external_id("PER"),
-        name=str(form.get("name", "")).strip(),
-        public_role=str(form.get("public_role", "")).strip() or None,
-        organization_network=str(form.get("organization_network", "")).strip() or None,
+        name=name,
+        public_role=public_role or None,
+        organization_network=organization_name or None,
         ability_tags=str(form.get("ability_tags", "")).strip() or None,
         value_provided=str(form.get("value_provided", "")).strip() or None,
         visibility=str(form.get("visibility", "内部")).strip() or "内部",
@@ -1140,7 +1273,53 @@ async def admin_create_person(request: Request, db: Session = Depends(get_db)):
     )
     db.add(person)
     db.commit()
-    return RedirectResponse(f"/admin/people/{person.id}", 303)
+    return RedirectResponse(f"/admin/people?message=人物已新增：{person.name}", 303)
+
+
+@router.get("/admin/people/bulk", response_class=HTMLResponse)
+def admin_people_bulk(request: Request):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    return render(request, "platform/admin_people.html", people=[], person=None, q="", bulk_import=True, bulk_preview=[], source_text="")
+
+
+@router.post("/admin/people/bulk/preview", response_class=HTMLResponse)
+async def admin_people_bulk_preview(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    form = await request.form()
+    source_text = str(form.get("source_text") or "")
+    preview = _person_bulk_preview(source_text, db)
+    return render(request, "platform/admin_people.html", people=[], person=None, q="", bulk_import=True, bulk_preview=preview, source_text=source_text)
+
+
+@router.post("/admin/people/bulk/confirm")
+async def admin_people_bulk_confirm(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    form = await request.form()
+    source_text = str(form.get("source_text") or "")
+    force_rows = {int(value) for value in form.getlist("confirm_rows") if str(value).isdigit()}
+    created = skipped = failed = 0
+    for row in _person_bulk_preview(source_text, db):
+        if row["status"] == "EXACT_DUPLICATE":
+            skipped += 1
+            continue
+        if row["status"] == "POSSIBLE_DUPLICATE" and int(row["line"]) not in force_rows:
+            skipped += 1
+            continue
+        if row["status"] not in {"NEW", "POSSIBLE_DUPLICATE"}:
+            failed += 1
+            continue
+        db.add(Person(
+            external_id=_next_external_id("PER"), name=str(row["name"]),
+            public_role=str(row["public_role"] or "") or None,
+            organization_network=str(row["resolved_organization"] or "") or None,
+            visibility="内部", verification_status="待核验", manually_confirmed=True, is_active=True,
+        ))
+        created += 1
+    db.commit()
+    return RedirectResponse(f"/admin/people?message=批量新增：{created}；已存在或待确认：{skipped}；失败：{failed}", 303)
 
 
 @router.get("/admin/people/{person_id:int}", response_class=HTMLResponse)
@@ -1151,7 +1330,16 @@ def admin_person_detail(person_id: int, request: Request, q: str = Query(""), db
     if not person:
         raise HTTPException(404, "person not found")
     people = list(db.scalars(select(Person).order_by(desc(Person.created_at)).limit(100)).all())
-    return render(request, "platform/admin_people.html", people=people, person=person, q=q)
+    organization_options = list(db.scalars(
+        select(Organization.standard_name)
+        .where(Organization.is_active.is_(True))
+        .order_by(Organization.standard_name)
+        .limit(500)
+    ).all())
+    return render(
+        request, "platform/admin_people.html", people=people, person=person, q=q,
+        organization_options=organization_options,
+    )
 
 
 @router.post("/admin/people/{person_id:int}/update")
@@ -1162,9 +1350,19 @@ async def admin_update_person(person_id: int, request: Request, db: Session = De
     if not person:
         raise HTTPException(404, "person not found")
     form = await request.form()
-    person.name = str(form.get("name", person.name)).strip() or person.name
-    person.public_role = str(form.get("public_role", "")).strip() or None
-    person.organization_network = str(form.get("organization_network", "")).strip() or None
+    name = str(form.get("name", person.name)).strip() or person.name
+    public_role = str(form.get("public_role", "")).strip()
+    organization_input = str(form.get("organization_network", "")).strip()
+    organization_name, org_candidates = resolve_organization_for_person(db, organization_input)
+    if organization_input and not organization_name:
+        labels = "、".join(item.standard_name for item in org_candidates) or "无匹配主体"
+        return RedirectResponse(f"/admin/people/{person_id}?error=所属企业无法唯一匹配：{labels}", 303)
+    duplicate = check_person_duplicates(db, name, organization_name, public_role, current_id=person_id)
+    if duplicate.exact:
+        return RedirectResponse(f"/admin/people/{person_id}?error=相同姓名、企业和职位的人物已存在", 303)
+    person.name = name
+    person.public_role = public_role or None
+    person.organization_network = organization_name or None
     person.ability_tags = str(form.get("ability_tags", "")).strip() or None
     person.value_provided = str(form.get("value_provided", "")).strip() or None
     person.visibility = str(form.get("visibility", person.visibility)).strip() or person.visibility
@@ -1174,7 +1372,56 @@ async def admin_update_person(person_id: int, request: Request, db: Session = De
     if not person.is_active:
         person.deactivated_at = datetime.now()
     db.commit()
-    return RedirectResponse(f"/admin/people/{person.id}", 303)
+    return RedirectResponse(f"/admin/people/{person.id}?message=人物主数据已保存", 303)
+
+
+@router.post("/admin/people/{person_id:int}/delete")
+def admin_delete_person(person_id: int, request: Request, confirm: str = Form(""), db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    if confirm != "1":
+        return RedirectResponse(f"/admin/people/{person_id}?error=请确认安全删除", 303)
+    person = db.get(Person, int(person_id))
+    if not person:
+        return RedirectResponse("/admin/people?error=人物不存在", 303)
+    reasons = person_reference_reasons(db, person)
+    if reasons:
+        return RedirectResponse(f"/admin/people/{person_id}?error=该人物已有正式业务关联，不能直接删除：{'；'.join(reasons)}", 303)
+    db.delete(person)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(f"/admin/people/{person_id}?error=该人物仍有数据库引用，未执行删除", 303)
+    return RedirectResponse("/admin/people?message=人物已安全删除", 303)
+
+
+@router.post("/admin/people/bulk-delete")
+async def admin_bulk_delete_people(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    form = await request.form()
+    deleted = 0
+    protected: list[str] = []
+    for raw_id in form.getlist("person_ids")[:100]:
+        if not str(raw_id).isdigit():
+            continue
+        person = db.get(Person, int(raw_id))
+        if not person:
+            continue
+        reasons = person_reference_reasons(db, person)
+        if reasons:
+            protected.append(f"{person.name}（{'、'.join(reasons)}）")
+            continue
+        db.delete(person)
+        try:
+            db.commit()
+            deleted += 1
+        except IntegrityError:
+            db.rollback()
+            protected.append(f"{person.name}（仍有数据库引用）")
+    detail = f"；受保护：{'；'.join(protected[:8])}" if protected else ""
+    return RedirectResponse(f"/admin/people?message=成功删除：{deleted}；保留：{len(protected)}{detail}", 303)
 
 
 @router.get("/admin/organizations", response_class=HTMLResponse)
@@ -1217,18 +1464,92 @@ async def admin_create_organization(request: Request, db: Session = Depends(get_
     if not _can_manage_people_orgs(request):
         raise HTTPException(403, "organization admin permission required")
     form = await request.form()
+    standard_name = str(form.get("standard_name", "")).strip()
+    if not standard_name:
+        return RedirectResponse("/admin/organizations/new?error=企业或机构名称不能为空", 303)
+    duplicate = check_organization_duplicates(db, standard_name)
+    exact = [*duplicate.exact, *duplicate.normalized]
+    if exact:
+        return RedirectResponse(f"/admin/organizations/new?error=主体已存在：{exact[0].standard_name}", 303)
+    if duplicate.similar and form.get("confirm_possible") != "1":
+        labels = "、".join(item.standard_name for item in duplicate.similar)
+        return RedirectResponse(f"/admin/organizations/new?error=发现可能重复主体：{labels}；确认不是同一主体后可勾选继续新增&possible=1", 303)
+    official_website = str(form.get("official_website", "")).strip()
+    if official_website and not official_website.startswith(("http://", "https://")):
+        return RedirectResponse("/admin/organizations/new?error=官网必须使用http或https", 303)
     org = Organization(
-        external_id=_next_external_id("ORG"), standard_name=str(form.get("standard_name", "")).strip(),
+        external_id=_next_external_id("ORG"), standard_name=standard_name,
         short_name=str(form.get("short_name", "")).strip() or None,
         org_type=str(form.get("org_type", "")).strip() or None, region=str(form.get("region", "")).strip() or None,
         industry_tags=str(form.get("industry_tags", "")).strip() or None, resources=str(form.get("resources", "")).strip() or None,
         needs=str(form.get("needs", "")).strip() or None, visibility=str(form.get("visibility", "内部")).strip() or "内部",
         verification_status=str(form.get("verification_status", "待核验")).strip() or "待核验",
-        manually_confirmed=True, is_active=bool(form.get("is_active")),
+        source_url=official_website or None, manually_confirmed=True, is_active=bool(form.get("is_active")),
     )
     db.add(org)
     db.commit()
-    return RedirectResponse(f"/admin/organizations/{org.id}", 303)
+    if official_website:
+        actor = request.scope.get("security_context", {}).get("user", {}).get("username", "admin")
+        set_admin_confirmed_official_domain(org.external_id, official_website, actor, db_path=Path(str(db.get_bind().url.database)))
+    return RedirectResponse(f"/admin/organizations?message=企业/机构已新增：{org.standard_name}", 303)
+
+
+@router.get("/admin/organizations/bulk", response_class=HTMLResponse)
+def admin_organizations_bulk(request: Request):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    return render(request, "platform/admin_organizations.html", orgs=[], org=None, related_people=[], q="",
+                  bulk_import=True, bulk_preview=[], source_text="", show_form=False, website_import=False,
+                  priority_filter=False, incomplete_count=0)
+
+
+@router.post("/admin/organizations/bulk/preview", response_class=HTMLResponse)
+async def admin_organizations_bulk_preview(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    form = await request.form()
+    source_text = str(form.get("source_text") or "")
+    preview = _organization_bulk_preview(source_text, db)
+    return render(request, "platform/admin_organizations.html", orgs=[], org=None, related_people=[], q="",
+                  bulk_import=True, bulk_preview=preview, source_text=source_text, show_form=False,
+                  website_import=False, priority_filter=False, incomplete_count=0)
+
+
+@router.post("/admin/organizations/bulk/confirm")
+async def admin_organizations_bulk_confirm(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    form = await request.form()
+    source_text = str(form.get("source_text") or "")
+    force_rows = {int(value) for value in form.getlist("confirm_rows") if str(value).isdigit()}
+    created_rows: list[tuple[str, str]] = []
+    skipped = failed = 0
+    for row in _organization_bulk_preview(source_text, db):
+        if row["status"] == "EXACT_DUPLICATE":
+            skipped += 1
+            continue
+        if row["status"] == "POSSIBLE_DUPLICATE" and int(row["line"]) not in force_rows:
+            skipped += 1
+            continue
+        if row["status"] not in {"NEW", "POSSIBLE_DUPLICATE"}:
+            failed += 1
+            continue
+        external_id = _next_external_id("ORG")
+        website = str(row["website"] or "")
+        db.add(Organization(
+            external_id=external_id, standard_name=str(row["name"]),
+            short_name=str(row["short_name"] or "") or None,
+            region=str(row["region"] or "") or None, source_url=website or None,
+            visibility="内部", verification_status="待核验", manually_confirmed=True, is_active=True,
+        ))
+        created_rows.append((external_id, website))
+    db.commit()
+    actor = request.scope.get("security_context", {}).get("user", {}).get("username", "admin")
+    db_path = Path(str(db.get_bind().url.database))
+    for external_id, website in created_rows:
+        if website:
+            set_admin_confirmed_official_domain(external_id, website, actor, db_path=db_path)
+    return RedirectResponse(f"/admin/organizations?message=批量新增：{len(created_rows)}；已存在或待确认：{skipped}；失败：{failed}", 303)
 
 
 @router.get("/admin/organizations/website-import", response_class=HTMLResponse)
@@ -1302,9 +1623,14 @@ async def admin_update_organization(org_id: int, request: Request, db: Session =
     actor_user = request.scope.get("security_context", {}).get("user", {})
     actor = actor_user.get("username", "admin")
     db_path = Path(str(db.get_bind().url.database))
+    proposed_name = str(form.get("standard_name", org.standard_name)).strip() or org.standard_name
+    duplicate = check_organization_duplicates(db, proposed_name, current_id=org_id)
+    exact = [*duplicate.exact, *duplicate.normalized]
+    if exact:
+        return RedirectResponse(f"/admin/organizations/{org_id}?error=同名主体已存在：{exact[0].standard_name}", 303)
     try:
         update_organization(org_id, {
-            "name": str(form.get("standard_name", org.standard_name)).strip(),
+            "name": proposed_name,
             "short_name": str(form.get("short_name", "")).strip(), "organization_type": str(form.get("org_type", "")).strip(),
             "region": str(form.get("region", "")).strip(), "industry_tags": str(form.get("industry_tags", "")).strip(),
             "resources": str(form.get("resources", "")).strip(), "needs": str(form.get("needs", "")).strip(),
@@ -1326,6 +1652,55 @@ async def admin_update_organization(org_id: int, request: Request, db: Session =
         detail = getattr(exc, "message", str(exc))
         return RedirectResponse(f"/admin/organizations/{org_id}?error={detail}", 303)
     return RedirectResponse(f"/admin/organizations/{org_id}?message=机构主数据已保存", 303)
+
+
+@router.post("/admin/organizations/{org_id:int}/delete")
+def admin_delete_organization(org_id: int, request: Request, confirm: str = Form(""), db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    if confirm != "1":
+        return RedirectResponse(f"/admin/organizations/{org_id}?error=请确认安全删除", 303)
+    org = db.get(Organization, int(org_id))
+    if not org:
+        return RedirectResponse("/admin/organizations?error=主体不存在", 303)
+    reasons = organization_reference_reasons(db, org)
+    if reasons:
+        return RedirectResponse(f"/admin/organizations/{org_id}?error=该主体已有正式业务关联，不能直接删除：{'；'.join(reasons)}", 303)
+    db.delete(org)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(f"/admin/organizations/{org_id}?error=该主体仍有数据库引用，未执行删除", 303)
+    return RedirectResponse("/admin/organizations?message=主体已安全删除", 303)
+
+
+@router.post("/admin/organizations/bulk-delete")
+async def admin_bulk_delete_organizations(request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    form = await request.form()
+    deleted = 0
+    protected: list[str] = []
+    for raw_id in form.getlist("organization_ids")[:100]:
+        if not str(raw_id).isdigit():
+            continue
+        org = db.get(Organization, int(raw_id))
+        if not org:
+            continue
+        reasons = organization_reference_reasons(db, org)
+        if reasons:
+            protected.append(f"{org.standard_name}（{'、'.join(reasons)}）")
+            continue
+        db.delete(org)
+        try:
+            db.commit()
+            deleted += 1
+        except IntegrityError:
+            db.rollback()
+            protected.append(f"{org.standard_name}（仍有数据库引用）")
+    detail = f"；受保护：{'；'.join(protected[:8])}" if protected else ""
+    return RedirectResponse(f"/admin/organizations?message=成功删除：{deleted}；保留：{len(protected)}{detail}", 303)
 
 @router.get("/admin/intelligence", response_class=HTMLResponse)
 def admin_intelligence(request: Request, message: str = Query(""), db: Session = Depends(get_db)):

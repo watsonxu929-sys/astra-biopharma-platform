@@ -6,6 +6,7 @@ from app.platform.capability_registry import filter_capabilities, list_capabilit
 
 INTELLIGENCE_WORK_ENTRY_KEYS = {
     "intelligence.feed",
+    "intelligence.collection",
     "intelligence.reports",
     "intelligence.subscriptions",
 }
@@ -129,7 +130,9 @@ def get_client_navigation(context: dict[str, Any] | None, *, client: str = "web"
     for item in primary:
         item["active"] = item.get("category") == active_category
     for item in secondary:
-        item["active"] = item.get("key") == active_key
+        item["active"] = item.get("key") == active_key or (
+            item.get("key") == "intelligence.collection" and path.startswith("/collection")
+        )
     return {
         "client": client,
         "primary": primary,

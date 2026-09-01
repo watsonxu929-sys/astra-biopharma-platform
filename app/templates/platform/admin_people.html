@@ -1,114 +1,23 @@
 {% extends "platform/base.html" %}
 {% block platform_title %}人物库管理{% endblock %}
-{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/admin/platform">管理控制台</a><span class="sep">/</span><span class="current">人物库</span></span>{% endblock %}
+{% block breadcrumb %}<span class="breadcrumb"><a href="/platform">工作台</a><span class="sep">/</span><a href="/admin/platform">管理控制台</a><span class="sep">/</span><span class="current">主体与人物管理 / 人物</span></span>{% endblock %}
 {% block page_header %}
-<section class="page-header">
-  <div class="page-header-top">
-    <h1>人物库</h1>
-    <div class="header-actions">
-      <a class="btn btn-primary" href="/admin/people/new">新增人物</a>
-      <a class="btn" href="/club/import">批量导入</a>
-    </div>
-  </div>
-  <p class="page-desc">管理产业人物主数据，支持标签、机构关系和维护历史。</p>
-</section>
+<section class="page-header"><div class="page-header-top"><h1>{{ '批量新增人物' if bulk_import else ('编辑人物' if person else ('新增人物' if create_only else '人物管理')) }}</h1><div class="header-actions"><a class="btn btn-primary" href="/admin/people/new">新增人物</a><a class="btn" href="/admin/people/bulk">批量新增</a><a class="btn" href="/admin/organizations">企业 / 机构</a></div></div><p class="page-desc">维护人物主数据；重复、机构歧义和正式业务引用会在写入前明确提示。</p></section>
 {% endblock %}
 {% block platform_content %}
-<section class="filter-row">
-  <form method="get" action="/admin/people" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-    <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索姓名、机构、标签" style="min-width:220px;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:13px;">
-    <button class="btn btn-sm" type="submit">搜索</button>
-    {% if q %}<a class="btn btn-sm" href="/admin/people" style="color:var(--color-text-muted);">清除</a>{% endif %}
-  </form>
-  <span style="font-size:12px;color:var(--color-text-muted);">共 {{ people|default([])|length }} 人</span>
-</section>
+{% if request.query_params.get('message') %}<div class="success-box">{{ request.query_params.get('message') }}</div>{% endif %}
+{% if request.query_params.get('error') %}<div class="warning-box">{{ request.query_params.get('error') }}</div>{% endif %}
 
-<section class="platform-card" style="padding:0;overflow:hidden;">
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>姓名</th>
-        <th>职务</th>
-        <th>所属机构</th>
-        <th>标签</th>
-        <th>状态</th>
-        <th>更新时间</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in people|default([]) %}
-      <tr>
-        <td><a href="/admin/people/{{ p.id }}" style="font-weight:500;color:var(--color-text);text-decoration:none;">{{ p.name }}</a></td>
-        <td>{{ p.public_role or '' }}</td>
-        <td>{{ p.organization_network or '' }}</td>
-        <td>{% for tag in (p.ability_tags or '').split(',')[:3] %}<span class="tag tag-blue">{{ tag.strip() }}</span>{% endfor %}</td>
-        <td><span class="badge {{ 'badge-active' if p.is_active else 'badge-inactive' }}">{{ '启用' if p.is_active else '停用' }}</span></td>
-        <td style="font-size:12px;color:var(--color-text-muted);">{{ p.updated_at or '' }}</td>
-        <td class="actions">
-          <a href="/admin/people/{{ p.id }}">编辑</a>
-          <a href="/network/people/{{ p.id }}">详情</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="7" class="empty">暂无人物数据。<a href="/admin/people/new">新增第一个人物</a>。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+{% if bulk_import %}
+<section class="platform-card"><h2>批量粘贴</h2><p class="text-muted">每行：姓名,所属企业,职位。所属企业必须唯一匹配现有企业/机构；最多100行。</p><form method="post" action="/admin/people/bulk/preview" class="platform-form"><textarea class="form-textarea" name="source_text" rows="9" placeholder="张三,复星医药,BD负责人&#10;李四,恒瑞医药,研发总监">{{ source_text or '' }}</textarea><button class="btn btn-primary" type="submit">解析并检查</button></form></section>
+{% if bulk_preview %}<section class="data-table-section mt-16"><h2>检查结果</h2><form method="post" action="/admin/people/bulk/confirm"><textarea name="source_text" hidden>{{ source_text }}</textarea><div class="table-wrap"><table class="data-table"><thead><tr><th>行</th><th>姓名</th><th>所属企业</th><th>职位</th><th>结果</th><th>人工确认</th></tr></thead><tbody>{% for row in bulk_preview %}<tr><td>{{ row.line }}</td><td>{{ row.name }}</td><td>{{ row.resolved_organization or row.organization_name or '未填写' }}</td><td>{{ row.public_role or '未填写' }}</td><td><strong>{{ {'NEW':'可新增','EXACT_DUPLICATE':'人物已存在','POSSIBLE_DUPLICATE':'可能重复','ORGANIZATION_NOT_UNIQUE':'企业不明确','INVALID':'输入错误'}.get(row.status,row.status) }}</strong><div class="text-muted">{{ row.reason }}{% if row.candidates %}：{{ row.candidates|join('；') }}{% endif %}</div></td><td>{% if row.status == 'POSSIBLE_DUPLICATE' %}<label class="form-checkbox"><input type="checkbox" name="confirm_rows" value="{{ row.line }}"> 确认新增</label>{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></div><button class="btn btn-primary" type="submit">保存可新增项</button><a class="btn btn-outline" href="/admin/people">取消</a></form></section>{% endif %}
 
-{% if not person %}
-<section class="platform-card mt-16">
-  <h3>新增人物</h3>
-  <form method="post" action="/admin/people" class="platform-form">
-    <div class="grid-2">
-      <label>姓名<input name="name" required style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-      <label>公开身份<input name="public_role" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-    </div>
-    <div class="grid-2">
-      <label>机构关系<input name="organization_network" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-      <label>能力/标签<input name="ability_tags" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-    </div>
-    <label>价值与合作偏好<textarea name="value_provided" rows="3" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></textarea></label>
-    <div class="grid-2">
-      <label>可见性<input name="visibility" value="内部" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-      <label>核验状态<input name="verification_status" value="待核验" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-    </div>
-    <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="is_active" value="1" checked> 启用</label>
-    <div style="display:flex;gap:8px;margin-top:16px;">
-      <button class="btn btn-primary" type="submit">保存人物</button>
-    </div>
-  </form>
-</section>
+{% elif create_only or person %}
+<section class="platform-card"><h2>{{ '编辑人物：' ~ person.name if person else '新增人物' }}</h2><form method="post" action="{{ '/admin/people/' ~ person.id ~ '/update' if person else '/admin/people' }}" class="platform-form"><div class="grid-2"><label>姓名<input name="name" required value="{{ person.name if person else '' }}"></label><label>职位<input name="public_role" value="{{ person.public_role or '' if person else '' }}"></label></div><div class="grid-2"><label>所属企业 / 机构<input name="organization_network" list="organization-options" value="{{ person.organization_network or '' if person else '' }}" placeholder="输入名称搜索并选择现有企业/机构"><datalist id="organization-options">{% for organization_name in organization_options|default([]) %}<option value="{{ organization_name }}">{% endfor %}</datalist><span class="form-help">按正式名称搜索；保存时会进行唯一匹配，不使用内部编号。</span></label><label>能力 / 标签<input name="ability_tags" value="{{ person.ability_tags or '' if person else '' }}"></label></div><label>简介、能力与合作偏好<textarea name="value_provided" rows="3">{{ person.value_provided or '' if person else '' }}</textarea></label><div class="grid-2"><label>可见性<input name="visibility" value="{{ person.visibility or '内部' if person else '内部' }}"></label><label>核验状态<input name="verification_status" value="{{ person.verification_status or '待核验' if person else '待核验' }}"></label></div>{% if request.query_params.get('possible') %}<label class="form-checkbox"><input type="checkbox" name="confirm_possible" value="1" required> 我已核对同名人物，确认这是不同人物</label>{% endif %}<label class="form-checkbox"><input type="checkbox" name="is_active" value="1" {% if not person or person.is_active %}checked{% endif %}> 启用</label><div class="form-actions"><button class="btn btn-primary" type="submit">保存人物</button><a class="btn btn-outline" href="/admin/people">返回列表</a></div></form></section>
+{% if person %}<section class="platform-card mt-16 danger-box"><h2>安全删除</h2><p>删除前将检查关系、情报主体关联、资源、匹配、机会、跟进、会员、活动和证据。存在正式业务历史时不会删除。</p><form method="post" action="/admin/people/{{ person.id }}/delete"><label class="form-checkbox"><input type="checkbox" name="confirm" value="1" required> 我确认执行引用检查</label><button class="btn btn-danger" type="submit">删除人物</button></form></section>{% endif %}
+
+{% else %}
+<section class="filter-row"><form method="get" action="/admin/people" class="filter-form"><input type="text" name="q" value="{{ q or '' }}" placeholder="搜索姓名、机构、标签" class="filter-input"><button class="btn btn-sm" type="submit">搜索</button>{% if q %}<a class="btn btn-sm btn-outline" href="/admin/people">清除</a>{% endif %}</form><span class="table-count">共 {{ people|length }} 人</span></section>
+<form method="post" action="/admin/people/bulk-delete" data-bulk-delete><section class="platform-card" style="padding:0;overflow:hidden;"><div class="table-header"><span>已选择 <strong data-selected-count>0</strong> 项 · <span class="text-muted">受保护人物会保留并说明原因。</span></span><button class="btn btn-danger btn-sm" type="submit" data-bulk-delete-button disabled>批量删除</button></div><div class="table-wrap"><table class="data-table"><thead><tr><th></th><th>姓名</th><th>职务</th><th>所属机构</th><th>标签</th><th>状态</th><th>操作</th></tr></thead><tbody>{% for p in people %}<tr><td><input type="checkbox" name="person_ids" value="{{ p.id }}" data-select-item></td><td><a class="object-link" href="/admin/people/{{ p.id }}">{{ p.name }}</a></td><td>{{ p.public_role or '未填写' }}</td><td>{{ p.organization_network or '未关联' }}</td><td>{{ p.ability_tags or '未填写' }}</td><td><span class="badge {{ 'badge-active' if p.is_active else 'badge-inactive' }}">{{ '启用' if p.is_active else '停用' }}</span></td><td><a href="/admin/people/{{ p.id }}">编辑</a><button class="action-link action-link-button danger-link" type="submit" formaction="/admin/people/{{ p.id }}/delete" formmethod="post" name="confirm" value="1" onclick="return confirm('将先检查正式业务引用。确认删除该人物？')">删除</button><a href="/network/people/{{ p.id }}">详情</a></td></tr>{% else %}<tr><td colspan="7" class="empty">暂无人物数据。<a href="/admin/people/new">新增第一个人物</a>。</td></tr>{% endfor %}</tbody></table></div></section></form>
 {% endif %}
-
-{% if person %}
-<section class="platform-card mt-16">
-  <div class="platform-card-header">
-    <h3>编辑人物：{{ person.name }}</h3>
-  </div>
-  <form method="post" action="/admin/people/{{ person.id }}/update" class="platform-form">
-    <div class="grid-2">
-      <label>姓名<input name="name" required value="{{ person.name }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-      <label>公开身份<input name="public_role" value="{{ person.public_role or '' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-    </div>
-    <div class="grid-2">
-      <label>机构关系<input name="organization_network" value="{{ person.organization_network or '' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-      <label>能力/标签<input name="ability_tags" value="{{ person.ability_tags or '' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-    </div>
-    <label>价值与合作偏好<textarea name="value_provided" rows="3" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;">{{ person.value_provided or '' }}</textarea></label>
-    <div class="grid-2">
-      <label>可见性<input name="visibility" value="{{ person.visibility or '内部' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-      <label>核验状态<input name="verification_status" value="{{ person.verification_status or '待核验' }}" style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:6px;"></label>
-    </div>
-    <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" name="is_active" value="1" {% if person.is_active %}checked{% endif %}> 启用</label>
-    <div style="display:flex;gap:8px;margin-top:16px;">
-      <button class="btn btn-primary" type="submit">保存人物</button>
-      <a class="btn" href="/network/people/{{ person.id }}">查看前台详情</a>
-      <a class="btn" href="/admin/people" style="color:var(--color-text-muted);">返回列表</a>
-    </div>
-  </form>
-</section>
-{% endif %}
-
 {% endblock %}

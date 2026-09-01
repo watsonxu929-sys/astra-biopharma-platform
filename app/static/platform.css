@@ -258,7 +258,7 @@
 .timeline-item .desc { font-size: 14px; margin-top: 4px; }
 
 /* ── Forms ── */
-.platform-form { max-width: 600px; }
+.platform-form { max-width: 1040px; }
 .platform-form .form-group { margin-bottom: 16px; }
 .platform-form label { display: block; font-size: 13px; font-weight: 500; color: var(--color-text); margin-bottom: 4px; }
 .platform-form input, .platform-form select, .platform-form textarea {
@@ -603,7 +603,7 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
-  --content-max: 1440px;
+  --content-max: 1520px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --shadow-subtle: 0 1px 2px rgba(15, 23, 42, .05);
@@ -616,12 +616,31 @@
 html, body { max-width: 100%; overflow-x: clip; }
 body { font-size: var(--font-body); line-height: 1.55; }
 .surface-product main, .surface-admin main { max-width: none; padding: 0 0 64px; }
+.surface-product main.app-content:not(.platform-shell),
+.surface-admin main.app-content:not(.platform-shell) {
+  width: min(var(--content-max), calc(100% - 48px));
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-8) 64px;
+  box-sizing: border-box;
+}
 .surface-product .platform-content, .surface-admin .platform-content {
   width: min(var(--content-max), calc(100% - 48px));
   max-width: var(--content-max);
   margin: 0 auto;
   padding: var(--space-6) var(--space-8);
+  box-sizing: border-box;
 }
+.club-member-filter {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 170px 170px auto;
+  gap: var(--space-3);
+  align-items: center;
+}
+.club-application-page { max-width: 1040px; margin: 0 auto; }
+.action-link-button { border: 0; padding: 0; background: none; font: inherit; cursor: pointer; }
+.danger-link { margin: 0 var(--space-2); color: #b42318; }
+.btn:disabled { cursor: not-allowed; opacity: .5; }
 .surface-product .platform-header { background: var(--product-navy); box-shadow: 0 1px 0 rgba(255,255,255,.12); }
 .product-header .main-nav { justify-content: center; }
 .product-header .main-nav a { padding: var(--space-2) var(--space-3); font-size: var(--font-body); }
@@ -892,4 +911,12 @@ body { font-size: var(--font-body); line-height: 1.55; }
   .entity-span-2 { grid-column: auto; }
   .lifecycle-bar { align-items: flex-start; flex-direction: column; }
   .impact-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+}
+@media (max-width: 720px) {
+  .surface-product main.app-content:not(.platform-shell),
+  .surface-admin main.app-content:not(.platform-shell) {
+    width: calc(100% - 24px);
+    padding: var(--space-6) 0 64px;
+  }
+  .club-member-filter { grid-template-columns: 1fr; }
 }

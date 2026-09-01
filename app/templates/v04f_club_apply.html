@@ -1,34 +1,15 @@
-﻿{% extends "base.html" %}
-{% block title %}Q-BAY会员申请{% endblock %}
+{% extends "base.html" %}
+{% block title %}申请加入Q-BAY俱乐部{% endblock %}
 {% block content %}
-<section class="page-head action-head">
-  <div>
-    <p class="eyebrow">Q-BAY俱乐部</p>
-    <h1>会员申请</h1>
-    <p>提交基础资料后，运营团队会进行人工审核和主体匹配。</p>
-  </div>
-  <a class="button secondary" href="/club">返回俱乐部</a>
-</section>
-{% if submitted %}<div class="success-box">申请已提交，编号：{{ submitted }}</div>{% endif %}
+{% set status_names = {'submitted':'已提交','under_review':'审核中','need_more_info':'需要补充信息','approved':'已通过','rejected':'未通过','withdrawn':'已撤回'} %}
+<div class="club-application-page">
+<section class="page-head action-head"><div><p class="eyebrow">Q-BAY俱乐部</p><h1>{{ '我的会员申请' if application else '申请加入Q-BAY俱乐部' }}</h1><p>{{ '查看申请进度与管理员反馈。' if application else '填写必要资料后，由俱乐部运营人员核对主体并进行审核。' }}</p></div><a class="button secondary" href="/club">返回俱乐部</a></section>
+{% if submitted %}<div class="success-box"><strong>会员申请已提交。</strong><p>管理员审核后，你可以参与俱乐部活动、会员连接、供需与产业合作。</p></div>{% endif %}
 {% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
-<section class="panel">
-  <form method="post" action="/club/apply" class="grid-2">
-    <label>姓名<input name="applicant_name" required></label>
-    <label>职务<input name="title"></label>
-    <label>手机<input name="mobile"></label>
-    <label>邮箱<input name="email" type="email"></label>
-    <label>微信<input name="wechat"></label>
-    <label>企业/机构<input name="organization_name"></label>
-    <label>城市<input name="city"></label>
-    <label>行业赛道<input name="industry_tags" placeholder="例如：创新药；医疗器械"></label>
-    <label class="grid-span">能力标签<textarea name="expertise_tags" placeholder="例如：融资；BD；临床资源"></textarea></label>
-    <label class="grid-span">可提供资源<textarea name="offered_resources"></textarea></label>
-    <label class="grid-span">合作需求<textarea name="cooperation_needs"></textarea></label>
-    <label>联系偏好<input name="preferred_contact_method" placeholder="手机、邮箱或微信"></label>
-    <label class="checkbox-line"><input type="checkbox" name="consent_to_store" value="1" required> 同意保存申请资料用于会员审核</label>
-    <label class="checkbox-line"><input type="checkbox" name="consent_to_contact" value="1" required> 同意运营团队后续联系</label>
-    <input type="hidden" name="website" value="">
-    <button class="button primary" type="submit">提交申请</button>
-  </form>
-</section>
+{% if application and not editing %}
+<section class="panel"><h2>申请状态</h2><dl class="info-list"><dt>申请编号</dt><dd>{{ application.application_no }}</dd><dt>申请时间</dt><dd>{{ application.submitted_at or application.created_at }}</dd><dt>申请身份</dt><dd>{{ '企业 / 机构会员' if application.member_type == 'organization' else '个人会员' }}</dd><dt>申请人</dt><dd>{{ application.applicant_name }}</dd><dt>企业 / 机构</dt><dd>{{ application.organization_name or '未填写' }}</dd><dt>当前状态</dt><dd><span class="badge">{{ status_names.get(application.status, application.status) }}</span></dd><dt>管理员反馈</dt><dd>{{ application.review_note or ('请等待管理员审核。' if application.status in ['submitted','under_review'] else '暂无补充说明') }}</dd><dt>需要补充</dt><dd>{{ application.review_note if application.status == 'need_more_info' else '当前无需补充信息' }}</dd></dl><div class="actions">{% if application.status == 'need_more_info' %}<a class="button primary" href="/club/apply?edit=1">完善申请</a>{% endif %}<a class="button secondary" href="/club">返回俱乐部</a></div></section>
+{% else %}
+<section class="panel">{% if editing %}<div class="warning-box">请根据管理员反馈补充后重新提交；系统会更新原申请，不会重复创建。</div>{% endif %}<form method="post" action="/club/apply" class="grid-2"><label>申请类型<select name="member_type" required><option value="individual" {% if application and application.member_type == 'individual' %}selected{% endif %}>个人会员</option><option value="organization" {% if application and application.member_type == 'organization' %}selected{% endif %}>企业 / 机构会员</option></select></label><label>姓名<input name="applicant_name" required value="{{ application.applicant_name if application else '' }}"></label><label>职务<input name="title" value="{{ application.title or '' if application else '' }}"></label><label>所属企业 / 机构<input name="organization_name" value="{{ application.organization_name or '' if application else '' }}" placeholder="企业会员必填；将匹配现有企业档案"></label><label>手机<input name="mobile" value="{{ application.mobile or '' if application else '' }}"></label><label>邮箱<input name="email" type="email" value="{{ application.email or '' if application else '' }}"></label><label>微信<input name="wechat" value="{{ application.wechat or '' if application else '' }}"></label><label>城市<input name="city" value="{{ application.city or '' if application else '' }}"></label><label class="grid-span">加入原因<textarea name="application_reason" required>{{ application.application_reason or '' if application else '' }}</textarea></label><label class="grid-span">关注产业方向<textarea name="industry_tags" placeholder="例如：创新药；医疗器械">{{ application.industry_tags or '' if application else '' }}</textarea></label><label class="grid-span">希望获得的资源 / 合作<textarea name="cooperation_needs">{{ application.cooperation_needs or '' if application else '' }}</textarea></label><label class="grid-span">可以提供的资源 / 能力<textarea name="offered_resources">{{ application.offered_resources or '' if application else '' }}</textarea></label><label class="grid-span">个人或机构简介<textarea name="self_introduction">{{ application.self_introduction or '' if application else '' }}</textarea></label><label>联系偏好<input name="preferred_contact_method" value="{{ application.preferred_contact_method or '' if application else '' }}" placeholder="手机、邮箱或微信"></label><label class="checkbox-line"><input type="checkbox" name="consent_to_store" value="1" required> 同意保存申请资料用于会员审核</label><label class="checkbox-line"><input type="checkbox" name="consent_to_contact" value="1" required> 同意运营团队后续联系</label><input type="hidden" name="website" value=""><button class="button primary" type="submit">{{ '提交补充资料' if editing else '提交会员申请' }}</button></form></section>
+{% endif %}
+</div>
 {% endblock %}
