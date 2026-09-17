@@ -1,16 +1,17 @@
 {% extends "platform/base.html" %}
-{% block platform_title %}管理控制台 · 情报加工{% endblock %}
-{% block breadcrumb %}<span class="breadcrumb"><a href="/admin/platform">管理控制台</a><span class="sep">/</span><span class="current">情报加工</span></span>{% endblock %}
+{% from 'platform/_review_facts.html' import review_facts %}
+{% set article_review_page = mode == 'review_queue' or (mode == 'candidate_detail' and candidate.field_name == 'article_review') %}
+{% block platform_title %}{{ '审核发布' if article_review_page else '管理控制台 · 情报加工' }}{% endblock %}
+{% block breadcrumb %}{% if article_review_page %}<a class="text-link" href="/intelligence">返回情报</a>{% else %}<span class="breadcrumb"><a href="/admin/platform">管理控制台</a><span class="sep">/</span><span class="current">情报加工</span></span>{% endif %}{% endblock %}
 {% block page_header %}
 <section class="page-header">
   <div class="page-header-top">
-    <div><span class="eyebrow">管理员工具</span><h1>情报加工</h1></div>
+    <div><h1>{{ '审核发布' if article_review_page else '情报加工' }}</h1></div>
     <div class="header-actions">
-      <a class="btn btn-secondary" href="/processing/jobs">处理队列</a>
-      <a class="btn btn-tertiary" href="/processing/candidates">审核候选</a>
+      {% if article_review_page %}<a class="btn btn-secondary" href="/processing/review-queue">待审核情报</a>{% else %}<a class="btn btn-secondary" href="/processing/jobs">处理队列</a><a class="btn btn-tertiary" href="/processing/candidates">主体候选</a>{% endif %}
     </div>
   </div>
-  <p class="page-desc">情报加工运行与异常恢复：正常采集会自动进入加工；管理员只需处理失败、重试和指定记录重新加工。</p>
+  <p class="page-desc">{% if article_review_page %}核对具体文章的事实和来源后发布；主体未关联不阻止阅读。规则筛选不是人工价值判断。{% else %}正常采集自动加工；这里用于失败重试和异常恢复。{% endif %}</p>
 </section>
 {% endblock %}
 {% block platform_content %}
@@ -20,11 +21,11 @@
 {% set match_method_labels = {"exact":"精确匹配","fuzzy":"模糊匹配","phonetic":"拼音匹配","keyword":"关键词匹配","entity":"实体匹配","manual":"人工匹配"} %}
 {% set security = request.scope.get('security_context', {}) %}
 {% set can_operate_processing = security.get('can_manage_users') or 'manage_monitoring' in security.get('permissions', []) %}
-<nav class="module-tabs">
+{% if not article_review_page %}<nav class="module-tabs">
   <a class="{{ 'active' if mode in ['home','jobs'] else '' }}" href="/processing/jobs">数据处理</a>
   <a class="{{ 'active' if mode in ['candidates','candidate_detail','candidate_delete','candidate_matches','candidate_evidence'] else '' }}" href="/processing/candidates">候选匹配</a>
   <a class="{{ 'active' if mode == 'review_queue' else '' }}" href="/processing/review-queue">情报审核</a>
-</nav>
+</nav>{% endif %}
 {% if message %}<div class="warning-box soft-delete-note">{{ message }}</div>{% endif %}
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 {% if mode == "home" %}
@@ -109,6 +110,35 @@
 {% elif mode == "candidates_legacy" %}
 <form class="search-bar" method="get"><input name="q" value="{{ q }}" placeholder="搜索候选、主体或证据"><select name="review_status"><option value="">全部状态</option>{% for s in ["pending","needs_review","approved","rejected","applied","apply_failed"] %}<option value="{{ s }}" {% if review_status==s %}selected{% endif %}>{{ status_labels.get(s, s) }}</option>{% endfor %}</select><select name="candidate_type"><option value="">全部类型</option>{% for t in ["organization","person","project","event","relationship","resource","need","risk","opportunity","field"] %}<option value="{{ t }}" {% if candidate_type==t %}selected{% endif %}>{{ type_labels.get(t, t) }}</option>{% endfor %}</select><button>筛选</button></form>
 <section class="panel"><div class="subject-table"><table><thead><tr><th>候选数据</th><th>主体</th><th>候选值</th><th>置信度</th><th>状态</th></tr></thead><tbody>{% for c in candidates %}<tr><td><a href="/processing/candidates/{{ c.id }}"><strong>{{ c.candidate_no }}</strong></a><div class="muted">{{ type_labels.get(c.candidate_type, c.candidate_type) }} · {{ field_labels.get(c.field_name, c.field_name) or '' }}</div></td><td>{{ type_labels.get(c.subject_type, c.subject_type or '') }} {{ c.subject_label or '' }}<div class="code">{{ c.matched_subject_id or c.subject_id or '' }}</div></td><td>{{ field_labels.get(c.field_name, c.field_name) or '' }}<p class="muted">{{ c.normalized_value or c.raw_value or '' }}</p></td><td>{{ c.confidence_score }} · {{ status_labels.get(c.confidence_level, c.confidence_level) }}</td><td><span class="badge">{{ status_labels.get(c.review_status, c.review_status) }}</span></td></tr>{% else %}<tr><td colspan="5" class="empty">暂无候选数据。已加工情报会在这里等待人工审核。</td></tr>{% endfor %}</tbody></table></div></section>
+{% elif mode == 'candidate_detail' and candidate.field_name == 'article_review' %}
+{% set can_review = 'review_data' in security.get('permissions', []) %}
+<section class="content-section">
+  <h2>{{ article.assessment.facts.title }}</h2>
+  <p class="row-meta">{{ article.source_name or '来源待核对' }} · 原始时间：{{ article.published_at or '时间待核对' }} · 采集：{{ article.captured_at }}</p>
+  <p><strong>{{ article.assessment.reading_use }}</strong> · {{ article.assessment.facts.freshness }}</p>
+  {% set facts = article.assessment.facts %}{{ review_facts(facts, article.assessment) }}
+  <p class="muted">披露到发现：{{ facts.discovery_delay }}。日期依据：{% for p in facts.publication.candidates %}{{ p.raw }}（{{ p.position }}） {% endfor %}</p>
+  {% for warning in article.assessment.warnings %}<p class="muted">{{ warning }}</p>{% endfor %}
+  <details><summary>展开完整证据正文</summary><p class="source-copy" style="white-space: pre-wrap">{{ article.content }}</p></details>
+  {% if candidate.source_url %}<a class="text-link" href="{{ candidate.source_url }}" target="_blank" rel="noopener noreferrer">核对公开原文</a>{% endif %}
+  {% for attachment in article.metadata.get('attachments', []) %}<p><a class="text-link" href="{{ attachment.url }}" target="_blank" rel="noopener noreferrer">{{ attachment.label or '原文附件' }}</a> · 附件尚未自动解析</p>{% endfor %}
+</section>
+{% if can_review %}
+<section class="content-section"><h2>审核操作</h2>
+  <div class="actions">
+    <form method="post" action="/processing/candidates/{{ candidate.id }}/publish"><button class="btn btn-primary" {% if not article.assessment.publishable or candidate.pipeline_review_status == 'rejected' %}disabled{% endif %}>通过并发布</button></form>
+    <details><summary>忽略此情报</summary><form method="post" action="/processing/candidates/{{ candidate.id }}/review"><input type="hidden" name="decision" value="rejected"><input type="hidden" name="return_to" value="/processing/review-queue"><label>忽略原因<input name="note" required></label><button class="btn btn-secondary">确认忽略</button></form></details>
+  </div>
+  <details><summary>编辑补充</summary><form method="post" action="/processing/candidates/{{ candidate.id }}/edit" class="stack-form">
+    <label>真实标题<input name="title" value="{{ article.title }}" maxlength="400" required></label>
+    <label>正文/有依据的摘录<textarea name="content" rows="14" maxlength="80000" required>{{ article.content }}</textarea></label>
+    <label>原始发布时间（无法确认则留空）<input name="published_at" value="{{ article.published_at or '' }}"></label>
+    <label>补充依据或日期来源<input name="note" value="{{ article.date_basis or '' }}"></label>
+    {% if article.metadata.get('attachments') %}<label><input type="checkbox" name="attachments_reviewed" value="1" {% if article.metadata.attachments_reviewed %}checked{% endif %}> 已人工核对附件，正文已保留所需事实</label>{% endif %}
+    <button class="btn btn-secondary">保存补充，重新待审</button>
+  </form></details>
+</section>
+{% endif %}
 {% elif mode == "candidate_detail" %}
 {% set chain_status_labels = {'pending':'待审核','needs_review':'需补充','approved':'已通过','rejected':'已拒绝','published':'已发布'} %}
 {% set workflow_step = '4 / 8' %}
@@ -204,29 +234,30 @@
 {% elif mode == "review_queue" %}
 {% set chain_status_labels = {'pending':'待审核','needs_review':'需补充','approved':'已通过','rejected':'已拒绝'} %}
 <section class="panel">
-  <div class="section-head"><div><p class="eyebrow">情报生产链 · 第 7 阶段</p><h2>情报审核队列</h2><p>复用 P2.1 候选审核与审计服务，不建立第三套审核队列。</p></div><div class="actions"><a class="button secondary" href="/processing/candidates">上一步：候选匹配</a><a class="button secondary" href="/reports">正式产品列表</a></div></div>
+  <div class="section-head"><div><h2>待审核情报 · {{ total }}</h2><p>核对主体、事项、披露时间与来源后决定发布；事实不足先查看原文、编辑补充或忽略。</p></div><a class="btn btn-secondary" href="/intelligence">阅读已发布情报</a></div>
   {% set sec = request.scope.get('security_context', {}) %}
   {% set can_review = sec.get('can_manage_users') or 'review_data' in sec.get('permissions', []) %}
   {% if not can_review %}<div class="warning-box">当前账号可以查看队列，但没有审核权限。请联系管理员授予“审核数据”权限。</div>{% endif %}
-  <div class="subject-table"><table><thead><tr><th>候选</th><th>证据与状态</th><th>操作</th></tr></thead><tbody>
+  <form method="get" class="filter-form"><select name="view"><option value="">全部待审</option>{% for k,label in review_views.items() %}<option value="{{ k }}" {% if view==k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><select name="category"><option value="">全部业务类别</option>{% for k,spec in categories.items() %}<option value="{{ k }}" {% if category==k %}selected{% endif %}>{{ spec[0] }}</option>{% endfor %}</select><button class="btn btn-secondary">筛选</button></form>
+  <div class="dense-list">
   {% for c in candidates %}
-    <tr>
-      <td><strong>{{ c.candidate_no }}</strong> {% if c.is_pilot %}<span class="badge">P2.1 试点</span>{% endif %}<div class="muted">{{ c.subject_label or c.normalized_value or '待匹配' }}</div></td>
-      <td><span class="badge">{{ chain_status_labels.get(c.pipeline_review_status or c.review_status, '待审核') }}</span><p class="muted">{{ c.evidence_excerpt or '暂无证据摘录' }}</p></td>
-      <td class="actions">
-        <a class="button primary" href="/processing/candidates/{{ c.id }}">查看详情</a>
-        <a class="button secondary" href="/processing/candidates/{{ c.id }}/evidence">查看证据</a>
+    {% set quality = c.payload.assessment %}{% set facts = quality.facts %}
+    <article class="content-section">
+      <h3><a href="/processing/candidates/{{ c.id }}">{{ facts.title }}</a></h3><div class="muted">{{ c.source_name or '来源待核对' }} · 原文披露：{{ facts.publication.value or '时间待核对' }} · {{ facts.view_label }} · {{ facts.business_status if facts.business_times else facts.freshness }}</div>
+      {{ review_facts(facts, quality, compact=true) }}
+      <div class="actions" style="display:flex;flex-wrap:wrap;gap:8px">
+        <a class="btn btn-primary" style="white-space:nowrap" href="/processing/candidates/{{ c.id }}">核对并审核</a>
+        {% if c.source_url %}<a class="btn btn-tertiary" href="{{ c.source_url }}" target="_blank" rel="noopener noreferrer">查看原文</a>{% endif %}
         {% if can_review %}
-        <form method="post" action="/processing/candidates/{{ c.id }}/review" style="display:inline"><input type="hidden" name="decision" value="approved"><button class="button primary" type="submit">通过</button></form>
-        <form method="post" action="/processing/candidates/{{ c.id }}/review" style="display:inline"><input type="hidden" name="decision" value="rejected"><input type="hidden" name="return_to" value="/processing/review-queue"><input name="note" placeholder="拒绝原因" required><button class="button secondary" type="submit">拒绝</button></form>
-        <form method="post" action="/processing/candidates/{{ c.id }}/review" style="display:inline"><input type="hidden" name="decision" value="needs_review"><input type="hidden" name="return_to" value="/processing/review-queue"><input name="note" placeholder="需要补充的内容" required><button class="button secondary" type="submit">需要补充</button></form>
+        <details><summary>忽略此情报</summary><form method="post" action="/processing/candidates/{{ c.id }}/review"><input type="hidden" name="decision" value="rejected"><input type="hidden" name="return_to" value="/processing/review-queue"><label>忽略原因<input name="note" required></label><button class="button secondary" type="submit">确认忽略</button></form></details>
         {% else %}<span class="muted">无审核权限</span>{% endif %}
-      </td>
-    </tr>
+      </div>
+    </article>
   {% else %}
-    <tr><td colspan="3" class="empty"><h3>暂无待审核候选</h3><p>从候选详情提交审核后会出现在这里；如当前无候选，请先进入原始情报生成数据。</p><a class="button primary" href="/processing/candidates">进入候选匹配</a><a class="button secondary" href="/collection/items">进入原始情报</a>{% if can_review %}<a class="button secondary" href="/pipeline/pilot">运行试点</a>{% endif %}</td></tr>
+    <div class="empty"><h3>此视图暂无待审核情报</h3><p>当前没有新的重点动态，可查看行业观察或仍开放的业务事项。</p><a href="?view=observation">行业观察</a> · <a href="?view=">全部待审</a></div>
   {% endfor %}
-  </tbody></table></div>
+  </div>
+  {% if page > 1 %}<a href="?page={{ page - 1 }}&view={{ view }}&category={{ category }}">上一页</a>{% endif %}{% if total > page * 20 %}<a href="?page={{ page + 1 }}&view={{ view }}&category={{ category }}">下一页</a>{% endif %}
 </section>
 
 {% elif mode == "matches" %}

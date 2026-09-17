@@ -234,9 +234,10 @@ class CanonicalRelationshipService:
         _audit(conn, "relationship_approved", actor, relationship_id=relationship_id, after=result, reason=note)
         return result
 
-    def archive(self, relationship_id: int, *, actor: str, permissions: set[str], reason: str) -> dict[str, Any]:
+    def archive(self, relationship_id: int, *, actor: str, permissions: set[str], reason: str, connection=None) -> dict[str, Any]:
+        from contextlib import nullcontext
         _permissions(permissions, "review_data")
-        with db_connection(self.db_path) as conn:
+        with (nullcontext(connection) if connection is not None else db_connection(self.db_path)) as conn:
             row = conn.execute("SELECT * FROM p3_canonical_relationships WHERE id=?", (relationship_id,)).fetchone()
             if not row:
                 raise ValueError("relationship_not_found")

@@ -8,6 +8,7 @@
 </div>
 {% endblock %}
 {% block platform_content %}
+{% include "platform/_related_knowledge.html" %}
 {% if message %}<div class="success-box" role="status"><strong>{{ message }}</strong>{% if opportunity_id %} <a class="text-link" href="/opportunities/{{ opportunity_id }}">查看跟进</a>{% endif %} <a class="text-link" href="/platform">返回工作台</a></div>{% endif %}
 {% if can_manage_lifecycle %}
 <section class="lifecycle-bar" aria-label="情报管理">
@@ -29,6 +30,7 @@
 {% endif %}
 <div class="intelligence-detail-layout">
   <div class="intelligence-main">
+    <section class="content-section"><h2>关键事实与时效</h2>{% set facts = reading.facts %}{% include 'platform/_article_facts.html' %}<p class="muted">披露到发现：{{ facts.discovery_delay }}。内部审核与编辑不刷新消息年龄。</p></section>
     <section class="content-section" aria-labelledby="happened-heading"><div class="section-header"><div><span class="section-index">01</span><h2 id="happened-heading">发生了什么</h2></div></div><p class="lead-copy">{{ reading.display_summary }}</p>{% if not reading.has_chinese_reading %}<div class="warning-box">中文辅助内容尚未完成，作出业务判断前请核对页面底部原文。</div>{% endif %}</section>
 
     <section class="content-section" aria-labelledby="subjects-heading">
@@ -45,7 +47,7 @@
 
     <details class="content-section evidence-section" data-translation-mode="{{ reading.translation_mode }}">
       <summary><strong>原文与公开证据</strong></summary>
-      <h3>{{ reading.original_title or '原文标题待核对' }}</h3><p class="source-copy">{{ reading.original_summary or item.content or '原文摘要待核对' }}</p>
+      <h3>{{ reading.original_title or '原文标题待核对' }}</h3><p class="source-copy" style="white-space: pre-wrap">{{ item.content or reading.original_summary or '原文摘要待核对' }}</p>
       {% if item.source_url %}<p><a class="text-link" href="{{ item.source_url }}" target="_blank" rel="noopener">打开公开来源</a></p>{% endif %}
       {% for ev in evidence %}<article class="evidence-row">{% if ev.url %}<a class="object-link" href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.page_title or '查看公开证据' }}</a>{% endif %}<p>{{ ev.evidence_excerpt or '证据摘录待核对' }}</p></article>{% else %}<p class="business-empty">暂无补充证据</p>{% endfor %}
     </details>
@@ -57,7 +59,8 @@
     <section class="context-panel action-panel" aria-labelledby="next-heading"><h2 id="next-heading">下一步行动</h2><p>{{ opportunity_context.next_action }}</p>{% if opportunity_context.next_action_url %}<p><a class="text-link" href="{{ opportunity_context.next_action_url }}">打开相关上下文</a></p>{% endif %}
       {% if can_write %}<details open><summary><strong>建立跟进</strong></summary><form method="post" action="/golden-loop/intelligence/{{ item.id }}/follow-ups" class="stack-form">
         <label>跟进对象<input name="object_name" required value="{% if trace.subjects %}{{ trace.subjects[0].subject_label }}{% endif %}" placeholder="企业、人物或事项"></label>
-        <label>跟进事项<input name="matter" required value="核实该产业动态对当前业务的影响"></label>
+        <p class="muted">当前跟进必须关联您负责的既有机会；没有真实机会时请继续观察，不会为记录事项代建商机。</p>
+        <label>跟进事项<input name="matter" required value="{{ item.title }}"></label>
         <label>为什么要跟进<textarea name="reason" required>{{ opportunity_context.value_reason }}</textarea></label>
         <label>下一步做什么<input name="next_action" required value="{{ opportunity_context.next_action }}"></label>
         <label>计划时间<input name="next_follow_at" type="datetime-local" required></label>

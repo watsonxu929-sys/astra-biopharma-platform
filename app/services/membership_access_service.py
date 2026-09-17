@@ -156,6 +156,24 @@ def get_membership_context(user: dict[str, Any] | None, db_path: str | Path | No
     }
 
 
+def service_member_identity(db, user_id: int, membership_id=None) -> dict:
+    """Reuse explicit membership-user links, never infer tenancy from names or tags."""
+    from sqlalchemy import text
+    user = db.execute(text("SELECT id,display_name,person_id,role FROM v05a_users WHERE id=:id AND status='active'"), {"id": user_id}).mappings().first()
+    if not user:
+        return {"member": None, "tenant_member": None, "user": {}}
+    members = db.execute(text("""SELECT m.*,p.name AS person_name,o.standard_name AS organization_name
+        FROM v04f_club_memberships m LEFT JOIN people p ON p.id=m.person_id
+        LEFT JOIN organizations o ON o.id=m.organization_id
+        WHERE m.user_id=:id AND m.status='active'
+        AND (m.expired_at IS NULL OR m.expired_at='' OR datetime(m.expired_at)>datetime('now','localtime'))
+        ORDER BY m.id DESC"""), {"id": user_id}).mappings().all()
+    member = next((dict(m) for m in members if membership_id is None or m["id"] == membership_id), None)
+    contact = db.execute(text("SELECT contact_phone,contact_email FROM v06_person_profiles WHERE person_id=:p"), {"p": member.get("person_id") if member else user["person_id"]}).mappings().first()
+    # No authoritative tenant field exists in the current canonical schema.
+    return {"member": member, "tenant_member": None, "user": dict(user), "contact_method": (contact["contact_phone"] or contact["contact_email"] or "") if contact else ""}
+
+
 def get_accessible_membership(
     user: dict[str, Any] | None,
     membership_id: int,

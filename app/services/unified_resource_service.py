@@ -197,6 +197,15 @@ class UnifiedResourceService:
             self.db.refresh(resource)
         return resource
 
+    def detach_subject(self, resource_id: int, *, subject_type: str, subject_id: int) -> None:
+        """Detach only unreferenced draft ownership in the caller's cleanup transaction."""
+        field = {"person": "owner_person_id", "organization": "organization_id"}.get(subject_type)
+        resource = self.detail(resource_id)
+        if not field or getattr(resource, field) != subject_id or resource.status != "draft" or any(self.reference_counts(resource_id).values()):
+            raise HTTPException(409, "资源归属或业务状态已变化，请保留主体并重新核对")
+        setattr(resource, field, None)
+        resource.updated_at = datetime.now()
+
     def reference_counts(self, resource_id: int) -> dict[str, int]:
         params = {"resource_id": int(resource_id), "resource_text": str(resource_id)}
         matches = self.db.execute(text("""SELECT COUNT(*) FROM p4_resource_match_candidates

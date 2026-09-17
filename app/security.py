@@ -551,6 +551,14 @@ def is_public_path(path: str) -> bool:
 
 def required_permission(path: str, method: str) -> str | None:
     method = method.upper()
+    if path.startswith('/admin/club-facilities'):
+        return 'manage_users'
+    if path.startswith('/club/services'):
+        return 'view_internal'
+    if path.startswith('/admin/knowledge'):
+        return 'edit_data'
+    if path.startswith('/knowledge'):
+        return 'view_internal'
     if is_public_path(path):
         return None
     if path.startswith("/api/v1/entity-network") and method in {"POST", "PUT", "PATCH", "DELETE"}:
@@ -562,6 +570,8 @@ def required_permission(path: str, method: str) -> str | None:
     if path.startswith("/network/resolution-candidates/") and method == "POST":
         return "review_data"
     if path.startswith("/network/relationship-candidates/") and method == "POST":
+        return "review_data"
+    if path.startswith("/network/relationships/") and method == "POST":
         return "review_data"
     if path.startswith("/network/merges/") and method == "POST":
         return "review_data" if any(part in path for part in ("/approve", "/rollback")) else "edit_data"

@@ -2,6 +2,7 @@
 import csv
 import io
 from datetime import datetime
+from urllib.parse import quote, urlencode
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -31,9 +32,11 @@ from app.services.entity_governance_service import (
 )
 from app.services.data_quality import (
     check_organization_duplicates, check_person_duplicates,
-    organization_reference_reasons, person_reference_reasons,
+    organization_reference_details, organization_reference_reasons,
+    person_reference_details, person_reference_reasons, delete_subject, reference_fingerprint,
     resolve_organization_for_person,
 )
+from app.services.knowledge_service import KnowledgeService
 from app.services.organization_access_service import OrganizationAccessError, update_organization
 from app.services.platform_service import (
     get_user_person, get_person_full_profile, upsert_person_profile, set_person_tags,
@@ -93,6 +96,22 @@ _templates.env.filters["status_label"] = status_label
 def render(request: Request, name: str, **context):
     """Render a Jinja2 template with platform status_label filter."""
     return _templates.TemplateResponse(request=request, name=name, context=context)
+
+
+def _reference_context(details: list[dict], return_to: str) -> list[dict]:
+    """Attach a safe return path to relationship review links without changing the data checks."""
+    result = []
+    for category in details:
+        copied = {**category, "preview_token": reference_fingerprint(details), "items": [dict(item) for item in category.get("items", [])]}
+        if copied.get("key") == "relationships":
+            for item in copied["items"]:
+                item["url"] = f"{item['url']}?return_to={quote(return_to, safe='')}"
+        result.append(copied)
+    return result
+
+
+def _protected_ids(value: str) -> list[int]:
+    return [int(raw) for raw in value.split(",")[:100] if raw.strip().isdigit()]
 
 
 def is_platform_admin(request: Request) -> bool:
@@ -418,7 +437,8 @@ def person_card(request: Request, person_id: int, history: bool = False, db: Ses
     return render(request, "platform/person_card.html",
         person=person, person_data=person_data, is_favorited=fav, is_following=following,
         user_id=user_id, person_relationships=person_relationships, business_trace=business_trace,
-        evidence_list=evidence_list, RELATION_TYPE_LABELS=RELATION_TYPE_LABELS)
+        evidence_list=evidence_list, RELATION_TYPE_LABELS=RELATION_TYPE_LABELS,
+        related_knowledge=KnowledgeService(db).related("person", person_id))
 
 
 @router.get("/network/organizations", response_class=HTMLResponse)
@@ -466,20 +486,24 @@ def intelligence_center(
     source: str = Query(""),
     time_range: str = Query(""),
     workflow: str = Query(""),
+    view: str = Query('latest'), start: str = Query(''), end: str = Query(''),
+    active: bool = Query(False), category: str = Query(''),
     page: int = Query(1),
     db: Session = Depends(get_db),
 ):
     user_id = get_current_user_id(request)
-    result = list_intelligence(db, user_id=user_id,
+    from app.services.processing.article_facts import CATEGORIES, READ_VIEWS
+    result = UnifiedIntelligenceService(db).list(user_id=user_id,
         intel_type=intel_type or None,
         industry_direction=industry_direction or None,
-        q=q or None, source=source, time_range=time_range, workflow=workflow, page=page)
+        q=q or None, source=source, time_range=time_range, workflow=workflow, page=page,
+        view=view,start=start,end=end,active=active,category=category)
     golden = GoldenLoopService(db)
     for item in result["items"]:
-        view = golden.reading_view(int(item.id), item)
-        item.display_title = view["display_title"]
-        item.display_summary = view["display_summary"]
-        item.translation_mode = view["translation_mode"]
+        reading = golden.reading_view(int(item.id), item)
+        item.display_title = reading["display_title"]
+        item.display_summary = reading["display_summary"]
+        item.translation_mode = reading["translation_mode"]
     feed = personalized_feed(db, user_id, limit=6) if user_id is not None else []
     intel_type_options = [v for v in db.scalars(select(IntelligenceItem.intel_type).where(IntelligenceItem.status == "published", IntelligenceItem.intel_type.is_not(None), IntelligenceItem.intel_type != "").distinct().order_by(IntelligenceItem.intel_type)).all() if v]
     industry_direction_options = [v for v in db.scalars(select(IntelligenceItem.industry_directions).where(IntelligenceItem.status == "published", IntelligenceItem.industry_directions.is_not(None), IntelligenceItem.industry_directions != "").distinct().order_by(IntelligenceItem.industry_directions)).all() if v]
@@ -490,6 +514,7 @@ def intelligence_center(
         intel_type_options=intel_type_options,
         industry_direction_options=industry_direction_options,
         source=source, time_range=time_range, workflow=workflow,
+        view=view,start=start,end=end,active=active,category=category,categories=CATEGORIES,read_views=READ_VIEWS,
     )
 
 
@@ -546,6 +571,7 @@ def intelligence_detail(
     role = get_user_role(request)
     return render(
         request, "platform/intelligence_detail.html", item=item, evidence=evidence,
+        related_knowledge=KnowledgeService(db).related("intelligence", item.id),
         is_favorited=fav, user_id=user_id, trace=trace, subject_q=query,
         people=people, organizations=organizations, projects=projects,
         event_insight=event_insight, subject_candidates=subject_candidates,
@@ -1213,14 +1239,31 @@ def intelligence_operations(request: Request):
 
 
 @router.get("/admin/people", response_class=HTMLResponse)
-def admin_people(request: Request, q: str = Query(""), db: Session = Depends(get_db)):
+def admin_people(
+    request: Request, q: str = Query(""), protected_ids: str = Query(""),
+    db: Session = Depends(get_db),
+):
     if not _can_manage_people_orgs(request):
         raise HTTPException(403, "people admin permission required")
     stmt = select(Person).order_by(desc(Person.created_at))
     if q:
         stmt = stmt.where((Person.name.contains(q)) | (Person.public_role.contains(q)) | (Person.organization_network.contains(q)))
     people = list(db.scalars(stmt.limit(100)).all())
-    return render(request, "platform/admin_people.html", people=people, person=None, q=q)
+    bulk_delete_results = []
+    for person_id in _protected_ids(protected_ids):
+        protected_person = db.get(Person, person_id)
+        if protected_person:
+            details = _reference_context(person_reference_details(db, protected_person), f"/admin/people/{person_id}")
+            bulk_delete_results.append({
+                "name": protected_person.name,
+                "detail_url": f"/admin/people/{person_id}",
+                "references": [item for item in details if item["count"] and item["classification"] == "BUSINESS_HISTORY"],
+                "reference_count": sum(item["count"] for item in details if item["classification"] == "BUSINESS_HISTORY"),
+            })
+    return render(
+        request, "platform/admin_people.html", people=people, person=None, q=q,
+        bulk_delete_results=bulk_delete_results,
+    )
 
 
 @router.get("/admin/people/new", response_class=HTMLResponse)
@@ -1339,6 +1382,7 @@ def admin_person_detail(person_id: int, request: Request, q: str = Query(""), db
     return render(
         request, "platform/admin_people.html", people=people, person=person, q=q,
         organization_options=organization_options,
+        reference_details=_reference_context(person_reference_details(db, person), f"/admin/people/{person.id}"),
     )
 
 
@@ -1371,8 +1415,26 @@ async def admin_update_person(person_id: int, request: Request, db: Session = De
     person.manually_confirmed = True
     if not person.is_active:
         person.deactivated_at = datetime.now()
+        person.deactivated_reason = person.deactivated_reason or "管理员停用并保留历史"
+    else:
+        person.deactivated_at = None
+        person.deactivated_reason = None
     db.commit()
     return RedirectResponse(f"/admin/people/{person.id}?message=人物主数据已保存", 303)
+
+
+@router.post("/admin/people/{person_id:int}/deactivate")
+def admin_deactivate_person(person_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "people admin permission required")
+    person = db.get(Person, int(person_id))
+    if not person:
+        raise HTTPException(404, "person not found")
+    person.is_active = False
+    person.deactivated_at = datetime.now()
+    person.deactivated_reason = "管理员停用并保留历史"
+    db.commit()
+    return RedirectResponse(f"/admin/people/{person.id}?message=人物已停用，正式历史保持不变", 303)
 
 
 @router.post("/admin/people/{person_id:int}/delete")
@@ -1386,11 +1448,11 @@ def admin_delete_person(person_id: int, request: Request, confirm: str = Form(""
         return RedirectResponse("/admin/people?error=人物不存在", 303)
     reasons = person_reference_reasons(db, person)
     if reasons:
-        return RedirectResponse(f"/admin/people/{person_id}?error=该人物已有正式业务关联，不能直接删除：{'；'.join(reasons)}", 303)
-    db.delete(person)
+        return RedirectResponse(f"/admin/people/{person_id}?error=无法删除该人物，请先核对下方引用详情", 303)
     try:
+        delete_subject(db, person, actor=request.scope.get("security_context", {}).get("user", {}).get("username", "admin"), actor_user_id=get_current_user_id(request))
         db.commit()
-    except IntegrityError:
+    except (IntegrityError, HTTPException):
         db.rollback()
         return RedirectResponse(f"/admin/people/{person_id}?error=该人物仍有数据库引用，未执行删除", 303)
     return RedirectResponse("/admin/people?message=人物已安全删除", 303)
@@ -1402,7 +1464,7 @@ async def admin_bulk_delete_people(request: Request, db: Session = Depends(get_d
         raise HTTPException(403, "people admin permission required")
     form = await request.form()
     deleted = 0
-    protected: list[str] = []
+    protected_ids: list[int] = []
     for raw_id in form.getlist("person_ids")[:100]:
         if not str(raw_id).isdigit():
             continue
@@ -1411,21 +1473,27 @@ async def admin_bulk_delete_people(request: Request, db: Session = Depends(get_d
             continue
         reasons = person_reference_reasons(db, person)
         if reasons:
-            protected.append(f"{person.name}（{'、'.join(reasons)}）")
+            protected_ids.append(person.id)
             continue
-        db.delete(person)
         try:
+            delete_subject(db, person, actor=request.scope.get("security_context", {}).get("user", {}).get("username", "admin"), actor_user_id=get_current_user_id(request))
             db.commit()
             deleted += 1
-        except IntegrityError:
+        except (IntegrityError, HTTPException):
             db.rollback()
-            protected.append(f"{person.name}（仍有数据库引用）")
-    detail = f"；受保护：{'；'.join(protected[:8])}" if protected else ""
-    return RedirectResponse(f"/admin/people?message=成功删除：{deleted}；保留：{len(protected)}{detail}", 303)
+            protected_ids.append(person.id)
+    query = urlencode({
+        "message": f"批量删除完成：成功 {deleted}；受保护并保留 {len(protected_ids)}",
+        "protected_ids": ",".join(str(item) for item in protected_ids),
+    })
+    return RedirectResponse(f"/admin/people?{query}", 303)
 
 
 @router.get("/admin/organizations", response_class=HTMLResponse)
-def admin_organizations(request: Request, q: str = Query(""), priority: bool = Query(False), db: Session = Depends(get_db)):
+def admin_organizations(
+    request: Request, q: str = Query(""), priority: bool = Query(False),
+    protected_ids: str = Query(""), db: Session = Depends(get_db),
+):
     if not _can_manage_people_orgs(request):
         raise HTTPException(403, "organization admin permission required")
     stmt = select(Organization).order_by(desc(Organization.created_at)).limit(100)
@@ -1447,8 +1515,20 @@ def admin_organizations(request: Request, q: str = Query(""), priority: bool = Q
         people_count = db.scalar(select(func.count()).select_from(Person).where(Person.organization_network.contains(org.standard_name))) or 0
         items.append({"org": org, "people_count": int(people_count), "priority": priority_info, "identity": identity})
     incomplete = sum(1 for item in items if item["priority"].get("is_priority") and item["identity"]["status"] != "IDENTITY_CONFIRMED")
+    bulk_delete_results = []
+    for org_id in _protected_ids(protected_ids):
+        protected_org = db.get(Organization, org_id)
+        if protected_org:
+            details = _reference_context(organization_reference_details(db, protected_org), f"/admin/organizations/{org_id}")
+            bulk_delete_results.append({
+                "name": protected_org.standard_name,
+                "detail_url": f"/admin/organizations/{org_id}",
+                "references": [item for item in details if item["count"] and item["classification"] == "BUSINESS_HISTORY"],
+                "reference_count": sum(item["count"] for item in details if item["classification"] == "BUSINESS_HISTORY"),
+            })
     return render(request, "platform/admin_organizations.html", orgs=items, org=None, related_people=[], q=q,
-                  priority_filter=priority, incomplete_count=incomplete, show_form=False, website_import=False)
+                  priority_filter=priority, incomplete_count=incomplete, show_form=False, website_import=False,
+                  bulk_delete_results=bulk_delete_results)
 
 
 @router.get("/admin/organizations/new", response_class=HTMLResponse)
@@ -1609,7 +1689,8 @@ def admin_organization_detail(org_id: int, request: Request, q: str = Query(""),
     return render(request, "platform/admin_organizations.html", orgs=[], org=org, related_people=related_people, q=q,
                   entity=entity, monitoring=monitoring, priority_info=priority_info, identity=identity,
                   duplicate_candidates=organization_duplicate_candidates(org.external_id, db_path), show_form=True,
-                  website_import=False, priority_filter=False, incomplete_count=0)
+                  website_import=False, priority_filter=False, incomplete_count=0,
+                  reference_details=_reference_context(organization_reference_details(db, org), f"/admin/organizations/{org.id}"))
 
 
 @router.post("/admin/organizations/{org_id:int}/update")
@@ -1654,6 +1735,24 @@ async def admin_update_organization(org_id: int, request: Request, db: Session =
     return RedirectResponse(f"/admin/organizations/{org_id}?message=机构主数据已保存", 303)
 
 
+@router.post("/admin/organizations/{org_id:int}/deactivate")
+def admin_deactivate_organization(org_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _can_manage_people_orgs(request):
+        raise HTTPException(403, "organization admin permission required")
+    org = db.get(Organization, int(org_id))
+    if not org:
+        raise HTTPException(404, "organization not found")
+    actor_user = request.scope.get("security_context", {}).get("user", {})
+    try:
+        update_organization(
+            org_id, {"status": "inactive"}, actor_user,
+            Path(str(db.get_bind().url.database)),
+        )
+    except OrganizationAccessError as exc:
+        return RedirectResponse(f"/admin/organizations/{org_id}?error={exc.message}", 303)
+    return RedirectResponse(f"/admin/organizations/{org_id}?message=主体已停用，正式历史保持不变", 303)
+
+
 @router.post("/admin/organizations/{org_id:int}/delete")
 def admin_delete_organization(org_id: int, request: Request, confirm: str = Form(""), db: Session = Depends(get_db)):
     if not _can_manage_people_orgs(request):
@@ -1665,11 +1764,11 @@ def admin_delete_organization(org_id: int, request: Request, confirm: str = Form
         return RedirectResponse("/admin/organizations?error=主体不存在", 303)
     reasons = organization_reference_reasons(db, org)
     if reasons:
-        return RedirectResponse(f"/admin/organizations/{org_id}?error=该主体已有正式业务关联，不能直接删除：{'；'.join(reasons)}", 303)
-    db.delete(org)
+        return RedirectResponse(f"/admin/organizations/{org_id}?error=无法删除该主体，请先核对下方引用详情", 303)
     try:
+        delete_subject(db, org, actor=request.scope.get("security_context", {}).get("user", {}).get("username", "admin"), actor_user_id=get_current_user_id(request))
         db.commit()
-    except IntegrityError:
+    except (IntegrityError, HTTPException):
         db.rollback()
         return RedirectResponse(f"/admin/organizations/{org_id}?error=该主体仍有数据库引用，未执行删除", 303)
     return RedirectResponse("/admin/organizations?message=主体已安全删除", 303)
@@ -1681,7 +1780,7 @@ async def admin_bulk_delete_organizations(request: Request, db: Session = Depend
         raise HTTPException(403, "organization admin permission required")
     form = await request.form()
     deleted = 0
-    protected: list[str] = []
+    protected_ids: list[int] = []
     for raw_id in form.getlist("organization_ids")[:100]:
         if not str(raw_id).isdigit():
             continue
@@ -1690,17 +1789,20 @@ async def admin_bulk_delete_organizations(request: Request, db: Session = Depend
             continue
         reasons = organization_reference_reasons(db, org)
         if reasons:
-            protected.append(f"{org.standard_name}（{'、'.join(reasons)}）")
+            protected_ids.append(org.id)
             continue
-        db.delete(org)
         try:
+            delete_subject(db, org, actor=request.scope.get("security_context", {}).get("user", {}).get("username", "admin"), actor_user_id=get_current_user_id(request))
             db.commit()
             deleted += 1
-        except IntegrityError:
+        except (IntegrityError, HTTPException):
             db.rollback()
-            protected.append(f"{org.standard_name}（仍有数据库引用）")
-    detail = f"；受保护：{'；'.join(protected[:8])}" if protected else ""
-    return RedirectResponse(f"/admin/organizations?message=成功删除：{deleted}；保留：{len(protected)}{detail}", 303)
+            protected_ids.append(org.id)
+    query = urlencode({
+        "message": f"批量删除完成：成功 {deleted}；受保护并保留 {len(protected_ids)}",
+        "protected_ids": ",".join(str(item) for item in protected_ids),
+    })
+    return RedirectResponse(f"/admin/organizations?{query}", 303)
 
 @router.get("/admin/intelligence", response_class=HTMLResponse)
 def admin_intelligence(request: Request, message: str = Query(""), db: Session = Depends(get_db)):
@@ -1708,6 +1810,37 @@ def admin_intelligence(request: Request, message: str = Query(""), db: Session =
         raise HTTPException(403, "intelligence admin permission required")
     items = list(db.scalars(select(IntelligenceItem).order_by(desc(IntelligenceItem.updated_at), desc(IntelligenceItem.created_at)).limit(100)).all())
     return render(request, "platform/admin_intelligence.html", items=items, item=None, message=message)
+
+
+@router.post("/admin/people/{subject_id:int}/cleanup")
+@router.post("/admin/organizations/{subject_id:int}/cleanup")
+async def admin_cleanup_subject(subject_id: int, request: Request, db: Session = Depends(get_db)):
+    if get_user_role(request) != "admin":
+        raise HTTPException(403, "彻底清理仅限管理员")
+    kind = "people" if request.url.path.startswith("/admin/people/") else "organizations"
+    detail_url = f"/admin/{kind}/{subject_id}"
+    form = await request.form()
+    subject = db.get(Person if kind == "people" else Organization, subject_id)
+    if not subject:
+        return RedirectResponse(f"/admin/{kind}?message=主体已不存在", 303)
+    name = subject.name if kind == "people" else subject.standard_name
+    if form.get("confirm") != "1" or form.get("confirm_name") != name or not str(form.get("reason", "")).strip():
+        return RedirectResponse(detail_url + "?error=请核对影响预览、输入完整名称并说明错误原因", 303)
+    ids = form.getlist("relationship_ids")
+    if any(not str(i).isdigit() for i in ids):
+        raise HTTPException(422, "关系选择无效")
+    try:
+        delete_subject(db, subject, actor=request.scope["security_context"]["user"]["username"],
+                       actor_user_id=get_current_user_id(request), archive_relationship_ids=[int(i) for i in ids],
+                       reason=str(form["reason"]).strip(), permissions=_v06e_permissions(request), preview_token=str(form.get("preview_token", "")))
+        db.commit()
+    except HTTPException as exc:
+        db.rollback()
+        return RedirectResponse(detail_url + "?" + urlencode({"error": str(exc.detail)}), 303)
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(detail_url + "?error=仍有受保护引用，全部清理已撤销；请停用或核对历史", 303)
+    return RedirectResponse(f"/admin/{kind}?message=错误主体已安全清理，操作与归档历史已保留", 303)
 
 
 @router.post("/admin/intelligence")

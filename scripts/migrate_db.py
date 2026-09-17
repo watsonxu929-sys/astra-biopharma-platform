@@ -56,6 +56,8 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration("009", "intelligence_production_loop", "scripts.migrations.009_intelligence_production_loop"),
     Migration("010", "intelligence_opportunity_loop", "scripts.migrations.010_intelligence_opportunity_loop"),
     Migration("011", "feedback_outcome_loop", "scripts.migrations.011_feedback_outcome_loop"),
+    Migration("012", "industry_knowledge", "scripts.migrations.012_industry_knowledge"),
+    Migration("013", "knowledge_training_and_rooms", "scripts.migrations.013_knowledge_training_and_rooms"),
 )
 
 
@@ -346,7 +348,7 @@ def _history_value(row: sqlite3.Row, name: str) -> object | None:
     return row[name] if name in row.keys() else None
 
 
-def build_plan(conn: sqlite3.Connection, target: str = "011", start: str = "000") -> dict[str, object]:
+def build_plan(conn: sqlite3.Connection, target: str = "013", start: str = "000") -> dict[str, object]:
     target_index = _target_index(target)
     start_index = _target_index(start)
     if start_index > target_index:
@@ -478,7 +480,7 @@ def _record_failure(conn: sqlite3.Connection, migration: Migration, started_at: 
 def run_upgrade(
     database: Path,
     *,
-    target: str = "011",
+    target: str = "013",
     start: str = "000",
     confirm_formal: bool = False,
     failure_hook: Callable[[Migration, sqlite3.Connection], None] | None = None,
@@ -609,16 +611,16 @@ def inspect_database(database: Path, target: str, start: str = "000") -> dict[st
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Explicit-only 000-011 SQLite migration runner")
+    parser = argparse.ArgumentParser(description="Explicit-only 000-013 SQLite migration runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in ("status", "plan"):
         child = subparsers.add_parser(command)
         child.add_argument("--database", required=True)
-        child.add_argument("--target", default="011")
+        child.add_argument("--target", default="013")
         child.add_argument("--start", default="000")
     upgrade = subparsers.add_parser("upgrade")
     upgrade.add_argument("--database", required=True)
-    upgrade.add_argument("--target", default="011")
+    upgrade.add_argument("--target", default="013")
     upgrade.add_argument("--start", default="000")
     upgrade.add_argument("--confirm-formal", action="store_true")
     return parser

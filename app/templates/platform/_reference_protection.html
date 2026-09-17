@@ -1,0 +1,27 @@
+{% set refs = reference_details|default([]) %}
+{% set metadata = refs|selectattr('classification','equalto','OWNED_METADATA')|sum(attribute='count') %}
+{% set detachable = refs|selectattr('classification','equalto','DETACHABLE_ASSOCIATION')|sum(attribute='count') %}
+{% set history = refs|selectattr('classification','equalto','BUSINESS_HISTORY')|sum(attribute='count') %}
+<section class="platform-card mt-16 danger-box">
+  <h2>删除影响预览与停用</h2>
+  <p>将同时清理 {{ metadata }} 条附属资料、解除 {{ detachable }} 条安全绑定。其他主体、会员记录、资源和知识本身不会删除。</p>
+  {% if history %}<div class="warning-box"><strong>无法直接删除该{{ subject_label }}</strong>：存在 {{ history }} 条业务历史引用。真实历史建议保留{{ subject_label }}，不要硬删除。</div>{% endif %}
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>引用类型</th><th>数量</th><th>引用详情</th><th>处理方式</th></tr></thead><tbody>
+  {% for category in refs %}<tr><td>{{ category.label }}</td><td>{{ category.count }}</td><td>{% for item in category['items'] %}<div>{% if item.url %}<a class="object-link" href="{{ item.url }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</div>{% else %}无引用{% endfor %}</td><td>{{ category.cleanup_guidance }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if not history %}<form method="post" action="{{ delete_url }}"><label><input type="checkbox" name="confirm" value="1" required> 确认按上述影响安全删除</label><button class="btn btn-danger" type="submit">删除{{ subject_label }}</button></form>{% endif %}
+  {% if request.scope.get('security_context',{}).get('user',{}).get('role') == 'admin' %}
+  <details class="mt-16"><summary>彻底清理错误{{ subject_label }}（管理员危险操作）</summary>
+    <p>上方为本次影响预览。仅测试、错误导入或明确错误的主体适用。正式关系只能逐条确认后归档，证据继续保留；跟进、机会、报告及其他真实历史不清除。提交时重新检查，任何阻断都会撤销本次全部清理。</p>
+    <form method="post" action="{{ delete_url.rsplit('/',1)[0] }}/cleanup" class="platform-form">
+      <input type="hidden" name="preview_token" value="{{ refs[0].preview_token if refs else '' }}">
+      {% for category in refs if category.key == 'relationships' %}{% for item in category['items'] %}<label><input type="checkbox" name="relationship_ids" value="{{ item.id }}"> 我确认 <a href="{{ item.url }}">{{ item.label }}</a> 为该错误主体产生的错误/测试关系，同意归档</label>{% endfor %}{% endfor %}
+      <label>输入该主体完整名称<input name="confirm_name" required autocomplete="off"></label>
+      <label>错误原因<textarea name="reason" required rows="2" maxlength="2000"></textarea></label>
+      <label><input type="checkbox" name="confirm" value="1" required> 已核对影响预览，确认是错误主体，不是真实历史主体</label>
+      <button class="btn btn-danger" type="submit">确认彻底清理</button>
+    </form>
+  </details>
+  {% endif %}
+  {% if subject_active %}<form method="post" action="{{ deactivate_url }}" class="mt-16"><button class="btn btn-outline" type="submit" onclick="return confirm('确认停用并保留全部历史记录？')">停用{{ subject_label }}</button><span class="text-muted">真实主体不再活跃时，使用停用保留历史。</span></form>{% else %}<p>该{{ subject_label }}已停用；可勾选“启用”并保存恢复。</p>{% endif %}
+</section>

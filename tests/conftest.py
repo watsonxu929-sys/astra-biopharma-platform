@@ -72,7 +72,7 @@ def temp_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             text=True,
             encoding="utf-8",
         )
-    migration = run_upgrade(target, start="009", target="011")
+    migration = run_upgrade(target, start="009", target="013")
     if migration["status"] not in {"success", "up_to_date"}:
         pytest.fail(f"test database migration failed: {migration}")
 

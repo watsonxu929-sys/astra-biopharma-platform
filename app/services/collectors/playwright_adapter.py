@@ -49,6 +49,8 @@ class PlaywrightAdapter:
             raise PlaywrightUnavailable("playwright_unavailable")
 
         from playwright.sync_api import sync_playwright
+        from app.services.member_import_service import validate_public_url
+        validate_public_url(url)
 
         started = time.perf_counter()
         network_errors: list[str] = []
@@ -59,8 +61,16 @@ class PlaywrightAdapter:
             browser = runtime.chromium.launch(headless=True)
             try:
                 context = browser.new_context(
-                    user_agent="BiopharmaIntelligencePilot/2.2 (+controlled-public-source-pilot)"
+                    user_agent="QBAY-Industry-Intelligence-Bot/0.5F", service_workers='block'
                 )
+                def public_requests(route):
+                    try:
+                        validate_public_url(route.request.url)
+                    except ValueError:
+                        route.abort()
+                        return
+                    route.continue_()
+                context.route('**/*', public_requests)
                 page = context.new_page()
                 page.on(
                     "requestfailed",

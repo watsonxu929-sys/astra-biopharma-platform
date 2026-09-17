@@ -15,6 +15,7 @@ from .content_block_service import split_blocks, text_hash
 from .document_classifier import classify_page
 from .entity_extraction_service import extract_candidates, apply_global_limits
 from .subject_matching_service import SUBJECT_CONFIG, match_subject
+from .content_quality_service import article_review_quality
 
 APPLY_FIELD_WHITELIST = {
     "organization": {
@@ -215,6 +216,22 @@ def process_job(job_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     raw_candidate["block_id"] = block_id
                     all_candidates.append(raw_candidate)
             limited_candidates = apply_global_limits(all_candidates)
+            # One article-review candidate per collection item, independent of entity matches.
+            # Keep existing entity candidates, but do not mistake an event label for a subject.
+            meta = _loads(snapshot['metadata_json'], {})
+            assessment = article_review_quality(title, text, source_url, snapshot['published_at'] or '', meta)
+            event = next((c for c in limited_candidates if c['candidate_type'] == 'event'), {})
+            limited_candidates = [c for c in limited_candidates if c['candidate_type'] != 'event']
+            existing_article = conn.execute("SELECT id FROM v05g_extraction_candidates WHERE collection_item_id=? AND field_name='article_review'", (job['collection_item_id'],)).fetchone()
+            if assessment['relevant'] and not existing_article:
+                limited_candidates.append({
+                    'candidate_type': 'event', 'subject_type': None, 'subject_label': '',
+                    'field_name': 'article_review', 'raw_value': title, 'normalized_value': title,
+                    'source_url': source_url, 'source_title': title, 'evidence_excerpt': text[:1000],
+                    'source_position': 'article', 'extraction_rule': 'article_review', 'fact_level': 'fact',
+                    'confidence_score': 80, 'warnings': assessment['gaps'] + assessment['warnings'],
+                    'payload': {**(event.get('payload') or {}), 'article_review': True, 'assessment': assessment},
+                })
             for raw_candidate in limited_candidates:
                 candidate_id = _insert_candidate(conn, job_id, job, raw_candidate)
                 if candidate_id:
@@ -540,24 +557,38 @@ def list_review_queue(
     db_path: str | Path | None = None,
     page: int = 1,
     page_size: int = 20,
+    view: str = '', category: str = '',
 ) -> tuple[list[dict[str, Any]], int]:
     """Return the canonical P2.1 candidate review queue without another queue model."""
     ensure_schema(db_path)
     offset = (max(1, page) - 1) * page_size
-    where = "COALESCE(pipeline_review_status,review_status) IN ('pending','needs_review')"
+    where = "field_name='article_review' AND COALESCE(pipeline_review_status,review_status) IN ('pending','needs_review','approved') AND NOT EXISTS (SELECT 1 FROM p2_intelligence_product_candidates pc WHERE pc.candidate_id=v05g_extraction_candidates.id)"
     with db_connection(db_path) as conn:
         total = int(conn.execute(f"SELECT COUNT(*) FROM v05g_extraction_candidates WHERE {where}").fetchone()[0])
         rows = [
             dict(row)
             for row in conn.execute(
-                f"SELECT * FROM v05g_extraction_candidates WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
-                (page_size, offset),
+                f"""SELECT v05g_extraction_candidates.*,
+                    (SELECT name FROM v04g_monitoring_sources s WHERE s.id=(SELECT monitoring_source_id FROM v05f_collection_items ci WHERE ci.id=collection_item_id)) AS source_name,
+                    (SELECT published_at FROM v04g_source_snapshots sn WHERE sn.id=snapshot_id) AS published_at,
+                    (SELECT cleaned_text FROM v04g_source_snapshots sn WHERE sn.id=snapshot_id) AS article_content,
+                    (SELECT metadata_json FROM v04g_source_snapshots sn WHERE sn.id=snapshot_id) AS article_metadata
+                    FROM v05g_extraction_candidates WHERE {where} ORDER BY id DESC""",
             ).fetchall()
         ]
     for row in rows:
         row["warning_list"] = _loads(row.get("warning_json"), [])
         row["payload"] = _loads(row.get("payload_json"), {})
-    return rows, total
+        if 'article_content' in row:
+            edits = row['payload'].get('article_edit') or {}
+            metadata = _loads(row.get('article_metadata'), {})
+            metadata['attachments_reviewed'] = bool(edits.get('attachments_reviewed'))
+            if 'published_at' in edits:
+                metadata['publication_candidates'] = [{'raw':edits['published_at'] or '', 'position':'人工补充：'+str(edits.get('date_basis') or '')}]
+            row['payload']['assessment'] = article_review_quality(edits.get('title') or row['source_title'], edits.get('content') or row['article_content'] or '', row['source_url'] or '', edits.get('published_at', row['published_at']) or '', metadata)
+    rows = [r for r in rows if (not view or r['payload']['assessment']['facts']['view']==view) and (not category or r['payload']['assessment']['facts']['category']==category)]
+    rows.sort(key=lambda r:(r['payload']['assessment']['facts']['actionable'],r['payload']['assessment']['facts']['sort_time']),reverse=True)
+    return rows[offset:offset+page_size], len(rows)
 
 
 def candidate_detail(candidate_id: int, db_path: str | Path | None = None) -> dict[str, Any] | None:
@@ -566,6 +597,9 @@ def candidate_detail(candidate_id: int, db_path: str | Path | None = None) -> di
         row = conn.execute("SELECT * FROM v05g_extraction_candidates WHERE id=?", (candidate_id,)).fetchone()
         if not row:
             return None
+        article = conn.execute("""SELECT sn.cleaned_text AS content,sn.metadata_json,sn.published_at,sn.captured_at,s.name AS source_name
+            FROM v04g_source_snapshots sn LEFT JOIN v04g_monitoring_sources s ON s.id=sn.monitoring_source_id
+            WHERE sn.id=?""", (row['snapshot_id'],)).fetchone()
         matches = [dict(r) for r in conn.execute("SELECT * FROM v05g_subject_match_candidates WHERE extraction_candidate_id=? ORDER BY match_score DESC", (candidate_id,)).fetchall()]
         history = [dict(r) for r in conn.execute("SELECT * FROM v05g_candidate_review_history WHERE candidate_id=? ORDER BY created_at DESC", (candidate_id,)).fetchall()]
         logs = [dict(r) for r in conn.execute("SELECT * FROM v05g_candidate_application_logs WHERE candidate_id=? ORDER BY applied_at DESC", (candidate_id,)).fetchall()]
@@ -576,7 +610,17 @@ def candidate_detail(candidate_id: int, db_path: str | Path | None = None) -> di
     data = dict(row)
     data["warning_list"] = _loads(data.get("warning_json"), [])
     data["payload"] = _loads(data.get("payload_json"), {})
-    return {"candidate": data, "matches": matches, "history": history, "logs": logs, "evidence": evidence}
+    article = dict(article) if article else {}
+    overrides = data['payload'].get('article_edit') or {}
+    article.update(overrides)
+    article['title'] = overrides.get('title') or data.get('source_title') or ''
+    article['metadata'] = _loads(article.get('metadata_json'), {})
+    article['metadata']['attachments_reviewed'] = bool(overrides.get('attachments_reviewed'))
+    article['metadata']['captured_at'] = article.get('captured_at')
+    if 'published_at' in overrides:
+        article['metadata']['publication_candidates'] = [{'raw':overrides['published_at'] or '', 'position':'人工补充：'+str(overrides.get('date_basis') or '')}]
+    article['assessment'] = article_review_quality(article['title'], article.get('content') or '', data.get('source_url') or '', article.get('published_at') or '', article['metadata'])
+    return {"candidate": data, "matches": matches, "history": history, "logs": logs, "evidence": evidence, "article": article}
 
 
 def candidate_delete_preview(candidate_id: int, db_path: str | Path | None = None) -> dict[str, Any]:

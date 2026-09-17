@@ -18,7 +18,7 @@
 {% set nav = request.app.state.navigation_for(sec, path) if authenticated else {'primary': [], 'secondary': [], 'account': [], 'admin': []} %}
 {% set is_admin_surface = authenticated and (
   path.startswith('/admin') or path.startswith('/system') or
-  path.startswith('/processing') or path.startswith('/review') or
+  (path.startswith('/processing') and not article_review_page|default(false)) or path.startswith('/review') or
   path.startswith('/intelligence/operations') or path.startswith('/intelligence/monitoring') or
   path.startswith('/network/governance') or path.startswith('/network/relationship-candidates') or
   path.startswith('/network/resolution-candidates') or path.startswith('/network/merges') or

@@ -7,6 +7,10 @@
 <section class="admin-index-section">
   <div class="section-header"><div><h2>情报运行</h2><p>从来源到正式发布的后台链路。</p></div></div>
   <div class="table-wrap"><table class="admin-index-table"><thead><tr><th>工具</th><th>职责</th><th>类型</th><th>入口</th></tr></thead><tbody>
+    <tr><td>知识管理</td><td>知识录入、发布、关联与学习路径</td><td>内容</td><td><a href="/admin/knowledge">打开</a></td></tr>
+    <tr><td>题库与考试</td><td>人工配置题目、考试及通过要求</td><td>培训</td><td><a href="/admin/knowledge/questions">题库</a> · <a href="/admin/knowledge/exams">考试管理</a></td></tr>
+    <tr><td>培训记录</td><td>查看按版本保留的学习与成绩</td><td>培训</td><td><a href="/admin/knowledge/training-records">打开</a></td></tr>
+    {% if request.scope.get('security_context',{}).get('user',{}).get('role')=='admin' %}<tr><td>空间与会议室</td><td>会议室配置、会员预约审核</td><td>会员服务</td><td><a href="/admin/club-facilities">会议室</a> · <a href="/admin/club-facilities/bookings">预约管理</a></td></tr>{% endif %}
     <tr><td>情报运营总览</td><td>查看采集、加工、审核和发布状态</td><td><span class="badge badge-neutral">运行</span></td><td><a href="/intelligence/operations">打开</a></td></tr>
     <tr><td>Source管理</td><td>维护来源、发现候选和运行采集</td><td><span class="badge badge-neutral">来源</span></td><td><a href="/collection/sources">打开</a></td></tr>
     <tr><td>Collection运行</td><td>查看采集记录、原始条目与失败</td><td><span class="badge badge-neutral">日志</span></td><td><a href="/collection">打开</a></td></tr>

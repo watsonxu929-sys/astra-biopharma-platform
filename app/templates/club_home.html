@@ -6,6 +6,7 @@
 {% set sec = request.scope.get('security_context', {}) %}
 {% set is_operator = sec.get('has_permission', {}).get('manage_club', False) %}
 <div class="platform-content">
+  <section class="utility-section"><a class="object-link" href="/club/services">空间与服务 · 查看会议室</a><span class="text-muted"> · Q-BAY会员均可申请使用，具体安排以审核结果为准。</span></section>
   <div class="page-header"><div class="page-header-left"><span class="eyebrow">产业合作场景</span><h1 class="page-title">Q-BAY俱乐部</h1><p class="page-desc">汇聚生物医药产业企业、专业人士与合作资源，参与活动、发现供需并推进产业合作。</p></div><div class="page-header-right">
     {% if my_membership and my_membership.status == 'active' %}<span class="badge badge-active">Q-BAY俱乐部会员</span><a class="btn btn-primary" href="/club/members/{{ my_membership.id }}">我的会员信息</a>
     {% elif my_application and my_application.status in ['submitted','under_review'] %}<span class="badge">会员申请审核中</span><a class="btn btn-primary" href="/club/application">查看申请</a>

@@ -10,7 +10,7 @@ import re
 import secrets
 import sqlite3
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -22,8 +22,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.core.content_extraction import extract_main_text
+from app.services.member_import_service import validate_public_url
 from app.services.collectors import PlaywrightAdapter, PlaywrightCollectionError, PlaywrightUnavailable
-from app.services.processing.content_quality_service import check_content_quality, assess_content_quality, QUALITY_STATUS_LABELS
+from app.services.processing.content_quality_service import check_content_quality, assess_content_quality, QUALITY_STATUS_LABELS, LOW_QUALITY_PATTERNS
 from app.v04c_review import db_connection, default_db_path
 from scripts.migrate_v05f import migrate as migrate_v05f
 
@@ -32,6 +33,7 @@ _logger = logging.getLogger(__name__)
 TRACKING_PARAMS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "from", "share", "spm"}
 SOURCE_TYPES = {"rss", "api", "webpage", "list_page", "dynamic_page", "manual_url_list"}
 COLLECTION_MODES = {"http", "rss", "api", "playwright", "auto"}
+FREQUENCY_HOURS = {'hourly':1, 'six_hourly':6, 'daily':24, 'weekly':168, 'monthly':720}
 SOURCE_IMPORT_MAX_ROWS = 2000
 JOB_STATUSES = {"pending", "running", "success", "partial", "unchanged", "failed", "skipped", "cancelled"}
 COLLECTION_STATUS_LABELS = {
@@ -188,7 +190,7 @@ def delete_collection_chain_safely(item_id: int, *, actor: str, db_path: str | P
 def _decorate_source(row: dict[str, Any], conn: sqlite3.Connection) -> dict[str, Any]:
     latest = conn.execute(
         """
-        SELECT id, run_no, status, error_type, error_message, finished_at, created_at,
+        SELECT id, run_no, status, error_type, error_message, http_status, finished_at, created_at,
                new_content_count, changed_content_count, duplicate_content_count,
                failed_content_count, skipped_content_count, queued_item_count
         FROM v04g_monitoring_runs
@@ -199,6 +201,11 @@ def _decorate_source(row: dict[str, Any], conn: sqlite3.Connection) -> dict[str,
     ).fetchone()
     item_count = int(conn.execute("SELECT COUNT(*) FROM v05f_collection_items WHERE monitoring_source_id=?", (row["id"],)).fetchone()[0] or 0)
     row["collected_item_count"] = item_count
+    from app.services.processing.article_facts import parse_time, TZ
+    row['last_new_content_at'] = conn.execute("SELECT MAX(captured_at) FROM v05f_collection_items WHERE monitoring_source_id=? AND dedup_status='new'", (row['id'],)).fetchone()[0]
+    last_success, _ = parse_time(row.get('last_success_at'))
+    hours = FREQUENCY_HOURS.get(row.get('check_frequency'))
+    row['collection_lag_label'] = '采集可能滞后' if hours and row.get('is_enabled') and (not last_success or datetime.now(TZ)-last_success>timedelta(hours=hours*2)) else '手动采集' if not hours else '按运行记录核对'
     row["history_count"] = sum(int(conn.execute(sql, (row["id"],)).fetchone()[0] or 0) for sql in (
         "SELECT COUNT(*) FROM v04g_monitoring_runs WHERE monitoring_source_id=?",
         "SELECT COUNT(*) FROM v04g_source_snapshots WHERE monitoring_source_id=?",
@@ -206,6 +213,24 @@ def _decorate_source(row: dict[str, Any], conn: sqlite3.Connection) -> dict[str,
         "SELECT COUNT(*) FROM v05f_collection_items WHERE monitoring_source_id=?",
     ))
     row["source_status_label"] = "已暂停" if row.get("auto_paused") else ("已启用" if row.get("is_enabled") else "已停用")
+    # Scheduling permission is not evidence of health; no freshness is implied.
+    health = row.get("health_status")
+    row["health_status_label"] = (
+        "上次采集成功" if health == "healthy" and row.get("last_success_at") else
+        "上次检测异常" if health in {"degraded", "paused"} or row.get("consecutive_failures") else
+        "历史结果待核对" if row.get("last_checked_at") or row.get("last_success_at") else "未检测"
+    )
+    if health == "healthy" and row.get("last_success_at"):
+        snapshot = conn.execute(
+            "SELECT raw_html,raw_content,content_type FROM v04g_source_snapshots WHERE monitoring_source_id=? ORDER BY id DESC LIMIT 1",
+            (row["id"],),
+        ).fetchone()
+        if snapshot:
+            try:
+                _validate_source_response(snapshot["raw_html"] or snapshot["raw_content"] or "",
+                                          snapshot["content_type"] or "", "list_page")
+            except (RuntimeError, ValueError):
+                row["health_status_label"] = "历史成功记录与内容冲突，待核对"
     row["domain"] = urlparse(str(row.get("url") or "")).netloc
     row["discovery"] = {}
     if row.get("health_status") == "candidate" and row.get("compliance_note"):
@@ -304,6 +329,7 @@ class ExtractedPage:
     content_type: str = "text/html"
     guid: str = ""
     extractor: str = "trafilatura"
+    evidence_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def now() -> str:
@@ -380,12 +406,19 @@ def _meta(soup: BeautifulSoup, *keys: str) -> str:
 
 
 def _date_candidate(soup: BeautifulSoup, text: str) -> str:
-    value = _meta(soup, "article:published_time", "date", "pubdate", "publishdate", "timestamp")
-    haystack = f"{value}\n{text[:3000]}"
+    value = _meta(soup, "article:published_time", "date", "pubdate", "publishdate", "PubDate", "publishDate")
+    node = soup.find("time", datetime=True)
+    value = value or (str(node["datetime"]) if node else "")
+    # A deadline or trial milestone in prose is not the article publication date.
+    labeled = re.search(r"(?:发布时间|发布日期|Published\s*:)\s*[：:]?\s*(20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2})", text[:3000], re.I)
+    haystack = value or (labeled.group(1) if labeled else "")
     match = re.search(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})", haystack)
     if match:
         y, m, d = map(int, match.groups())
-        return f"{y:04d}-{m:02d}-{d:02d}"
+        try:
+            return datetime(y, m, d).date().isoformat()
+        except ValueError:
+            return ""
     return value[:50] if value else ""
 
 
@@ -408,15 +441,19 @@ def _structure_type(url: str, title: str, text: str) -> str:
     return "unknown"
 
 
-def extract_html(raw_html: str, url: str) -> ExtractedPage:
+def extract_html(raw_html: str, url: str, rules: dict | None = None) -> ExtractedPage:
     soup = BeautifulSoup(raw_html or "", "html.parser")
     title = _meta(soup, "og:title", "twitter:title") or (soup.title.get_text(" ", strip=True) if soup.title else "")
     canonical_node = soup.find("link", rel=lambda value: value and "canonical" in value)
     canonical = str(canonical_node.get("href", "")).strip() if canonical_node else ""
+    canonical = urljoin(url, canonical) if canonical else ""
+    if canonical and urlparse(canonical).hostname != urlparse(url).hostname:
+        canonical = ""
     description = _meta(soup, "description", "og:description")
     author = _meta(soup, "author", "article:author")
     lang = (soup.html.get("lang") if soup.html else "") or ""
-    text, extractor = extract_main_text(raw_html)
+    body_node = soup.select_one((rules or {}).get('detail_selector') or 'article, [itemprop="articleBody"]')
+    text, extractor = extract_main_text(str(body_node) if body_node else raw_html)
     warnings = []
     if len(text) < 50:
         warnings.extend(["empty_content", "EXTRACTION_EMPTY"])
@@ -431,7 +468,13 @@ def extract_html(raw_html: str, url: str) -> ExtractedPage:
         warnings.append("content_truncated")
     cleaned_html = f"<article>{html.escape(text)}</article>"[:200_000]
     normalized = normalize_url(url, canonical_url=canonical)
-    published = _date_candidate(soup, text)
+    from app.services.processing.article_facts import publication_metadata, publication, TZ
+    date_metadata = publication_metadata(soup)
+    if (rules or {}).get('date_selector'):
+        date_node = soup.select_one(rules['date_selector'])
+        if date_node:
+            date_metadata['publication_candidates'].append({'raw':date_node.get('datetime') or date_node.get_text(' ',strip=True),'position':'verified_selector:'+rules['date_selector']})
+    published = publication('', date_metadata, datetime.now(TZ))['value'] or ''
     content_hash = _hash_text(text)
     structure_hash = _hash_text("\n".join(line[:80] for line in text.splitlines()[:40]))
     return ExtractedPage(
@@ -452,17 +495,33 @@ def extract_html(raw_html: str, url: str) -> ExtractedPage:
         language=lang[:40],
         warnings=warnings,
         extractor=extractor,
+        evidence_metadata={
+            **date_metadata,
+            "publication_date_basis": "publisher_metadata_or_labeled_date" if published else "unavailable",
+            "attachments": [{"url": urljoin(url, a["href"]), "label": a.get_text(" ", strip=True), "status": "unparsed"}
+                            for a in soup.find_all("a", href=True)
+                            if re.search(r"\.(pdf|docx?|xlsx?)(?:[?#]|$)", a["href"], re.I)
+                            and urlparse(urljoin(url, a["href"])).scheme in {"http", "https"}][:20],
+        },
     )
 
 
-def discover_links(raw_html: str, base_url: str, allowed_domains: list[str] | None = None, max_links: int = 20) -> list[dict[str, str]]:
+def discover_links(raw_html: str, base_url: str, allowed_domains: list[str] | None = None, max_links: int = 20, rules: dict | None = None) -> list[dict[str, str]]:
     soup = BeautifulSoup(raw_html or "", "html.parser")
+    rules = rules or {}
+    for node in soup.select("nav, header, footer, aside, [role=navigation]"):
+        if node.name == 'header' and (node.find_parent('article') or (rules.get('article_selector') and node.select(rules['article_selector']))):
+            continue
+        node.decompose()
     base_host = urlparse(base_url).hostname or ""
     allowed = {base_host.lower(), *(d.lower().strip() for d in (allowed_domains or []) if d.strip())}
     rows: list[dict[str, str]] = []
     seen: set[str] = set()
     blocked_words = ("login", "register", "privacy", "terms", "share", "javascript:", "mailto:", "tel:")
-    for node in soup.find_all("a", href=True):
+    scope = soup.select_one(rules.get("content_selector") or "main, [role=main]") or soup
+    for node in scope.select(rules.get("article_selector") or "a[href]"):
+        if not node.get("href"):
+            continue
         href = str(node["href"]).strip()
         if not href or any(word in href.lower() for word in blocked_words):
             continue
@@ -475,14 +534,41 @@ def discover_links(raw_html: str, base_url: str, allowed_domains: list[str] | No
         normalized = normalize_url(absolute)
         if normalized in seen:
             continue
-        seen.add(normalized)
         text = node.get_text(" ", strip=True)[:300]
-        if len(text) < 2 and not re.search(r"\d{4}", normalized):
+        text = text or str(node.get("title") or "")[:300]
+        if normalized == normalize_url(base_url) or len(text) < 12:
             continue
+        if re.search(r"\.(pdf|docx?|xlsx?|zip|jpe?g|png)(?:[?#]|$)", normalized, re.I):
+            continue
+        if re.search(r"(?:^|/)(?:index(?:_\d+)?\.(?:html?|shtml)|contact|about|category)(?:[/?]|$)", parsed.path, re.I):
+            continue
+        if rules.get("article_url_pattern") and not re.search(rules["article_url_pattern"], normalized):
+            continue
+        seen.add(normalized)
         rows.append({"url": absolute, "normalized_url": normalized, "link_text": text, "title_candidate": text})
         if len(rows) >= max_links:
             break
     return rows
+
+
+def _next_column(raw: str, url: str, rules: dict) -> str:
+    soup = BeautifulSoup(raw, "html.parser")
+    nodes = soup.select(rules["next_selector"]) if rules.get("next_selector") else soup.select("a[href]")
+    for node in nodes:
+        label = node.get_text(" ", strip=True)
+        if rules.get("next_selector") or "next" in (node.get("rel") or []) or re.fullmatch(r"下一页|下页|Next(?: Page)?|›|»", label, re.I):
+            target = urljoin(url, node.get("href") or "")
+            if urlparse(target).hostname == urlparse(url).hostname and normalize_url(target) != normalize_url(url):
+                return target
+    if rules.get('next_page_template'):
+        # Explicit source rule, verified against the publisher's public pagination.
+        index = re.search(r'index_(\d+)\.html', url)
+        page = int(index.group(1)) + 1 if index else 2
+        base = url if re.search(r'\.[a-z]{2,5}$', urlparse(url).path, re.I) or url.endswith('/') else url + '/'
+        target = urljoin(base, rules['next_page_template'].replace('{page}', str(page)))
+        if urlparse(target).hostname == urlparse(url).hostname:
+            return target
+    return ""
 
 
 def _inline_payload(url: str) -> str | None:
@@ -506,13 +592,21 @@ def _http_get(
         **(conditional_headers or {}),
     }
     with httpx.Client(
-        follow_redirects=True,
+        follow_redirects=False,
         timeout=httpx.Timeout(float(timeout), connect=min(float(timeout), 8.0)),
         headers=headers,
     ) as client:
         for attempt in range(max(0, min(retries, 2)) + 1):
             try:
-                response = client.get(url)
+                current = validate_public_url(url)
+                for redirect in range(6):
+                    response = client.get(current)
+                    if response.status_code not in {301, 302, 303, 307, 308}:
+                        break
+                    current = validate_public_url(urljoin(current, response.headers.get("location", "")))
+                    time.sleep(2)
+                else:
+                    raise ValueError("redirect_limit_exceeded")
                 if response.status_code == 304:
                     return "", 304, response.headers.get("content-type", ""), dict(response.headers)
                 response.raise_for_status()
@@ -521,7 +615,7 @@ def _http_get(
                 retryable = not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code in {408, 429, 500, 502, 503, 504}
                 if attempt >= min(retries, 2) or not retryable:
                     raise RuntimeError("FETCH_FAILED") from exc
-                time.sleep(min(4.0, 0.5 * (2 ** attempt)))
+                time.sleep(max(2.0, 2 ** attempt))
     raise RuntimeError("FETCH_FAILED")
 
 
@@ -530,18 +624,31 @@ def check_robots(url: str, user_agent: str = USER_AGENT, timeout: int = 8) -> di
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return {"allowed": True, "status": "not_applicable", "summary": "non-http or inline source"}
     robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+    validate_public_url(robots_url)
     parser = RobotFileParser()
     parser.set_url(robots_url)
     try:
         with httpx.Client(timeout=timeout, headers={"User-Agent": user_agent}) as client:
             response = client.get(robots_url)
+        if response.status_code in {401, 403}:
+            return {"allowed": False, "status": "denied", "summary": f"robots returned {response.status_code}"}
         if response.status_code >= 400:
             return {"allowed": True, "status": "unavailable", "robots_url": robots_url, "summary": f"robots returned {response.status_code}"}
         parser.parse(response.text.splitlines())
         allowed = parser.can_fetch(user_agent, url)
-        return {"allowed": allowed, "status": "allowed" if allowed else "denied", "robots_url": robots_url, "summary": "robots parsed"}
+        return {"allowed": allowed, "status": "allowed" if allowed else "denied", "robots_url": robots_url, "summary": "robots parsed", "crawl_delay": parser.crawl_delay(user_agent) or parser.crawl_delay('*') or 0, "parser": parser}
     except Exception as exc:
         return {"allowed": True, "status": "unavailable", "robots_url": robots_url, "summary": exc.__class__.__name__}
+
+
+def _source_request_url(url: str) -> str:
+    # Dedup identity may ignore a trailing slash; an actual HTTP request may not.
+    if not url.startswith(('http://', 'https://')):
+        return url.strip()
+    parsed = urlparse(normalize_url(url))
+    if urlparse(url).path.endswith('/') and not parsed.path.endswith('/'):
+        parsed = parsed._replace(path=parsed.path + '/')
+    return urlunparse(parsed)
 
 
 def create_collection_source(
@@ -557,6 +664,8 @@ def create_collection_source(
     compliance_note: str = "",
     max_links: int = 20,
     crawl_detail_pages: bool = False,
+    max_pages: int = 1,
+    min_interval_seconds: int = 60,
     check_frequency: str = "manual",
     is_enabled: bool = True,
     db_path: str | Path | None = None,
@@ -565,8 +674,8 @@ def create_collection_source(
     source_type = source_type if source_type in SOURCE_TYPES else "webpage"
     collection_mode = collection_mode if collection_mode in COLLECTION_MODES else "auto"
     fetch_mode = "manual" if source_type == "manual_url_list" else "web"
-    check_frequency = check_frequency if check_frequency in {"manual", "daily", "weekly", "monthly"} else "manual"
-    url = normalize_url(url) if url.startswith(("http://", "https://")) else url.strip()
+    check_frequency = check_frequency if check_frequency in {'manual', *FREQUENCY_HOURS} else 'manual'
+    url = _source_request_url(url)
     ts = now()
     with db_connection(db_path) as conn:
         existing = next((row for row in conn.execute(
@@ -586,14 +695,15 @@ def create_collection_source(
                  check_frequency, int(bool(is_enabled)), owner[:100] or None, fetch_mode, compliance_note[:2000] or None, ts, ts),
             )
             row_id = cur.lastrowid
+            conn.execute("UPDATE v04g_monitoring_sources SET health_status='unknown' WHERE id=?", (row_id,))
         conn.execute(
             """
             UPDATE v04g_monitoring_sources
             SET collection_source_type=?, collection_mode=?, allowed_domains=?, content_kind=?,
-                max_links=?, crawl_detail_pages=?, compliance_note=?, updated_at=?
+                max_links=?, crawl_detail_pages=?, compliance_note=?, updated_at=?,max_pages=?,min_interval_seconds=?
             WHERE id=?
             """,
-            (source_type, collection_mode, allowed_domains[:1000] or None, source_type, int(max_links or 20), int(bool(crawl_detail_pages)), compliance_note[:2000] or None, ts, row_id),
+            (source_type, collection_mode, allowed_domains[:1000] or None, source_type, max(1,min(int(max_links or 20),20)), int(bool(crawl_detail_pages)), compliance_note[:2000] or None, ts,max(1,min(int(max_pages),3)),max(2,int(min_interval_seconds)), row_id),
         )
         return dict(conn.execute("SELECT * FROM v04g_monitoring_sources WHERE id=?", (row_id,)).fetchone())
 
@@ -656,14 +766,14 @@ def update_collection_source(source_id: int, fields: dict[str, Any], db_path: st
     name, url = str(fields.get("name") or "").strip(), str(fields.get("url") or "").strip()
     if not name or not url:
         raise ValueError("name_and_url_required")
-    url = normalize_url(url) if url.startswith(("http://", "https://")) else url
+    url = _source_request_url(url)
     source_type = str(fields.get("source_type") or "webpage")
     mode = str(fields.get("collection_mode") or "auto")
     frequency = str(fields.get("check_frequency") or "manual")
-    if source_type not in SOURCE_TYPES or mode not in COLLECTION_MODES or frequency not in {"manual", "daily", "weekly", "monthly"}:
+    if source_type not in SOURCE_TYPES or mode not in COLLECTION_MODES or frequency not in {'manual', *FREQUENCY_HOURS}:
         raise ValueError("invalid_source_settings")
     with db_connection(db_path) as conn:
-        row = conn.execute("SELECT id FROM v04g_monitoring_sources WHERE id=? AND deactivated_at IS NULL", (source_id,)).fetchone()
+        row = conn.execute("SELECT * FROM v04g_monitoring_sources WHERE id=? AND deactivated_at IS NULL", (source_id,)).fetchone()
         if not row:
             raise ValueError("source_not_found")
         if conn.execute("SELECT 1 FROM v04g_monitoring_sources WHERE url=? AND deactivated_at IS NULL AND id<>?", (url, source_id)).fetchone():
@@ -673,6 +783,10 @@ def update_collection_source(source_id: int, fields: dict[str, Any], db_path: st
               collection_mode=?,check_frequency=?,subject_type=?,subject_id=?,updated_at=? WHERE id=?
         """, (name[:200], url[:2000], source_type, source_type, source_type, mode, frequency,
               fields.get("subject_type") or None, fields.get("subject_id") or None, now(), source_id))
+        if 'max_pages' in fields:
+            conn.execute("UPDATE v04g_monitoring_sources SET max_pages=?,max_links=?,crawl_detail_pages=?,min_interval_seconds=? WHERE id=?", (
+                max(1,min(int(fields['max_pages']),3)),max(1,min(int(fields.get('max_links') or 20),20)),
+                int(bool(fields.get('crawl_detail_pages'))),max(2,int(fields.get('min_interval_seconds') or 2)), source_id))
     return source_detail(source_id, db_path)
 
 
@@ -682,8 +796,8 @@ def set_source_enabled(source_id: int, enabled: bool, db_path: str | Path | None
         if not conn.execute("SELECT 1 FROM v04g_monitoring_sources WHERE id=? AND deactivated_at IS NULL", (source_id,)).fetchone():
             raise ValueError("source_not_found")
         conn.execute("""
-            UPDATE v04g_monitoring_sources SET is_enabled=?,auto_paused=0,last_pause_reason=NULL,
-              health_status=CASE WHEN ?=1 THEN 'healthy' ELSE 'disabled' END,updated_at=? WHERE id=?
+            UPDATE v04g_monitoring_sources SET is_enabled=?,auto_paused=0,
+              health_status=CASE WHEN ?=1 AND health_status='candidate' THEN 'unknown' ELSE health_status END,updated_at=? WHERE id=?
         """, (int(enabled), int(enabled), now(), source_id))
     return source_detail(source_id, db_path)
 
@@ -762,6 +876,45 @@ def _probe_source_access(url: str, timeout: int = 8) -> dict[str, Any]:
     return result
 
 
+def _validate_source_response(raw: str, content_type: str, source_type: str) -> None:
+    """Validate access/content, not industry relevance or number of new items."""
+    if source_type == "rss" or "xml" in content_type or re.search(r"<(?:rss|feed)\b", raw[:500], re.I):
+        parsed = feedparser.parse(raw)
+        if not parsed.entries and not (parsed.version and parsed.feed.get("title") and not parsed.bozo):
+            raise RuntimeError("PARSE_FAILED")
+        return
+    if source_type == "api" or "json" in content_type:
+        payload = json.loads(raw)
+        if isinstance(payload, dict) and (payload.get("error") or payload.get("success") is False):
+            raise RuntimeError("PARSE_FAILED")
+        records = payload if isinstance(payload, list) else next(
+            (payload[k] for k in ("data", "items", "results") if k in payload), None
+        ) if isinstance(payload, dict) else None
+        if not isinstance(records, list):
+            raise RuntimeError("PARSE_FAILED")
+        return  # A valid empty list is not a failed collection.
+    if source_type == "manual_url_list":
+        if not any(line.strip().startswith(("https://", "http://")) for line in raw.splitlines()):
+            raise RuntimeError("EXTRACTION_EMPTY")
+        return
+    soup = BeautifulSoup(raw, "html.parser")
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    visible = soup.get_text(" ", strip=True)
+    sample = title + "\n" + visible[:500]
+    access_patterns = [p for p, reason in LOW_QUALITY_PATTERNS
+                       if reason in {"login_page", "captcha_required"}]
+    if (any(re.search(p, sample, re.I) for p in access_patterns)
+            or re.match(r"\s*(?:404\b|not found\b|页面不存在)", sample, re.I)
+            or re.search(r"access denied|verify (?:you are|that you)|just a moment|checking your browser|service unavailable|访问拒绝|安全验证|正在进行安全检测|检测当前网络环境", sample, re.I)
+            or soup.select_one('input[type="password"]')):
+        raise RuntimeError("access_denied")
+    text_value, _ = extract_main_text(raw)
+    if len(text_value.strip()) < 50 and not (
+        source_type == "list_page" and discover_links(raw, "https://source.invalid", [], 1)
+    ):
+        raise RuntimeError("EXTRACTION_EMPTY")
+
+
 def _source_test_result(url: str, probe: dict[str, Any]) -> dict[str, Any]:
     common = {
         "url": normalize_url(url) if not url.startswith("inline:") else url,
@@ -783,6 +936,13 @@ def _source_test_result(url: str, probe: dict[str, Any]) -> dict[str, Any]:
 
     body = str(probe.get("body") or "")
     content_type = str(probe.get("content_type") or "")
+    try:
+        _validate_source_response(body, content_type, "list_page")
+    except (RuntimeError, ValueError) as exc:
+        return {**common, "ok": False, "status": "PARSE_FAILED", "extractable": False,
+                "failure_reason": str(exc), "recommendation": "响应内容无效，不能认定健康",
+                "is_rss": False, "is_html": "html" in content_type, "needs_playwright": False,
+                "recent_titles": [], "recent_items": []}
     headers = probe.get("headers") or {}
     feed = feedparser.parse(body) if ("xml" in content_type or "rss" in content_type or "atom" in content_type) else None
     soup = BeautifulSoup(body, "html.parser")
@@ -1419,7 +1579,7 @@ def _release_lock(conn: sqlite3.Connection, source_id: int, token: str) -> None:
 
 def _parse_rss(xml_text: str, source_url: str, max_links: int = 50) -> list[ExtractedPage]:
     parsed = feedparser.parse(xml_text)
-    if not parsed.entries:
+    if not parsed.entries and not (parsed.version and parsed.feed.get("title") and not parsed.bozo):
         raise RuntimeError("PARSE_FAILED") from getattr(parsed, "bozo_exception", None)
     entries: list[ExtractedPage] = []
     for entry in parsed.entries[:max_links]:
@@ -1428,7 +1588,7 @@ def _parse_rss(xml_text: str, source_url: str, max_links: int = 50) -> list[Extr
         link = str(entry.get("link") or guid or source_url)
         content = entry.get("content") or []
         content_value = content[0].get("value", "") if content and isinstance(content[0], dict) else ""
-        summary = str(entry.get("summary") or entry.get("description") or content_value or title)
+        summary = str(content_value or entry.get("summary") or entry.get("description") or title)
         html_text = f"<html><head><title>{html.escape(title)}</title></head><body><article>{summary or title}</article></body></html>"
         page = extract_html(html_text, link)
         parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
@@ -1439,6 +1599,13 @@ def _parse_rss(xml_text: str, source_url: str, max_links: int = 50) -> list[Extr
         page.author = str(entry.get("author") or "")[:200]
         page.description = BeautifulSoup(summary, "html.parser").get_text(" ", strip=True)[:500]
         page.guid = guid[:500]
+        page.evidence_metadata["publication_date_basis"] = "feed_published" if entry.get("published") else "feed_updated_only" if entry.get("updated") else "unavailable"
+        if not entry.get("published"):
+            page.evidence_metadata["original_updated_at"] = page.published_at
+            page.published_at = ""
+        page.evidence_metadata["feed_full_content"] = bool(content_value and len(page.text) >= 500)
+        page.evidence_metadata['source_modified_at'] = entry.get('updated') or None
+        page.evidence_metadata['publication_candidates'] = [{'raw':entry['published'],'position':'feed published'}] if entry.get('published') else []
         entries.append(page)
     return entries
 
@@ -1470,6 +1637,12 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
         "SELECT * FROM v05f_collection_items WHERE monitoring_source_id=? AND normalized_url=? ORDER BY id DESC LIMIT 1",
         (source["id"], page.normalized_url),
     ).fetchone()
+    if not previous and page.guid:
+        previous = conn.execute("SELECT * FROM v05f_collection_items WHERE monitoring_source_id=? AND json_valid(metadata_json) AND json_extract(metadata_json,'$.guid')=? ORDER BY id DESC LIMIT 1", (source['id'],page.guid)).fetchone()
+    previous_meta = json.loads(previous['metadata_json'] or '{}') if previous else {}
+    earliest = conn.execute('SELECT MIN(captured_at) FROM v05f_collection_items WHERE monitoring_source_id=? AND normalized_url=?', (source['id'],page.normalized_url)).fetchone()[0]
+    page.evidence_metadata['first_seen_at'] = previous_meta.get('first_seen_at') or earliest or (previous['captured_at'] if previous else ts)
+    page.evidence_metadata['captured_at'] = ts
     same_hash = conn.execute(
         "SELECT * FROM v05f_collection_items WHERE content_hash=? ORDER BY id ASC LIMIT 1",
         (page.content_hash,),
@@ -1492,6 +1665,17 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
         dedup_status = "changed"
         change_status = "changed"
         processing_status = "queued"
+        from app.services.processing.article_facts import analyze_article
+        old = conn.execute('SELECT cleaned_text FROM v04g_source_snapshots WHERE id=?', (previous['snapshot_id'],)).fetchone()
+        if old:
+            before = analyze_article(previous['title'], old[0] or '', page.url, previous['published_at'] or '')
+            after = analyze_article(page.title, page.text, page.url, page.published_at, page.evidence_metadata)
+            material = before['material_signature'] != after['material_signature']
+            page.evidence_metadata['change_review'] = {'material_candidate':material,'previous_collection_id':previous['id'],'reason':'关键事实句/阶段/业务日期变化，需人工核对' if material else '正文变化但未发现关键字段变化'}
+            if not material:processing_status='ignored'
+    if conn.execute("SELECT 1 FROM v05g_extraction_candidates WHERE source_url=? AND field_name='article_review' AND pipeline_review_status='rejected' LIMIT 1", (page.url,)).fetchone() or conn.execute("SELECT 1 FROM v06_intelligence_items WHERE source_url=? AND status IN ('withdrawn','archived') LIMIT 1", (page.url,)).fetchone():
+        processing_status = 'ignored'
+        page.warnings.append('人工忽略/下架/归档内容不自动恢复')
 
     quality = assess_content_quality(
         title=page.title,
@@ -1528,7 +1712,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             (
                 _next_no(conn, "SNP"), source["id"], run_id, page.title, page.url, ts,
                 page.text[:12000], page.text[:80000], page.content_hash,
-                _json({"description": page.description, "author": page.author, "warnings": page.warnings, "page_structure": page.page_structure, "guid": page.guid, "extractor": page.extractor, "source": source["name"]}),
+                _json({"description": page.description, "author": page.author, "warnings": page.warnings, "page_structure": page.page_structure, "guid": page.guid, "extractor": page.extractor, "source": source["name"], **page.evidence_metadata}),
                 ts, page.url, page.normalized_url, page.canonical_url, page.published_at, page.http_status,
                 "{}", page.raw_html if int(source["save_raw_html"] or 0) else "", page.cleaned_html,
                 page.structure_hash, "utf-8", page.content_type, len(page.text), int("content_truncated" in page.warnings),
@@ -1562,7 +1746,7 @@ def _store_page(conn: sqlite3.Connection, source: sqlite3.Row, run_id: int, page
             page.title, page.url, page.normalized_url, page.canonical_url, page.published_at, ts,
             page.content_type, page.page_structure, page.language, dedup_status, change_status,
             processing_status, source["subject_type"], source["subject_id"], page.content_hash, page.structure_hash,
-            duplicate_of, _json(page.warnings), _json({"summary": page.summary, "description": page.description, "author": page.author, "guid": page.guid, "extractor": page.extractor, "source": source["name"]}),
+            duplicate_of, _json(page.warnings), _json({"summary": page.summary, "description": page.description, "author": page.author, "guid": page.guid, "extractor": page.extractor, "source": source["name"], **page.evidence_metadata}),
             quality_result["quality_status"], quality_result["quality_reason"], ts, ts,
         ),
     )
@@ -1585,6 +1769,67 @@ def _source_allowed_domains(source: sqlite3.Row) -> list[str]:
     if host:
         domains.append(host)
     return domains
+
+
+def _collection_rules(conn: sqlite3.Connection, source_id: int) -> dict:
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='source_rule_versions'").fetchone():
+        return {}
+    row = conn.execute("SELECT rule_config_json FROM source_rule_versions WHERE source_id=? AND rule_key='article_collection' AND current_status='active' ORDER BY id DESC LIMIT 1", (source_id,)).fetchone()
+    return json.loads(row[0]) if row else {}
+
+
+def _column_pages(conn, source, run_id, raw, fetch, rules):
+    """One bounded pass; remaining/failed article links live in the existing link table."""
+    url, seen_pages, discovered = source['url'], set(), set()
+    discovery_order = {}
+    limit = max(1, min(int(source['max_links'] or 20), 20))
+    for _ in range(max(1, min(int(source['max_pages'] or 1), 3))):
+        digest = _hash_text(raw)
+        if digest in seen_pages:
+            break
+        seen_pages.add(digest)
+        links = discover_links(raw, url, _source_allowed_domains(source), 200, rules)
+        new_links = [link for link in links if link['normalized_url'] not in discovered]
+        for link in new_links:
+            discovery_order[link['normalized_url']] = len(discovery_order)
+            discovered.add(link['normalized_url'])
+            _record_link(conn, source['id'], run_id, link)
+        next_url = _next_column(raw, url, rules)
+        if not new_links or not next_url or len(seen_pages) >= min(int(source['max_pages'] or 1), 3):
+            break
+        url = next_url
+        raw, _, kind, _ = fetch(url)
+        _validate_source_response(raw, kind, 'list_page')
+    pages, failed = [], 0
+    if source['crawl_detail_pages']:
+        pending = conn.execute("""SELECT * FROM v05f_discovered_links
+            WHERE monitoring_source_id=? AND status IN ('new','failed')
+            ORDER BY CASE status WHEN 'new' THEN 0 ELSE 1 END,id DESC""", (source['id'],)).fetchall()
+        pending = sorted(pending, key=lambda row:(row['status']=='failed', row['normalized_url'] not in discovery_order, discovery_order.get(row['normalized_url'],0),-row['id']))[:limit]
+        selected_ids = {row['id'] for row in pending}
+        # Revisit visible known articles within the same budget to detect updates;
+        # exact body/URL/guid dedup is still performed by _store_page.
+        for row in conn.execute("SELECT * FROM v05f_discovered_links WHERE monitoring_source_id=? AND status='fetched' ORDER BY id DESC", (source['id'],)):
+            if len(pending) >= limit:
+                break
+            if row['normalized_url'] in discovered and row['id'] not in selected_ids:
+                pending.append(row)
+        for link in pending:
+            try:
+                body, status, kind, _ = fetch(link['source_url'])
+                _validate_source_response(body, kind, 'webpage')
+                page = extract_html(body, link['source_url'], rules)
+                page.http_status, page.content_type = status, kind
+                pages.append((page, link['id']))
+            except Exception as exc:
+                failed += 1
+                cause = exc.__cause__
+                reason = f'HTTP {cause.response.status_code}' if isinstance(cause, httpx.HTTPStatusError) else str(exc)
+                conn.execute("UPDATE v05f_discovered_links SET status='failed',reason=?,updated_at=? WHERE id=?", (reason[:200], now(), link['id']))
+    known = conn.execute("SELECT normalized_url FROM v05f_discovered_links WHERE monitoring_source_id=? AND status='fetched'", (source['id'],)).fetchall()
+    fetched_urls = {p.normalized_url for p, _ in pages}
+    duplicates = len((discovered & {row[0] for row in known}) - fetched_urls)
+    return pages, len(discovered), failed, duplicates
 
 
 def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any]:
@@ -1619,8 +1864,30 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
             if not robots.get("allowed", True):
                 raise PermissionError("robots_denied")
 
+            # Source jobs are serialized by the existing SQLite writer/runner; every
+            # detail and pagination request also obeys the same domain pacing/robots.
+            policies = {urlparse(source['url']).netloc: robots}
+            last_request = time.monotonic()
+            def fetch_public(target):
+                nonlocal last_request
+                host = urlparse(target).netloc
+                if host not in policies:
+                    policies[host] = check_robots(target)
+                policy = policies[host]
+                parser = policy.get('parser')
+                if not policy.get('allowed', True) or (parser and not parser.can_fetch(USER_AGENT, target)):
+                    raise PermissionError('robots_denied')
+                delay = max(2.0, float(source['min_interval_seconds'] or 2), float(policy.get('crawl_delay') or 0))
+                time.sleep(max(0, delay - (time.monotonic() - last_request)))
+                try:
+                    return _http_get(target, int(source['request_timeout_seconds'] or 15), retries=min(int(source['max_retries'] or 0), 2))
+                finally:
+                    last_request = time.monotonic()
+
             pages: list[tuple[ExtractedPage, int | None]] = []
             discovered_count = 0
+            detail_failures = known_duplicates = 0
+            rules = _collection_rules(conn, source['id'])
             source_columns = set(source.keys())
             conditional: dict[str, str] = {}
             if "last_etag" in source_columns and source["last_etag"]:
@@ -1628,6 +1895,7 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
             if "last_modified_header" in source_columns and source["last_modified_header"]:
                 conditional["If-Modified-Since"] = str(source["last_modified_header"])
             if mode == "playwright":
+                validate_public_url(source['url'])
                 adapter = PlaywrightAdapter()
                 try:
                     dynamic_result = adapter.fetch(
@@ -1642,11 +1910,12 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     raise RuntimeError(exc.code) from exc
                 raw, http_status, content_type, headers = dynamic_result.html, 200, "text/html; charset=utf-8", {}
             else:
+                time.sleep(max(2.0, float(robots.get('crawl_delay') or 0)))
                 raw, http_status, content_type, headers = _http_get(
                     source["url"],
                     int(source["request_timeout_seconds"] or 15),
                     conditional_headers=conditional,
-                    retries=2,
+                    retries=min(int(source['max_retries'] or 0), 2),
                 )
             if http_status == 304:
                 conn.execute(
@@ -1654,11 +1923,16 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     (now(), run_id),
                 )
                 conn.execute(
-                    "UPDATE v04g_monitoring_sources SET last_checked_at=?,updated_at=? WHERE id=?",
+                    """UPDATE v04g_monitoring_sources SET last_checked_at=?,updated_at=?,
+                       health_status=CASE WHEN last_success_at IS NOT NULL THEN 'healthy' ELSE 'unknown' END,
+                       consecutive_failures=0 WHERE id=?""",
                     (now(), now(), source["id"]),
                 )
                 _release_lock(conn, source["id"], token)
                 return {"run_id": run_id, "status": "unchanged", "not_modified": True, "result_code": "SUCCESS"}
+            _validate_source_response(raw, content_type, source_type)
+            conn.execute("UPDATE v04g_monitoring_runs SET http_status=?,content_length=? WHERE id=?",
+                         (http_status, len(raw), run_id))
             if "last_etag" in source_columns:
                 conn.execute(
                     "UPDATE v04g_monitoring_sources SET last_etag=?,last_modified_header=? WHERE id=?",
@@ -1666,7 +1940,7 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                 )
             if source_type == "rss" or "xml" in content_type or "<rss" in raw[:200].lower() or "<feed" in raw[:200].lower():
                 parser_name = "feedparser"
-                for feed_page in _parse_rss(raw, source["url"], int(source["max_links"] or 20)):
+                for feed_page in _parse_rss(raw, source["url"], min(int(source["max_links"] or 20), 20)):
                     link = {
                         "url": feed_page.url,
                         "normalized_url": feed_page.normalized_url,
@@ -1676,21 +1950,28 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     }
                     link_id = _record_link(conn, source["id"], run_id, link)
                     discovered_count += 1
-                    if source["crawl_detail_pages"] and feed_page.url != source["url"]:
+                    if not feed_page.evidence_metadata.get('feed_full_content') and feed_page.url != source["url"]:
                         try:
-                            interval = float(source["request_interval_seconds"] or 1.0) if "request_interval_seconds" in source_columns else float(source["min_interval_seconds"] or 0)
-                            time.sleep(max(0.0, min(interval, 10.0)))
-                            detail_raw, detail_status, detail_type, _ = _http_get(
-                                feed_page.url, int(source["request_timeout_seconds"] or 15), retries=2
-                            )
+                            detail_raw, detail_status, detail_type, _ = fetch_public(feed_page.url)
+                            _validate_source_response(detail_raw, detail_type, "webpage")
+                            feed_original = feed_page
                             feed_page = extract_html(detail_raw, feed_page.url)
+                            feed_page.guid = feed_original.guid
+                            feed_page.evidence_metadata.setdefault('publication_candidates', []).extend(
+                                [{'raw':feed_original.published_at,'position':'feed published'}] if feed_original.published_at else [])
+                            feed_page.evidence_metadata['source_modified_at'] = feed_original.evidence_metadata.get('source_modified_at')
+                            if not feed_page.published_at:
+                                feed_page.published_at = feed_original.published_at
+                                feed_page.evidence_metadata['publication_date_basis'] = feed_original.evidence_metadata['publication_date_basis']
                             feed_page.http_status = detail_status
                             feed_page.content_type = detail_type
-                        except Exception:
+                        except Exception as exc:
+                            detail_failures += 1
                             conn.execute(
                                 "UPDATE v05f_discovered_links SET status='failed',reason=?,updated_at=? WHERE id=?",
-                                ("detail_fetch_failed", now(), link_id),
+                                (str(exc)[:200], now(), link_id),
                             )
+                            continue
                     pages.append((feed_page, link_id))
             elif source_type == "api" or "json" in content_type:
                 parser_name = "json"
@@ -1714,27 +1995,16 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     discovered_count += 1
             else:
                 parser_name = "html"
-                page = extract_html(raw, source["url"])
-                page.http_status = http_status
-                page.content_type = content_type
-                pages.append((page, None))
-                if source_type == "list_page":
-                    links = discover_links(raw, source["url"], _source_allowed_domains(source), int(source["max_links"] or 20))
-                    for link in links:
-                        link_id = _record_link(conn, source["id"], run_id, link)
-                        discovered_count += 1
-                        if source["crawl_detail_pages"]:
-                            try:
-                                time.sleep(min(1, int(source["min_interval_seconds"] or 0)))
-                                detail_raw, detail_status, detail_type, _ = _http_get(link["url"], int(source["request_timeout_seconds"] or 15))
-                                detail = extract_html(detail_raw, link["url"])
-                                detail.http_status = detail_status
-                                detail.content_type = detail_type
-                                pages.append((detail, link_id))
-                            except Exception:
-                                conn.execute("UPDATE v05f_discovered_links SET status='failed', reason=?, updated_at=? WHERE id=?", ("fetch_failed", now(), link_id))
+                if source_type in {'list_page', 'dynamic_page'}:
+                    pages, discovered_count, detail_failures, known_duplicates = _column_pages(conn, source, run_id, raw, fetch_public, rules)
+                    if not discovered_count and not pages:
+                        raise ValueError('column_has_no_article_links')
+                else:
+                    page = extract_html(raw, source['url'])
+                    page.http_status, page.content_type = http_status, content_type
+                    pages.append((page, None))
 
-            counts = {"new": 0, "duplicate": 0, "changed": 0, "failed": 0, "skipped": 0, "queued": 0, "snapshots": 0}
+            counts = {"new": 0, "duplicate": known_duplicates, "changed": 0, "failed": detail_failures, "skipped": 0, "queued": 0, "snapshots": 0}
             for page, link_id in pages:
                 extractor_names.add(page.extractor)
                 stored = _store_page(conn, source, run_id, page, link_id)
@@ -1747,12 +2017,14 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                     counts["new"] += 1
                 if stored["processing_status"] == "queued":
                     counts["queued"] += 1
+                elif stored['dedup_status'] not in {'duplicate', 'unchanged'}:
+                    counts['skipped'] += 1
                 if link_id:
                     conn.execute("UPDATE v05f_discovered_links SET status='fetched', updated_at=? WHERE id=?", (now(), link_id))
 
             status = "unchanged" if counts["new"] == 0 and counts["changed"] == 0 and counts["duplicate"] > 0 else "success"
-            if counts["failed"] and (counts["new"] or counts["changed"]):
-                status = "partial"
+            if counts["failed"]:
+                status = "partial" if pages or counts['duplicate'] else "failed"
             conn.execute(
                 """
                 UPDATE v04g_monitoring_runs
@@ -1768,14 +2040,14 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
             conn.execute(
                 """
                 UPDATE v04g_monitoring_sources
-                SET last_checked_at=?, last_success_at=?, last_changed_at=CASE WHEN ? THEN ? ELSE last_changed_at END,
+                SET last_checked_at=?, last_success_at=CASE WHEN ?='failed' THEN last_success_at ELSE ? END, last_changed_at=CASE WHEN ? THEN ? ELSE last_changed_at END,
                     consecutive_failures=0, updated_at=?
                 WHERE id=?
                 """,
-                (now(), now(), int(counts["new"] > 0 or counts["changed"] > 0), now(), now(), source["id"]),
+                (now(), status, now(), int(counts["new"] > 0 or counts["changed"] > 0), now(), now(), source["id"]),
             )
             if "health_status" in source.keys():
-                conn.execute("UPDATE v04g_monitoring_sources SET health_status='healthy' WHERE id=?", (source["id"],))
+                conn.execute("UPDATE v04g_monitoring_sources SET health_status=? WHERE id=?", ('degraded' if counts['failed'] else 'healthy', source["id"]))
             _release_lock(conn, source["id"], token)
             empty_count = sum("EXTRACTION_EMPTY" in page.warnings for page, _ in pages)
             result_code = (
@@ -1802,6 +2074,12 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
                 "discovered": discovered_count,
             }
         except Exception as exc:
+            cause = exc.__cause__
+            response_status = cause.response.status_code if isinstance(cause, httpx.HTTPStatusError) else None
+            failure_message = (
+                f"HTTP {response_status}" if response_status else
+                "HTTP访问超时" if isinstance(cause, httpx.TimeoutException) else str(exc)
+            )
             raw_error = getattr(exc, "args", [exc.__class__.__name__])[0] or exc.__class__.__name__
             if isinstance(exc, (httpx.HTTPError, httpx.TimeoutException)) or str(raw_error) == "FETCH_FAILED":
                 error_type = "FETCH_FAILED"
@@ -1814,10 +2092,10 @@ def process_job(run_id: int, db_path: str | Path | None = None) -> dict[str, Any
             conn.execute(
                 """
                 UPDATE v04g_monitoring_runs
-                SET status='failed', finished_at=?, error_type=?, error_message=?
+                SET status='failed', finished_at=?, error_type=?, error_message=?,http_status=COALESCE(?,http_status)
                 WHERE id=?
                 """,
-                (now(), str(error_type)[:80], str(exc)[:800], run_id),
+                (now(), str(error_type)[:80], failure_message[:800], response_status, run_id),
             )
             conn.execute(
                 """

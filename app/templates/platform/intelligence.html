@@ -11,21 +11,23 @@
 <section class="filter-bar">
   <form method="get" action="/intelligence" class="filter-form">
     <input type="text" name="q" value="{{ q or '' }}" placeholder="搜索标题、摘要或正文" class="filter-input">
-    <select name="intel_type" class="filter-select"><option value="">全部事件类型</option>{% for option in intel_type_options|default([]) %}<option value="{{ option }}" {% if intel_type == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
-    <select name="time_range" class="filter-select"><option value="">全部时间</option><option value="today" {% if time_range == 'today' %}selected{% endif %}>今日新增</option><option value="7days" {% if time_range == '7days' %}selected{% endif %}>近七天</option><option value="30days" {% if time_range == '30days' %}selected{% endif %}>近三十天</option></select>
+    <select name="view" class="filter-select">{% for k,label in read_views.items() %}<option value="{{ k }}" {% if view==k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <select name="category" class="filter-select"><option value="">全部业务类别</option>{% for k,spec in categories.items() %}<option value="{{ k }}" {% if category==k %}selected{% endif %}>{{ spec[0] }}</option>{% endfor %}</select>
+    <select name="time_range" class="filter-select"><option value="">不限披露时间</option>{% for k,label in [('24hours','近24小时'),('7days','近7天'),('30days','近30天'),('90days','近90天')] %}<option value="{{ k }}" {% if time_range==k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <label>从<input type="date" name="start" value="{{ start }}"></label><label>至<input type="date" name="end" value="{{ end }}"></label><label><input type="checkbox" name="active" value="true" {% if active %}checked{% endif %}>仍有效业务窗口（不代表新发布）</label>
     <select name="workflow" class="filter-select"><option value="">全部处理状态</option><option value="pending_subject" {% if workflow == 'pending_subject' %}selected{% endif %}>待关联主体</option><option value="pending_resource" {% if workflow == 'pending_resource' %}selected{% endif %}>待判断供需</option><option value="with_resource" {% if workflow == 'with_resource' %}selected{% endif %}>已形成资源</option></select>
     <button class="btn btn-primary btn-sm" type="submit">筛选</button>
-    {% if q or intel_type or industry_direction or source or time_range or workflow %}<a class="btn btn-tertiary btn-sm" href="/intelligence">清除</a>{% endif %}
+    {% if q or intel_type or industry_direction or source or time_range or workflow or category or start or end or active or view!='latest' %}<a class="btn btn-tertiary btn-sm" href="/intelligence">清除</a>{% endif %}
   </form>
 </section>
 <section class="content-section" aria-labelledby="intelligence-list-title">
-  <div class="section-header"><div><h2 id="intelligence-list-title">全部情报</h2><p>共 {{ total }} 条已发布产业动态。</p></div></div>
+  <div class="section-header"><div><h2 id="intelligence-list-title">{{ read_views.get(view, '全部资料') }}</h2><p>共 {{ total }} 条已发布产业动态。</p></div></div>
   {% if items %}
   <div class="dense-list intelligence-list">
     {% for item in items %}
     <article class="dense-row">
       <div class="dense-row-main">
-        <div class="row-meta"><span class="badge badge-info">{{ item.intel_type or '产业动态' }}</span><time>{{ item.published_at.strftime('%Y-%m-%d') if item.published_at else '日期待核对' }}</time><span>{{ item.source_name or '公开来源' }}</span></div>
+        <div class="row-meta"><span class="badge badge-info">{{ item.article_facts.category_label }}</span><time>{{ item.article_facts.publication.value or '日期待核对' }}</time><span>{{ item.source_name or '公开来源' }}</span><span>{{ item.article_facts.freshness }}</span>{% if item.article_facts.business_times %}<span>{{ item.article_facts.business_status }}</span>{% endif %}</div>
         <h3><a class="object-link" href="/intelligence/{{ item.id }}">{{ item.display_title }}</a></h3>
         <p>{{ item.display_summary|truncate(180, True) }}</p>
         {% if item.industry_directions %}<div class="context-line"><span>产业方向：{{ item.industry_directions }}</span></div>{% endif %}
@@ -34,6 +36,7 @@
     </article>
     {% endfor %}
   </div>
-  {% else %}<div class="empty-state compact-empty"><p>暂无相关产业动态。</p></div>{% endif %}
+  {% else %}<div class="empty-state compact-empty"><p>当前没有新的重点动态，可查看行业观察或仍开放的业务事项。</p><a href="?view=observation">行业观察</a> · <a href="?view=all&active=true">仍有效业务窗口</a> · <a href="?view=history">历史/待核对资料</a></div>{% endif %}
+  {% if page > 1 %}<a href="{{ request.url.include_query_params(page=page-1) }}">上一页</a>{% endif %}{% if total > page*20 %}<a href="{{ request.url.include_query_params(page=page+1) }}">下一页</a>{% endif %}
 </section>
 {% endblock %}

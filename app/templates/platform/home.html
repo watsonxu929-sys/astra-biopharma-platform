@@ -23,7 +23,7 @@
 
 <section class="content-section" id="today" aria-labelledby="today-heading">
   <div class="section-header">
-    <div><h2 id="today-heading">今天值得处理</h2><p>近三十天内、与主体、资源或既有关系有关的产业动态。</p></div>
+    <div><h2 id="today-heading">今天值得处理</h2><p>近期且有业务上下文的动态，或仍有明确行动窗口的事项。</p></div>
     <a class="text-link" href="/intelligence">查看全部</a>
   </div>
   {% if feed %}
@@ -31,7 +31,7 @@
     {% for item in feed %}
     <article class="dense-row intelligence-row" data-intelligence-id="{{ item.id }}">
       <div class="dense-row-main">
-        <div class="row-meta"><span class="badge badge-info">{{ item.priority_reason }}</span><time>{{ (item.published_at|string)[:10] if item.published_at else '近期' }}</time></div>
+        <div class="row-meta"><span class="badge badge-info">{{ item.priority_reason }}</span><time>{{ item.facts.disclosure_at or '披露时间待核对' }}</time><span>{{ item.facts.business_status if item.facts.actionable else item.facts.freshness }}</span></div>
         <h3><a class="object-link" href="/intelligence/{{ item.id }}">{{ item.display_title }}</a></h3>
         <p>{{ item.display_summary|truncate(150, True) }}</p>
         <div class="context-line">
@@ -46,7 +46,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <div class="empty-state compact-empty"><p>今天暂时没有需要优先处理的产业动态。</p><a class="text-link" href="/intelligence">查看全部情报</a></div>
+  <div class="empty-state compact-empty"><p>当前没有新的重点动态，可查看行业观察或仍开放的业务事项。</p><a class="text-link" href="/intelligence?view=observation">查看行业观察</a> · <a class="text-link" href="/intelligence?view=all&amp;active=true">仍有效业务窗口</a></div>
   {% endif %}
 </section>
 

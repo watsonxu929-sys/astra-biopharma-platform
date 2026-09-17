@@ -27,6 +27,8 @@ from app.api.v1.router import router as api_v1_router
 from app.identity import router as identity_router
 from app.routes_platform import router as platform_router
 from app.routes_golden_loop import router as golden_loop_router
+from app.routes_knowledge import router as knowledge_router
+from app.routes_club_facilities import router as club_facilities_router
 from app.security import SecurityMiddleware
 from datetime import datetime
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
@@ -131,6 +133,8 @@ app.include_router(v05kl_operations_router)
 app.include_router(identity_router)
 app.include_router(platform_router)
 app.include_router(golden_loop_router)
+app.include_router(knowledge_router)
+app.include_router(club_facilities_router)
 app.include_router(api_v1_router)
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))

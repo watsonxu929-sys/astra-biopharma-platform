@@ -146,6 +146,8 @@ def collection_create_source(
     compliance_note: str = Form(""),
     max_links: int = Form(20),
     crawl_detail_pages: str = Form(""),
+    max_pages: int = Form(1),
+    min_interval_seconds: int = Form(60),
     check_frequency: str = Form("weekly"),
     is_enabled: str = Form(""),
     tested: str = Form(""),
@@ -168,6 +170,8 @@ def collection_create_source(
             compliance_note=compliance_note,
             max_links=max_links,
             crawl_detail_pages=bool(crawl_detail_pages),
+            max_pages=max_pages,
+            min_interval_seconds=min_interval_seconds,
             check_frequency=check_frequency,
             is_enabled=bool(is_enabled),
         )

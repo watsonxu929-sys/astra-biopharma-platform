@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import secrets
 import sqlite3
 import uuid
@@ -310,6 +311,29 @@ class ClubMembershipService:
                                   actor_user_id=actor_user_id, pilot_batch_id=member.get("pilot_batch_id"))
             return {"membership": after, "idempotent": False}
 
+    def detach_subject(self, membership_id: int, *, subject_type: str, subject_id: int, conn,
+                       actor: str, actor_user_id: int | None = None) -> None:
+        """Part of the caller's atomic subject cleanup; preserve membership and history."""
+        if subject_type not in {"person", "organization"}:
+            raise ValueError("invalid_subject_type")
+        field = subject_type + "_id"
+        before = _row(conn.execute("SELECT * FROM v04f_club_memberships WHERE id=?", (membership_id,)).fetchone())
+        if not before or before.get(field) != subject_id:
+            raise ClubOperationError(409, "BINDING_CHANGED", "会员绑定已变化，请刷新后重新核对")
+        other = "organization_id" if subject_type == "person" else "person_id"
+        status = before["status"] if before.get(other) else "exited"
+        ts = now_iso()
+        conn.execute(f"UPDATE v04f_club_memberships SET {field}=NULL,status=?,updated_at=?,"
+                     "deactivated_at=CASE WHEN ?='exited' THEN ? ELSE deactivated_at END,"
+                     "is_org_contact=0,is_org_admin_candidate=0,org_admin_status=NULL WHERE id=?",
+                     (status, ts, status, ts, membership_id))
+        after = _row(conn.execute("SELECT * FROM v04f_club_memberships WHERE id=?", (membership_id,)).fetchone())
+        reason = "管理员删除错误主体，解除绑定并保留会员历史"
+        conn.execute("INSERT INTO p4_membership_history(membership_id,change_type,old_status,new_status,before_json,after_json,reason,actor_user_id,actor,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                     (membership_id, "withdrawn" if status == "exited" else "organization_changed", before["status"], status, _json(before), _json(after), reason, actor_user_id, actor, ts))
+        record_audit(conn, action="membership.detach_subject", target_type="membership", target_id=membership_id,
+                     actor=actor, actor_user_id=actor_user_id, before=before, after=after, reason=reason)
+
     def history(self, membership_id: int) -> list[dict[str, Any]]:
         with db_connection(self.db_path) as conn:
             return [dict(row) for row in conn.execute(
@@ -317,15 +341,43 @@ class ClubMembershipService:
             ).fetchall()]
 
 
-def _allow_v05c_legacy_fk_compatibility(conn: sqlite3.Connection) -> bool:
-    """Disable only this connection's FK enforcement when legacy v05c points at a removed table."""
-    targets = {str(row[2]) for row in conn.execute("PRAGMA foreign_key_list(v05c_club_event_registrations)")}
-    broken = "v04f_club_memberships_old" in targets and not conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='v04f_club_memberships_old'"
-    ).fetchone()
-    if broken:
-        conn.execute("PRAGMA foreign_keys=OFF")
-    return broken
+def _event_for_write(conn: sqlite3.Connection, club_event_id: int) -> dict[str, Any]:
+    """Check the profile's actual parent inside the same write transaction."""
+    event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+    if not event or not conn.execute("SELECT 1 FROM events WHERE id=?", (event["event_id"],)).fetchone():
+        raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在，不能继续操作")
+    return event
+
+
+def _require_registration_schema(conn: sqlite3.Connection, *, participation: bool = False) -> None:
+    table = "v05c_club_event_participation" if participation else "v05c_club_event_registrations"
+    targets = [tuple(row)[2:5] for row in conn.execute(f"PRAGMA foreign_key_list({table})")]
+    if ("v04f_club_memberships", "membership_id", "id") not in targets:
+        logging.getLogger(__name__).error("Club membership FK maintenance required: table=%s targets=%s", table, targets)
+        label = "活动参与" if participation else "报名"
+        raise ClubOperationError(503, "REGISTRATION_SCHEMA_MAINTENANCE", f"{label}数据约束待维护，请联系管理员")
+
+
+def _registration_member(conn: sqlite3.Connection, event: dict, registration: dict) -> int | None:
+    """Validate the existing registration identity before approval or attendance writes."""
+    member_id = registration.get("canonical_membership_id") or registration.get("membership_id")
+    if not member_id:
+        if event.get("member_only"):
+            raise ClubOperationError(403, "ACTIVE_MEMBERSHIP_REQUIRED", "本活动仅限有效会员参与")
+        return None
+    if registration.get("membership_id") not in (None, member_id):
+        raise ClubOperationError(409, "MEMBERSHIP_CONFLICT", "报名会员身份不一致，请管理员核对")
+    member = conn.execute("""SELECT * FROM v04f_club_memberships WHERE id=? AND status='active'
+        AND (expired_at IS NULL OR expired_at='' OR datetime(expired_at)>datetime('now','localtime'))""", (member_id,)).fetchone()
+    if not member:
+        raise ClubOperationError(400, "ACTIVE_MEMBERSHIP_REQUIRED", "会员身份无效")
+    if member["user_id"] != registration.get("user_id"):
+        raise ClubOperationError(403, "MEMBERSHIP_FORBIDDEN", "报名与会员所属账号不一致")
+    participation = conn.execute("SELECT membership_id,canonical_membership_id FROM v05c_club_event_participation WHERE club_event_id=? AND registration_id=?",
+                                 (event["id"], registration["id"])).fetchone()
+    if participation and any(value not in (None, member_id) for value in participation):
+        raise ClubOperationError(409, "MEMBERSHIP_CONFLICT", "参与记录会员身份不一致，请管理员核对")
+    return int(member_id)
 
 
 class ClubEventService:
@@ -393,7 +445,7 @@ class ClubEventService:
         ts = now_iso()
         with db_connection(self.db_path) as conn:
             conn.execute("BEGIN IMMEDIATE")
-            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            event = _event_for_write(conn, club_event_id)
             if not event:
                 raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
             current = event.get("lifecycle_status") or event["status"]
@@ -427,7 +479,7 @@ class ClubEventService:
                           actor_user_id: int | None = None) -> dict[str, Any]:
         with db_connection(self.db_path) as conn:
             conn.execute("BEGIN IMMEDIATE")
-            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            event = _event_for_write(conn, club_event_id)
             if not event:
                 raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
             status = event.get("lifecycle_status") or event["status"]
@@ -452,7 +504,7 @@ class ClubEventService:
         ts = now_iso()
         with db_connection(self.db_path) as conn:
             conn.execute("BEGIN IMMEDIATE")
-            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            event = _event_for_write(conn, club_event_id)
             if not event:
                 raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
             current = event.get("lifecycle_status") or event["status"]
@@ -485,11 +537,11 @@ class ClubEventService:
         ts = now_iso()
         pilot = fields.get("pilot_batch_id")
         with db_connection(self.db_path) as conn:
-            _allow_v05c_legacy_fk_compatibility(conn)
             conn.execute("BEGIN IMMEDIATE")
-            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            event = _event_for_write(conn, club_event_id)
             if not event:
                 raise ClubOperationError(404, "EVENT_NOT_FOUND", "活动不存在")
+            _require_registration_schema(conn)
             lifecycle = event.get("lifecycle_status") or event["status"]
             if lifecycle != "registration_open" or event["registration_status"] != "open":
                 raise ClubOperationError(409, "REGISTRATION_NOT_OPEN", "活动报名未开放")
@@ -500,6 +552,19 @@ class ClubEventService:
             user_id = int(fields.get("user_id") or actor_user_id or 0) or None
             person_id = int(fields.get("person_id") or 0) or None
             organization_id = int(fields.get("organization_id") or 0) or None
+            membership_id = int(fields.get("membership_id") or 0) or None
+            if membership_id:
+                membership = conn.execute("""SELECT * FROM v04f_club_memberships WHERE id=? AND status='active'
+                    AND (expired_at IS NULL OR expired_at='' OR datetime(expired_at)>datetime('now','localtime'))""",
+                    (membership_id,)).fetchone()
+                if not membership:
+                    raise ClubOperationError(400, "ACTIVE_MEMBERSHIP_REQUIRED", "会员身份无效")
+                if not actor_user_id or membership["user_id"] != actor_user_id or user_id != actor_user_id:
+                    raise ClubOperationError(403, "MEMBERSHIP_FORBIDDEN", "只能使用本人有效会员身份报名")
+                person_id = membership["person_id"]
+                organization_id = membership["organization_id"]
+            elif event.get("member_only"):
+                raise ClubOperationError(403, "ACTIVE_MEMBERSHIP_REQUIRED", "本活动仅限有效会员报名")
             mobile = str(fields.get("mobile") or "").strip()
             email = str(fields.get("email") or "").strip().lower()
             duplicate_clauses, params = [], [club_event_id]
@@ -514,16 +579,6 @@ class ClubEventService:
                 ).fetchone()
                 if duplicate:
                     return dict(duplicate)
-            membership_id = int(fields.get("membership_id") or 0) or None
-            if membership_id:
-                membership = conn.execute("SELECT * FROM v04f_club_memberships WHERE id=? AND status='active'", (membership_id,)).fetchone()
-                if not membership:
-                    raise ClubOperationError(400, "ACTIVE_MEMBERSHIP_REQUIRED", "会员身份无效")
-                person_id = person_id or membership["person_id"]
-                organization_id = organization_id or membership["organization_id"]
-                user_id = user_id or membership["user_id"]
-            legacy_membership_table = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v04f_club_memberships_old'").fetchone()
-            legacy_membership_id = membership_id if legacy_membership_table else None
             cur = conn.execute(
                 """
                 INSERT INTO v05c_club_event_registrations(
@@ -533,7 +588,7 @@ class ClubEventService:
                   pilot_batch_id,created_at,updated_at
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,'submitted','pending_review',?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
-                (_number("QBR"), club_event_id, legacy_membership_id, membership_id, str(fields.get("applicant_name") or "").strip(),
+                (_number("QBR"), club_event_id, membership_id, membership_id, str(fields.get("applicant_name") or "").strip(),
                  fields.get("organization_name"), fields.get("title"), mobile or None, email or None,
                  fields.get("registration_source") or ("member" if membership_id else "public"), ts,
                  user_id, person_id, organization_id, 0 if membership_id else 1, fields.get("application_reason"),
@@ -556,17 +611,23 @@ class ClubEventService:
         legacy = {"pending_review": "submitted", "no_show": "approved"}.get(decision, decision)
         ts = now_iso()
         with db_connection(self.db_path) as conn:
-            _allow_v05c_legacy_fk_compatibility(conn)
             conn.execute("BEGIN IMMEDIATE")
             registration = _row(conn.execute(
                 "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?",
                 (registration_id, club_event_id),
             ).fetchone())
-            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            event = _event_for_write(conn, club_event_id)
             if not registration or not event:
                 raise ClubOperationError(404, "REGISTRATION_NOT_FOUND", "报名不存在")
             current = registration.get("lifecycle_status") or registration["status"]
             target = decision
+            member_id = None
+            if target == "approved":
+                if (event.get("lifecycle_status") or event["status"]) not in {"published", "registration_open", "registration_closed", "ongoing"} or current == "cancelled":
+                    raise ClubOperationError(409, "REGISTRATION_NOT_APPROVABLE", "当前活动或报名状态不允许批准")
+                member_id = _registration_member(conn, event, registration)
+                if current in {"approved", "checked_in"}:
+                    return {"registration": registration, "idempotent": True}
             if target == "approved" and int(event.get("capacity") or 0) > 0:
                 approved = int(conn.execute(
                     "SELECT COUNT(*) FROM v05c_club_event_registrations WHERE club_event_id=? AND lifecycle_status IN ('approved','checked_in') AND id<>?",
@@ -576,6 +637,8 @@ class ClubEventService:
                     target, legacy = "waitlisted", "waitlisted"
             if current == target:
                 return {"registration": registration, "idempotent": True}
+            if target == "approved":
+                _require_registration_schema(conn, participation=True)
             conn.execute(
                 """
                 UPDATE v05c_club_event_registrations SET status=?,lifecycle_status=?,review_note=?,reviewed_at=?,
@@ -588,10 +651,10 @@ class ClubEventService:
                     """
                     INSERT INTO v05c_club_event_participation(
                       club_event_id,registration_id,membership_id,canonical_membership_id,attendance_status,pilot_batch_id,created_at,updated_at
-                    ) VALUES (?,?,NULL,?,'registered',?,?,?)
+                    ) VALUES (?,?,?,?,'registered',?,?,?)
                     ON CONFLICT(club_event_id,registration_id) DO NOTHING
                     """,
-                    (club_event_id, registration_id, registration.get("canonical_membership_id") or registration.get("membership_id"),
+                    (club_event_id, registration_id, member_id, member_id,
                      registration.get("pilot_batch_id"), ts, ts),
                 )
             updated = dict(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=?", (registration_id,)).fetchone())
@@ -614,6 +677,8 @@ class ClubEventService:
         now = datetime.now().replace(microsecond=0)
         valid_until = now + timedelta(minutes=max(1, min(int(valid_minutes), 1440)))
         with db_connection(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            _event_for_write(conn, club_event_id)
             registration = conn.execute(
                 "SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=? AND lifecycle_status='approved'",
                 (registration_id, club_event_id),
@@ -641,8 +706,10 @@ class ClubEventService:
         ts = now_iso()
         token_row = None
         with db_connection(self.db_path) as conn:
-            _allow_v05c_legacy_fk_compatibility(conn)
             conn.execute("BEGIN IMMEDIATE")
+            event = _event_for_write(conn, club_event_id)
+            if (event.get("lifecycle_status") or event["status"]) in {"draft", "pending_review", "cancelled", "archived"}:
+                raise ClubOperationError(409, "EVENT_NOT_CHECKIN_READY", "当前活动状态不允许签到")
             if token:
                 digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
                 token_row = conn.execute("SELECT * FROM p4_checkin_tokens WHERE token_hash=?", (digest,)).fetchone()
@@ -652,7 +719,9 @@ class ClubEventService:
                 if int(token_row["club_event_id"]) != club_event_id:
                     self._checkin_audit(conn, club_event_id, token_row["registration_id"], token_row["id"], "invalid_attempt", "wrong_event", method, actor, actor_user_id, "签到码不属于本活动")
                     raise ClubOperationError(409, "TOKEN_WRONG_EVENT", "签到码不属于本活动")
-                if token_row["status"] != "active" or ts < token_row["valid_from"] or ts > token_row["valid_until"]:
+                if registration_id is not None and int(token_row["registration_id"]) != registration_id:
+                    raise ClubOperationError(409, "TOKEN_WRONG_REGISTRATION", "签到码不属于该报名")
+                if token_row["status"] not in {"active", "used"} or ts < token_row["valid_from"] or ts > token_row["valid_until"]:
                     self._checkin_audit(conn, club_event_id, token_row["registration_id"], token_row["id"], "invalid_attempt", "expired", method, actor, actor_user_id, "签到码已失效")
                     raise ClubOperationError(409, "TOKEN_EXPIRED", "签到码已失效")
                 registration_id = int(token_row["registration_id"])
@@ -663,19 +732,23 @@ class ClubEventService:
             if not registration or registration.get("lifecycle_status") not in {"approved", "checked_in"}:
                 self._checkin_audit(conn, club_event_id, registration_id, token_row["id"] if token_row else None, "invalid_attempt", "rejected", method, actor, actor_user_id, "报名未通过")
                 raise ClubOperationError(409, "APPROVED_REGISTRATION_REQUIRED", "报名未通过，不能签到")
+            member_id = _registration_member(conn, event, registration)
+            if token_row and token_row["status"] == "used" and registration.get("lifecycle_status") != "checked_in":
+                raise ClubOperationError(409, "TOKEN_EXPIRED", "签到码已使用，请重新签发")
             if registration.get("lifecycle_status") == "checked_in":
                 self._checkin_audit(conn, club_event_id, registration_id, token_row["id"] if token_row else None, "check_in", "duplicate", method, actor, actor_user_id, "重复签到")
                 return {"registration": registration, "idempotent": True}
+            _require_registration_schema(conn, participation=True)
             conn.execute("UPDATE v05c_club_event_registrations SET status='approved',lifecycle_status='checked_in',checked_in_at=?,updated_at=? WHERE id=?", (ts, ts, registration_id))
             conn.execute(
                 """
                 INSERT INTO v05c_club_event_participation(
                   club_event_id,registration_id,membership_id,canonical_membership_id,attendance_status,check_in_method,check_in_time,pilot_batch_id,created_at,updated_at
-                ) VALUES (?,?,NULL,?,'checked_in',?,?,?,?,?)
+                ) VALUES (?,?,?,?,'checked_in',?,?,?,?,?)
                 ON CONFLICT(club_event_id,registration_id) DO UPDATE SET attendance_status='checked_in',
                   check_in_method=excluded.check_in_method,check_in_time=excluded.check_in_time,updated_at=excluded.updated_at
                 """,
-                (club_event_id, registration_id, registration.get("canonical_membership_id") or registration.get("membership_id"), method, ts,
+                (club_event_id, registration_id, member_id, member_id, method, ts,
                  registration.get("pilot_batch_id"), ts, ts),
             )
             if token_row:
@@ -691,8 +764,8 @@ class ClubEventService:
     def undo_checkin(self, club_event_id: int, registration_id: int, *, actor: str, actor_user_id: int | None = None, reason: str = "") -> dict[str, Any]:
         ts = now_iso()
         with db_connection(self.db_path) as conn:
-            _allow_v05c_legacy_fk_compatibility(conn)
             conn.execute("BEGIN IMMEDIATE")
+            _event_for_write(conn, club_event_id)
             registration = _row(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?", (registration_id, club_event_id)).fetchone())
             if not registration:
                 raise ClubOperationError(404, "REGISTRATION_NOT_FOUND", "报名不存在")
@@ -708,9 +781,8 @@ class ClubEventService:
     ) -> dict[str, Any]:
         ts = now_iso()
         with db_connection(self.db_path) as conn:
-            _allow_v05c_legacy_fk_compatibility(conn)
             conn.execute("BEGIN IMMEDIATE")
-            event = _row(conn.execute("SELECT * FROM v05c_club_event_profiles WHERE id=?", (club_event_id,)).fetchone())
+            event = _event_for_write(conn, club_event_id)
             registration = _row(conn.execute("SELECT * FROM v05c_club_event_registrations WHERE id=? AND club_event_id=?", (registration_id, club_event_id)).fetchone())
             if not event or not registration:
                 raise ClubOperationError(404, "REGISTRATION_NOT_FOUND", "报名不存在")

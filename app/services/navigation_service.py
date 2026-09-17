@@ -7,6 +7,8 @@ from app.platform.capability_registry import filter_capabilities, list_capabilit
 INTELLIGENCE_WORK_ENTRY_KEYS = {
     "intelligence.feed",
     "intelligence.collection",
+    "intelligence.review",
+    "intelligence.knowledge",
     "intelligence.reports",
     "intelligence.subscriptions",
 }
@@ -28,6 +30,7 @@ COLLABORATION_WORK_ENTRY_KEYS = {
     "collaboration.meetings",
 }
 CLUB_WORK_ENTRY_KEYS = {
+    "club.services",
     "club.home",
     "club.members",
     "club.events",

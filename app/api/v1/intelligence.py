@@ -27,10 +27,11 @@ def intelligence_detail(request: Request, item_id: int, db: Session = Depends(ge
     return single(svc.to_api(svc.detail(item_id)), meta={"canonical_model": svc.canonical_model})
 
 @router.get("/intelligence/{item_id}/evidence", summary="Trace product evidence")
-def intelligence_evidence(request: Request, item_id: int):
+def intelligence_evidence(request: Request, item_id: int, db: Session = Depends(get_db)):
     require_permission(request, "view_internal")
+    UnifiedIntelligenceService(db).detail(item_id)
     try:
-        trace = IntelligenceProductService().trace(item_id)
+        trace = IntelligenceProductService(db.get_bind().url.database).trace(item_id)
     except ValueError as exc:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail={"code": "INTELLIGENCE_NOT_FOUND", "message": str(exc), "details": {}}) from exc

@@ -120,6 +120,7 @@
 </section>
 
 {% elif mode == 'entity' %}
+{% include "platform/_related_knowledge.html" %}
 <section class="entity-summary">
   <div><span class="eyebrow">{{ ENTITY_TYPE_LABELS.get(entity_type, '主体') }}档案</span><strong>{{ entity.canonical_label }}</strong>{% if entity.aliases %}<p>常用名称：{% for alias in entity.aliases %}{{ alias.alias }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}</div>
   <div class="entity-context-counts"><span>关系 <b>{{ relationships|length }}</b></span><span>联系人 <b>{{ business_trace.contacts|length }}</b></span><span>动态 <b>{{ business_trace.intelligence|length }}</b></span><span>资源 <b>{{ business_trace.resources|length }}</b></span></div>
@@ -188,6 +189,19 @@
     {% if relationship.source_match_id %} · <a href="/matches/{{ relationship.source_match_id }}">来源匹配</a>{% endif %}
     {% if relationship.source_opportunity_id %} · <a href="/opportunities/{{ relationship.source_opportunity_id }}">来源机会</a>{% endif %}
   </p>
+  {% endif %}
+  {% if can_archive and relationship.review_status != 'archived' %}
+  <details class="admin-inline-tool">
+    <summary><strong>管理工具 · 归档错误或测试关系</strong></summary>
+    <p class="text-muted">真实历史关系应保留。只有确认属于错误绑定或测试数据时，才使用逻辑归档；不会级联删除主体、跟进或证据。</p>
+    <form method="post" action="/network/relationships/{{ relationship.id }}/archive" class="stack-form">
+      <input type="hidden" name="return_to" value="{{ return_to }}">
+      <label>归档原因<input name="reason" required placeholder="例如：测试数据或主体绑定错误"></label>
+      <button class="btn btn-danger" type="submit" onclick="return confirm('确认归档该关系？真实历史关系应保留。')">归档关系</button>
+    </form>
+  </details>
+  {% elif relationship.review_status == 'archived' %}
+  <p class="text-muted">该关系已归档，不再阻断主体安全删除。</p>
   {% endif %}
 </section>
 <section class="dashboard-card">

@@ -9,6 +9,9 @@ VALID_CLIENTS = {"web", "app", "miniprogram", "admin"}
 # MVP-R1 formal product surface. Non-admin users only see these proven,
 # business-facing capabilities; historical entries remain for administration.
 MVP_PRODUCT_KEYS = {
+    "intelligence.review",
+    "club.services", "admin.club_facilities",
+    "intelligence.knowledge", "admin.knowledge",
     "workspace", "workspace.todos", "workspace.recent_followups", "workspace.favorites",
     "network", "network.organizations", "network.people", "network.graph", "network.recommendations",
     "intelligence", "intelligence.feed", "intelligence.collection", "intelligence.reports", "intelligence.subscriptions",
@@ -50,6 +53,10 @@ def cap(key: str, name: str, short: str, desc: str, category: str, parent: str |
 
 
 CAPABILITIES: tuple[Capability, ...] = (
+    cap("club.services", "空间与服务", "空间", "会议室预约与我的预约", "club", "club", "/club/services", "", "calendar", order=65),
+    cap("admin.club_facilities", "空间与会议室", "会议室", "会议室规则和预约审核", "admin", "admin", "/admin/club-facilities", "", "calendar", "manage_users", clients=("web","admin"), order=95),
+    cap("intelligence.knowledge", "产业知识", "知识", "产业知识与学习路径", "intelligence", "intelligence", "/knowledge", "", "book", order=34),
+    cap("admin.knowledge", "知识管理", "知识", "知识内容、关联与学习路径维护", "admin", "admin", "/admin/knowledge", "", "book", "edit_data", clients=("web", "admin"), order=94),
     cap("workspace", "工作台", "工作台", "今天值得处理的情报、机会和任务", "workspace", None, "/platform", "/api/v1/client/bootstrap", "layout-dashboard", order=10, legacy=("/workspace",)),
     cap("workspace.overview", "业务概览", "概览", "平台业务摘要", "workspace", "workspace", "/platform", "/api/v1/client/bootstrap", "activity", order=11),
     cap("workspace.todos", "我的待办", "待办", "当前用户协作任务", "workspace", "workspace", "/platform#todo", "/api/v1/opportunities", "list-checks", order=12),
@@ -68,7 +75,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     cap("intelligence.feed", "情报首页", "首页", "已发布情报流和订阅", "intelligence", "intelligence", "/intelligence", "/api/v1/intelligence", "rss", order=31),
     cap("intelligence.collection", "采集与数据源", "采集", "情报采集、数据源管理和采集任务", "intelligence", "intelligence", "/collection", "/api/v1/collection", "download", "manage_monitoring", clients=("web", "admin"), order=32),
     cap("intelligence.processing", "情报加工", "加工", "数据处理、实体识别和候选匹配", "intelligence", "intelligence", "/processing/jobs", "/api/v1/processing", "workflow", clients=("web", "admin"), order=33),
-    cap("intelligence.review", "审核发布", "审核", "候选审核和情报发布", "intelligence", "intelligence", "/processing/review-queue", "/api/v1/intelligence", "shield-check", clients=("web", "admin"), order=34, legacy=("/review",)),
+    cap("intelligence.review", "审核发布", "审核", "文章审核和情报发布", "intelligence", "intelligence", "/processing/review-queue", "/api/v1/intelligence", "shield-check", "review_data", clients=("web", "admin"), order=34, legacy=("/review",)),
     cap("intelligence.reports", "报告", "报告", "固定模板生成的产业情报汇总", "intelligence", "intelligence", "/reports", "/api/v1/reports", "file-text", order=35),
     cap("intelligence.subscriptions", "我的订阅", "订阅", "情报订阅", "intelligence", "intelligence", "/intelligence/subscriptions", "/api/v1/intelligence/subscriptions", "bell", order=36),
     cap("intelligence.company_updates", "企业动态", "企业", "重点企业关注和变化跟踪", "intelligence", "intelligence", "/watchlists", "/api/v1/watchlists", "pulse", order=37, legacy=("/signals/watchlists",)),

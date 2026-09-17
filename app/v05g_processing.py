@@ -89,9 +89,10 @@ def processing_candidates(request: Request, page: int = 1, review_status: str = 
 
 
 @router.get("/processing/review-queue", response_class=HTMLResponse)
-def processing_review_queue(request: Request, page: int = 1, message: str = "", error: str = ""):
-    rows, total = list_review_queue(page=page)
-    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "review_queue", "candidates": rows, "total": total, "page": page, "message": message, "error": error})
+def processing_review_queue(request: Request, page: int = 1, message: str = "", error: str = "", view: str = 'priority', category: str = ''):
+    from app.services.processing.article_facts import CATEGORIES, REVIEW_VIEWS
+    rows, total = list_review_queue(page=page, view=view, category=category)
+    return templates.TemplateResponse(request, "v05g_processing.html", {"mode": "review_queue", "candidates": rows, "total": total, "page": page, "message": message, "error": error, 'view':view,'category':category,'categories':CATEGORIES,'review_views':REVIEW_VIEWS})
 
 
 
@@ -162,6 +163,7 @@ def processing_submit_candidate(request: Request, candidate_id: int):
 
 @router.post("/processing/candidates/{candidate_id}/review")
 def processing_review_candidate(request: Request, candidate_id: int, decision: str = Form(...), note: str = Form(""), final_value: str = Form(""), return_to: str = Form("")):
+    _require_article_review(request)
     try:
         context = request.scope.get("security_context", {})
         row = IntelligenceReviewService().review_candidate(
@@ -177,8 +179,14 @@ def processing_review_candidate(request: Request, candidate_id: int, decision: s
 
 @router.post("/processing/candidates/{candidate_id}/publish")
 def processing_publish_candidate(request: Request, candidate_id: int):
+    _require_article_review(request)
     context = request.scope.get("security_context", {})
     try:
+        detail = candidate_detail(candidate_id)
+        if detail and detail['candidate']['field_name'] == 'article_review':
+            if detail['candidate']['pipeline_review_status'] == 'rejected':
+                raise ValueError('该文章已忽略；请先人工编辑补充后重新审核')
+            IntelligenceReviewService().review_candidate(candidate_id, decision='approved', actor=current_username(request), permissions=set(context.get('permissions') or []), note='人工确认文章发布')
         product = IntelligenceProductService().publish_candidate(
             candidate_id,
             actor=current_username(request),
@@ -187,6 +195,24 @@ def processing_publish_candidate(request: Request, candidate_id: int):
         return RedirectResponse(f"/intelligence/{product['id']}", status_code=303)
     except Exception as exc:
         return RedirectResponse(f"/processing/candidates/{candidate_id}?error={str(exc)[:200]}", status_code=303)
+
+
+def _require_article_review(request: Request) -> None:
+    if 'review_data' not in set(request.scope.get('security_context', {}).get('permissions') or []):
+        raise HTTPException(status_code=403, detail='当前账号没有情报审核权限')
+
+
+@router.post('/processing/candidates/{candidate_id}/edit')
+def processing_edit_article(request: Request, candidate_id: int, title: str = Form(...), content: str = Form(...),
+                            published_at: str = Form(''), note: str = Form(''), attachments_reviewed: str = Form('')):
+    _require_article_review(request)
+    try:
+        IntelligenceReviewService().edit_article(candidate_id, actor=current_username(request),
+            permissions=set(request.scope['security_context'].get('permissions') or []), title=title,
+            content=content, published_at=published_at, note=note, attachments_reviewed=bool(attachments_reviewed))
+        return RedirectResponse(f'/processing/candidates/{candidate_id}?message=已保存，等待人工审核', status_code=303)
+    except ValueError as exc:
+        return RedirectResponse(f'/processing/candidates/{candidate_id}?error={str(exc)[:200]}', status_code=303)
 
 
 @router.post("/processing/candidates/{candidate_id}/apply")

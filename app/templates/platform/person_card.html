@@ -3,6 +3,7 @@
 {% set active_subnav = "network.people" %}
 {% block platform_title %}{{ person.name }} - 人物详情{% endblock %}
 {% block platform_content %}
+{% include "platform/_related_knowledge.html" %}
 <div class="platform-content" style="max-width:1000px;margin:0 auto;padding:24px 32px;">
   <div class="page-header">
     <div class="page-header-left">

@@ -1,0 +1,25 @@
+{% macro review_facts(facts, quality, compact=false) %}
+{% set reliable = facts.fields|selectattr('evidence')|list %}
+<div class="review-facts">
+{% if reliable %}
+  <p>{{ facts.summary }}</p>
+  {% set shown = namespace(values=[]) %}
+  <dl class="context-list">
+  {% for field in reliable %}
+    {% if field.value not in shown.values and field.value not in facts.summary %}
+      <div><dt>{{ field.label }}</dt><dd>{{ field.value }}</dd></div>
+    {% endif %}
+    {% set shown.values = shown.values + [field.value] %}
+  {% endfor %}
+  </dl>
+  <p class="muted">收录判断：{{ facts.category_label }}（规则分类建议，非人工确认）。{% if facts.actionable %}原文存在当前有效的业务时间线索，请核对适用对象。{% else %}请判断原文事项是否值得作为产业动态保留；不等同于我们的商机。{% endif %}</p>
+{% else %}
+  <p class="warning-box">事实抽取不足，请查看原文。当前不能依据自动摘要发布；请核对标题对应的主体和事项，补充有依据的正文，或忽略。</p>
+{% endif %}
+{% for gap in quality.gaps %}<p class="muted">待核对：{{ gap }}</p>{% endfor %}
+{% if facts.mixed_scope %}<p class="warning-box">综合通知：金额、条件和期限不能跨专题借用，请核对对应附件。</p>{% endif %}
+{% for t in facts.business_times %}<p class="muted">业务时间 · {{ t.kind }}：{{ t.raw }} · {{ t.evidence }}{% if t.ambiguous %} · 多日期口径待核对{% endif %}</p>{% endfor %}
+{% if facts.publication.label %}<p class="muted">{{ facts.publication.label }}</p>{% endif %}
+{% if not compact %}<details><summary>披露与采集时间依据</summary><p>原文披露：{{ facts.disclosure_at or '待核对' }}（不等于事件发生时间）。首次发现：{{ facts.first_seen_at or '未记录' }}；本次采集：{{ facts.fetched_at or '未记录' }}。</p>{% for p in facts.publication.candidates %}<p>{{ p.raw }} · {{ p.position }}</p>{% endfor %}</details>{% endif %}
+</div>
+{% endmacro %}

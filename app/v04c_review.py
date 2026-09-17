@@ -214,14 +214,20 @@ def default_db_path() -> Path:
 
 @contextmanager
 def db_connection(db_path: str | Path | None = None) -> Iterator[sqlite3.Connection]:
-    path = Path(db_path) if db_path else default_db_path()
+    if db_path is not None and not str(db_path).strip():
+        raise ValueError("Explicit database path must not be empty")
+    path = Path(db_path) if db_path is not None else default_db_path()
+    path = path.expanduser()
+    path = (path if path.is_absolute() else PROJECT_ROOT / path).resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA busy_timeout = 30000")
-    conn.execute("PRAGMA journal_mode = WAL")
     try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        if conn.execute("PRAGMA foreign_keys").fetchone()[0] != 1:
+            raise RuntimeError("SQLite foreign key enforcement is required")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        conn.execute("PRAGMA journal_mode = WAL")
         yield conn
         conn.commit()
     except Exception:

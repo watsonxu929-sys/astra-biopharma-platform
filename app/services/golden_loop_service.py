@@ -147,6 +147,9 @@ class GoldenLoopService:
             }
         title = str(item.get("title") or "").strip()
         summary = str(item.get("summary") or item.get("content") or "").strip()
+        from app.services.processing.article_facts import product_facts
+        facts = product_facts(item)
+        title, summary = facts['title'], facts['summary']
         notes: dict[str, Any] = {}
         try:
             notes = json.loads(str(item.get("analysis_notes") or "{}"))
@@ -159,6 +162,7 @@ class GoldenLoopService:
         mode = str(translation.get("mode") or "").strip()
         if title_zh and summary_zh and self._contains_chinese(title_zh + summary_zh):
             return {
+                'facts': facts,
                 "display_title": title_zh,
                 "display_summary": summary_zh,
                 "translation_mode": mode or "MANUAL_CURATED_ACCEPTANCE_SAMPLE",
@@ -168,6 +172,7 @@ class GoldenLoopService:
             }
         if self._contains_chinese(title + summary):
             return {
+                'facts': facts,
                 "display_title": title or "产业动态",
                 "display_summary": summary or "请查看公开来源了解详情。",
                 "translation_mode": "ORIGINAL_CHINESE",
@@ -176,9 +181,10 @@ class GoldenLoopService:
                 "original_summary": summary,
             }
         return {
-            "display_title": "英文产业动态（自动中文加工尚未配置）",
-            "display_summary": "自动中文加工尚未配置，可查看英文原文与公开证据。",
-            "translation_mode": "MANUAL_ACCEPTANCE_FALLBACK",
+            'facts': facts,
+            "display_title": title or "标题待核对",
+            "display_summary": summary or "请查看公开来源了解详情。",
+            "translation_mode": "ORIGINAL_ENGLISH",
             "has_chinese_reading": False,
             "original_title": title,
             "original_summary": summary,
@@ -907,12 +913,15 @@ class GoldenLoopService:
                       intel_type,event_type,importance,published_at,created_at
                FROM v06_intelligence_items
                WHERE status='published' AND COALESCE(is_demo,0)=0
-                 AND date(COALESCE(occurred_at,published_at,created_at)) >= date('now','-30 days')
-               ORDER BY COALESCE(published_at,created_at) DESC LIMIT 60""",
+               ORDER BY published_at DESC""",
             {},
         )
         visible_rows: list[dict[str, Any]] = []
         for row in rows:
+            from app.services.processing.article_facts import product_facts
+            facts = product_facts(row)
+            if facts['view'] in {'routine','verify','history'} or not (facts['freshness']=='近期' or facts['actionable']):
+                continue
             if user_id is not None:
                 collection_id = self._collection_item_id(int(row["id"]))
                 latest = self._one(
@@ -939,6 +948,8 @@ class GoldenLoopService:
             related = self.related_context(int(row["id"]), subjects=subjects)
             relationship_count = len(related.get("relationships") or [])
             related_resource_count = len(related.get("resources") or [])
+            if not (facts['actionable'] or facts['business_related'] or priority.get('is_priority') or candidate_priority or resource_count or related_resource_count or relationship_count or opportunity_count):
+                continue
             has_qbay = any(
                 str(item.get("reason") or "").startswith("Q-BAY")
                 for item in priority.get("subjects") or []
@@ -971,7 +982,7 @@ class GoldenLoopService:
         visible_rows.sort(
             key=lambda row: (
                 -int(row["priority_band"]),
-                str(row.get("published_at") or row.get("created_at") or ""),
+                row['facts']['sort_time'],
                 int(row["id"]),
             ),
             reverse=True,
@@ -1407,14 +1418,12 @@ class GoldenLoopService:
         missing = [key for key, value in values.items() if not value]
         if missing:
             raise HTTPException(status_code=400, detail="跟进对象、事项、原因、下一步和计划时间均不能为空")
-        source_type = f"followup_user_{int(actor_user_id)}"
         opportunity = self._one(
             """SELECT * FROM v06_opportunities
-               WHERE source_type=:source_type AND source_id=:source_id
+               WHERE source_intelligence_id=:source_id
                  AND owner_id=:owner_id AND COALESCE(is_demo,0)=0
                ORDER BY id LIMIT 1""",
             {
-                "source_type": source_type,
                 "source_id": int(intelligence_id),
                 "owner_id": int(actor_user_id),
             },
@@ -1422,27 +1431,7 @@ class GoldenLoopService:
         content = f"{values['matter']}；原因：{values['reason']}"
         try:
             if not opportunity:
-                created = UnifiedOpportunityService(self.db).create(
-                    actor_user_id=int(actor_user_id),
-                    commit=False,
-                    fields={
-                        "title": f"跟进｜{values['object_name']}｜{values['matter']}",
-                        "opp_type": "follow_up",
-                        "source_type": source_type,
-                        "source_id": int(intelligence_id),
-                        "description": f"由情报“{item['title']}”人工建立的跟进",
-                        "expected_outcome": values["matter"],
-                        "next_action": values["next_action"],
-                        "next_follow_at": values["next_follow_at"],
-                        "stage": "lead",
-                        "owner_id": int(actor_user_id),
-                        "status": "active",
-                        "visibility": "organization",
-                        "source_intelligence_id": int(intelligence_id),
-                        "human_confirmed": True,
-                    },
-                )
-                opportunity_id = int(created.id)
+                raise HTTPException(status_code=409, detail="当前跟进记录必须关联既有机会；尚无真实机会时请继续观察，本操作不会代建商机。")
             else:
                 opportunity_id = int(opportunity["id"])
             existing = self._one(
@@ -1644,10 +1633,15 @@ class GoldenLoopService:
         def count(sql: str) -> int:
             return int(self.db.execute(text(sql)).scalar() or 0)
 
+        from app.services.processing.article_facts import product_facts, TZ
+        disclosed = [(dict(row), product_facts(dict(row))) for row in self.db.execute(text(
+            "SELECT * FROM v06_intelligence_items WHERE status='published' AND COALESCE(is_demo,0)=0"
+        )).mappings()]
+        today = datetime.now(TZ).date().isoformat()
         return {
             "home_metrics": {
-                "today_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items WHERE status='published' AND date(COALESCE(published_at,created_at))=date('now','localtime')"),
-                "high_value_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items WHERE status='published' AND COALESCE(is_demo,0)=0 AND importance>=4 AND date(COALESCE(created_at,published_at))>=date('now','-30 days')"),
+                "today_intelligence": sum(1 for _, facts in disclosed if (facts['disclosure_at'] or '')[:10] == today),
+                "high_value_intelligence": sum(1 for item, facts in disclosed if (item.get('importance') or 0)>=4 and facts['age_days'] is not None and 0<=facts['age_days']<=30),
                 "actionable_intelligence": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND COALESCE(i.is_demo,0)=0 AND (EXISTS (SELECT 1 FROM v06_market_resources r WHERE r.source_intelligence_id=i.id AND r.status<>'archived') OR EXISTS (SELECT 1 FROM v06_opportunities o WHERE o.source_intelligence_id=i.id))"),
                 "pending_subjects": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND NOT EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=i.id)"),
                 "pending_judgement": count("SELECT COUNT(*) FROM v06_intelligence_items i WHERE i.status='published' AND EXISTS (SELECT 1 FROM core_intelligence_subject_links l WHERE l.intelligence_item_id=i.id) AND NOT EXISTS (SELECT 1 FROM v06_market_resources r WHERE r.source_intelligence_id=i.id AND r.status<>'archived')"),

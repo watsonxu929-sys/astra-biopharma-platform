@@ -145,7 +145,7 @@ class IntelligenceProductService:
             context = conn.execute(
                 """
                 SELECT ci.id AS collection_item_id,ci.published_at,s.name AS source_name,
-                       s.source_credibility,sn.captured_at
+                       s.source_credibility,sn.captured_at,sn.cleaned_text,sn.metadata_json
                 FROM v05g_extraction_candidates c
                 LEFT JOIN v05f_collection_items ci ON ci.id=c.collection_item_id
                 LEFT JOIN v04g_monitoring_sources s ON s.id=ci.monitoring_source_id
@@ -157,10 +157,33 @@ class IntelligenceProductService:
             event_type, event_label, importance, importance_reason = _event_profile(candidate)
             published_title = title.strip() or candidate["source_title"] or candidate["subject_label"] or f"情报候选 {candidate['candidate_no']}"
             published_summary = summary.strip() or candidate["evidence_excerpt"] or candidate["normalized_value"] or ""
+            published_content = context['cleaned_text'] if context else published_summary
+            published_at = (context['published_at'] if context else None) or None
+            article_assessment = None
+            if candidate['field_name'] == 'article_review':
+                from app.services.processing.content_quality_service import article_review_quality
+                payload = json.loads(candidate['payload_json'] or '{}')
+                edits = payload.get('article_edit') or {}
+                metadata = json.loads(context['metadata_json'] or '{}') if context else {}
+                metadata['attachments_reviewed'] = bool(edits.get('attachments_reviewed'))
+                metadata['captured_at'] = context['captured_at'] if context else None
+                if 'published_at' in edits:
+                    metadata['publication_candidates'] = [{'raw':edits['published_at'] or '', 'position':'人工补充：'+str(edits.get('date_basis') or '')}]
+                published_title = edits.get('title') or published_title
+                published_content = edits.get('content') or published_content or ''
+                published_at = edits.get('published_at', published_at)
+                published_summary = published_content[:1000]
+                article_assessment = article_review_quality(published_title, published_content, candidate['source_url'] or '', published_at or '', metadata)
+                if not article_assessment['publishable']:
+                    raise ValueError('；'.join(article_assessment['gaps']))
+                importance = 3 if article_assessment['reading_use'] == '业务优先处理' else 2
+                importance_reason = '；'.join(article_assessment['reasons'])
+                published_summary = summary.strip() or article_assessment['facts']['summary']
+                published_at = article_assessment['facts']['publication']['value']
             exact = conn.execute(
                 """
                 SELECT * FROM v06_intelligence_items
-                WHERE status='published' AND (
+                WHERE (
                     evidence_hash=? OR (
                         COALESCE(source_url,'')=COALESCE(?, '')
                         AND lower(trim(title))=lower(trim(?))
@@ -196,7 +219,6 @@ class IntelligenceProductService:
                 and str(row["subject_label"] or row["normalized_value"] or "").strip()
             ))
             source_credibility = int(context["source_credibility"] or 3) if context else 3
-            published_at = (context["published_at"] if context else None) or now()
             collected_at = (context["captured_at"] if context else None) or now()
             source_name = (context["source_name"] if context else None) or "人工审核候选"
             cur = conn.execute(
@@ -214,7 +236,7 @@ class IntelligenceProductService:
                    )""",
                 {
                     "title": published_title[:400], "summary": published_summary[:2000],
-                    "content": published_summary,
+                    "content": published_content or published_summary,
                     "intel_type": event_label if candidate["candidate_type"] == "event" else product_type,
                     "companies": companies or None, "people": people or None, "event_type": event_type,
                     "source_name": source_name, "source_url": candidate["source_url"],
@@ -222,7 +244,7 @@ class IntelligenceProductService:
                     "published_at": published_at, "collected_at": collected_at,
                     "credibility": max(1, min(5, source_credibility)), "importance": importance,
                     "visibility": visibility,
-                    "analysis_notes": json.dumps({"method": "deterministic_rules", "importance_reason": importance_reason}, ensure_ascii=False),
+                    "analysis_notes": json.dumps({"method": "deterministic_rules", "importance_reason": importance_reason, "article_assessment": article_assessment, 'article_metadata':metadata if article_assessment else {}}, ensure_ascii=False),
                     "created_at": now(), "updated_at": now(),
                     "is_pilot": int(candidate["is_pilot"] or 0), "pilot_batch_id": candidate["pilot_batch_id"],
                 },
@@ -331,6 +353,9 @@ class IntelligenceProductService:
                 (product_id, actor, json.dumps(impact["product"], ensure_ascii=False, default=str), json.dumps({"deleted": True}, ensure_ascii=False), ts),
             )
             conn.execute("DELETE FROM v06_favorites WHERE target_type='intelligence' AND target_id=?", (product_id,))
+            # A link is detachable; never delete the linked knowledge or its learning history.
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_links'").fetchone():
+                conn.execute("DELETE FROM knowledge_links WHERE target_type='intelligence' AND target_id=?", (product_id,))
             conn.execute("DELETE FROM v06_intelligence_items WHERE id=?", (product_id,))
             return {"deleted": True, **impact}
 

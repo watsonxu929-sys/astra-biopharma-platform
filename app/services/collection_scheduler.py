@@ -133,12 +133,8 @@ def run_scheduler_once(db_path: str | Path | None = None) -> dict[str, Any]:
 def get_sources_with_next_run() -> list[dict[str, Any]]:
     rows, _ = list_sources(page=1, page_size=50)
     result = []
-    frequency_map = {
-        "hourly": timedelta(hours=1),
-        "daily": timedelta(days=1),
-        "weekly": timedelta(weeks=1),
-        "monthly": timedelta(days=30),
-    }
+    from app.services.collection_service import FREQUENCY_HOURS
+    frequency_map = {key:timedelta(hours=value) for key,value in FREQUENCY_HOURS.items()}
     for row in rows:
         freq = row.get("check_frequency", "manual")
         last_checked = row.get("last_checked_at")

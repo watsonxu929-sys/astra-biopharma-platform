@@ -3,11 +3,14 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.services.knowledge_service import KnowledgeService
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.security import current_username
+from app.security import current_username, safe_next
 from app.services.canonical_relationship_service import (
     CanonicalRelationshipService,
     ConnectionRecommendationService,
@@ -158,7 +161,7 @@ def _business_trace(entity_type: str, internal_id: int) -> dict[str, list[dict]]
 
 
 @router.get("/network/entities/{entity_type}/{entity_id}", response_class=HTMLResponse)
-def entity_page(request: Request, entity_type: str, entity_id: str, history: bool = False):
+def entity_page(request: Request, entity_type: str, entity_id: str, history: bool = False, db: Session = Depends(get_db)):
     entity = EntityRegistryService().get(entity_type, entity_id)
     if not entity:
         raise HTTPException(status_code=404, detail="主体不存在")
@@ -169,6 +172,7 @@ def entity_page(request: Request, entity_type: str, entity_id: str, history: boo
     return _render(
         request, "entity", entity_type=entity_type, entity=entity, relationships=relationships,
         business_trace=business_trace, monitoring=monitoring, can_manage_monitoring=include_private,
+        related_knowledge=KnowledgeService(db).related(entity_type, int(entity["id"])),
         history=history,
     )
 
@@ -262,8 +266,8 @@ def review_organization_domain(
     )
 
 @router.get("/network/products/{product_id}", response_class=HTMLResponse)
-def product_page(request: Request, product_id: str):
-    return entity_page(request, "product", product_id, history=True)
+def product_page(request: Request, product_id: str, db: Session = Depends(get_db)):
+    return entity_page(request, "product", product_id, history=True, db=db)
 
 
 @router.post("/network/resolution-candidates/{candidate_id}/review")
@@ -339,7 +343,7 @@ def relationship_review(request: Request, candidate_id: int, decision: str = For
 
 
 @router.get("/network/relationships/{relationship_id}", response_class=HTMLResponse)
-def relationship_detail(request: Request, relationship_id: int):
+def relationship_detail(request: Request, relationship_id: int, return_to: str = Query("")):
     include_private = _can_access_governance(request)
     relationship = CanonicalRelationshipService().detail(relationship_id, include_private=include_private)
     if not relationship:
@@ -348,7 +352,25 @@ def relationship_detail(request: Request, relationship_id: int):
     subject = registry.get(relationship["subject_type"], relationship["subject_id"])
     object_entity = registry.get(relationship["object_type"], relationship["object_id"])
     return _render(request, "relationship", relationship=relationship,
-                   subject=subject, object_entity=object_entity)
+                   subject=subject, object_entity=object_entity,
+                   can_archive=include_private, return_to=safe_next(return_to, ""))
+
+
+@router.post("/network/relationships/{relationship_id}/archive")
+def relationship_archive(
+    request: Request, relationship_id: int, reason: str = Form(...), return_to: str = Form(""),
+):
+    if not _can_access_governance(request):
+        raise HTTPException(status_code=403, detail="关系归档权限不足")
+    reason = reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail="归档原因不能为空")
+    CanonicalRelationshipService().archive(
+        relationship_id, actor=current_username(request), permissions={"review_data"}, reason=reason,
+    )
+    target = safe_next(return_to, f"/network/relationships/{relationship_id}")
+    separator = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{separator}message=关系已归档，可重新执行主体删除检查", status_code=303)
 
 
 @router.get("/network/paths", response_class=HTMLResponse)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -41,11 +41,18 @@ def schedule_due_collection_jobs(*, limit: int = 20, db_path: str | Path | None 
               AND check_frequency<>'manual'
               AND (last_checked_at IS NULL OR last_checked_at<?)
             ORDER BY COALESCE(last_checked_at,''), id
-            LIMIT ?
             """,
-            (threshold, max(1, min(int(limit or 20), 200))),
+            (threshold,),
         ).fetchall()
     for row in rows:
+        from app.services.collection_service import FREQUENCY_HOURS
+        from app.services.processing.article_facts import parse_time, TZ
+        last, _ = parse_time(row['last_checked_at'])
+        hours = FREQUENCY_HOURS.get(row['check_frequency'])
+        if not hours or (last and datetime.now(TZ)-last < timedelta(hours=hours)):
+            continue
+        if len(created) >= max(1,min(int(limit or 20),200)):
+            break
         try:
             created.append(create_collection_job(int(row["id"]), trigger_type="scheduler", operator=operator, db_path=db_path))
         except RuntimeError:

@@ -1,0 +1,10 @@
+{% if mode == 'edit' %}
+<label>内容性质<select name="knowledge_type">{% for value,label in knowledge_types.items() %}<option value="{{ value }}" {% if item.get('knowledge_type','INDUSTRY')==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+{% for key,label in [('source_file','来源文件名称'),('source_version','来源文件版本'),('source_section','来源章节'),('applicable_to','适用对象')] %}<label>{{ label }}<input name="{{ key }}" value="{{ item.get(key,'') }}"></label>{% endfor %}
+<label>生效日期<input type="date" name="effective_date" value="{{ item.get('effective_date','') }}"></label><label>失效日期（可选）<input type="date" name="expiry_date" value="{{ item.get('expiry_date','') }}"></label>
+{% elif mode == 'path_edit' %}
+<div class="form-grid"><label>学习性质<select name="learning_type">{% for value,label in learning_types.items() %}<option value="{{ value }}" {% if item.get('learning_type','GENERAL_LEARNING')==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>版本<input name="version" value="{{ item.get('version','1') }}" required maxlength="50"><span class="form-help">已产生历史后，变更培训要求或知识列表须使用新版本。</span></label><label>生效日期<input type="date" name="effective_date" value="{{ item.get('effective_date','') }}"></label>
+<label>适用对象<select name="audience">{% for value,label in audiences.items() %}<option value="{{ value }}" {% if item.get('audience','ALL_USERS')==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><label>是否需要考试<select name="requires_exam"><option value="0">不需要</option><option value="1" {% if item.get('requires_exam') %}selected{% endif %}>需要考试</option></select></label></div>
+<p class="text-muted">入驻身份尚无可靠数据，选择入驻企业会员不会自动分配。保存路径后到 <a href="/admin/knowledge/exams">考试管理</a> 关联本路径。</p>
+{% endif %}

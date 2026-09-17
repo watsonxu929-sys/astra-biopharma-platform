@@ -164,15 +164,17 @@ def _render(request: Request, mode: str, **context: Any) -> HTMLResponse:
 @router.get("/club/events", response_class=HTMLResponse)
 def events_page(request: Request, status: str = "", tab: str = "list"):
     ensure_schema()
-    user_id = request.scope.get("user", {}).get("id")
+    user_id = (current_user(request) or {}).get("id")
     if tab == "my" and user_id:
         with db_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT r.*, e.name AS event_name, e.event_date
+                SELECT r.*, e.name AS event_name, e.event_date, a.attendance_status,
+                       CASE WHEN p.status IN ('completed','archived') THEN 1 ELSE 0 END AS event_completed
                 FROM v05c_club_event_registrations r
                 JOIN v05c_club_event_profiles p ON p.id=r.club_event_id
                 JOIN events e ON e.id=p.event_id
+                LEFT JOIN v05c_club_event_participation a ON a.club_event_id=p.id AND a.registration_id=r.id
                 WHERE r.user_id=?
                 ORDER BY r.registered_at DESC
                 LIMIT 50
@@ -180,13 +182,6 @@ def events_page(request: Request, status: str = "", tab: str = "list"):
                 (user_id,),
             ).fetchall()
             registrations = [dict(row) for row in rows]
-            for reg in registrations:
-                with db_connection() as c:
-                    event_completed = c.execute(
-                        "SELECT 1 FROM v05c_club_event_profiles WHERE id=? AND status IN ('completed','archived')",
-                        (reg["club_event_id"],),
-                    ).fetchone()
-                    reg["event_completed"] = bool(event_completed)
             return templates.TemplateResponse(request, "club_events.html", {"tab": "my", "my_registrations": registrations})
     params: list[Any] = []
     where = "1=1"
@@ -463,14 +458,20 @@ def bulk_check_in(request: Request, club_event_id: int, registration_ids: list[i
         raise HTTPException(403, "需要俱乐部运营权限")
     user = current_user(request) or {}
     service = ClubEventService()
+    failures = []
+    succeeded = 0
     for registration_id in registration_ids:
         try:
             service.check_in(
                 club_event_id, registration_id=registration_id, actor=current_username(request),
                 actor_user_id=int(user["id"]) if user.get("id") else None, method="bulk",
             )
-        except ClubOperationError:
-            continue
+            succeeded += 1
+        except ClubOperationError as exc:
+            failures.append(exc)
+    if failures:
+        raise HTTPException(failures[0].status_code,
+                            f"批量签到：成功{succeeded}，失败{len(failures)}。{failures[0].message}")
     return RedirectResponse(f"/club/events/{club_event_id}/registrations", status_code=303)
 
 @router.post("/club/events/{club_event_id}/registrations/{registration_id}/checkin-token", response_class=HTMLResponse)

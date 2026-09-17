@@ -1,0 +1,11 @@
+<div class="row-meta"><span class="badge">{{ facts.category_label }}</span><span>{{ facts.freshness }}</span>{% if facts.business_times %}<span>{{ facts.business_status }}</span>{% endif %}</div>
+<p>{{ facts.summary }}</p>
+<p class="muted">事件阶段：{{ facts.stage }}。规则摘录不代表人工确认。</p>
+<dl class="context-list">
+{% for field in facts.fields %}<div><dt>{{ field.label }}</dt><dd>{{ field.value }}{% if field.evidence %} <a href="{{ field.url }}" target="_blank" rel="noopener noreferrer" title="{{ field.evidence }}">原文依据</a>{% endif %}</dd></div>{% endfor %}
+</dl>
+<p class="muted">{{ facts.reason }}</p>
+{% if facts.mixed_scope %}<p class="warning-box">综合通知：仅列明确医药相关段落，金额、条件和期限不跨专题借用，请核对对应附件。</p>{% endif %}
+{% for t in facts.business_times %}<p class="muted">{{ t.kind }}：{{ t.raw }}{% if t.precision == 'date' %}（当日，具体时间未注明）{% endif %} · {{ t.evidence }}{% if t.ambiguous %} · 多日期口径待核对{% endif %}</p>{% endfor %}
+{% if facts.publication.label %}<p class="warning-box">{{ facts.publication.label }}</p>{% endif %}
+<details><summary>披露与采集时间依据</summary><p>当前已知披露：{{ facts.disclosure_at or '待核对' }}；精度：{{ {'date':'日期','minute':'分钟','unknown':'待核对'}.get(facts.publication.precision, facts.publication.precision) }}。</p>{% for p in facts.publication.candidates %}<p class="muted">{{ p.raw }} · {{ p.position }}</p>{% endfor %}<p class="muted">{{ facts.publication.timezone_assumption }}。首次发现：{{ facts.first_seen_at or '未记录' }}；本次采集：{{ facts.fetched_at or '未记录' }}。{% if facts.source_modified_at %}来源修改：{{ facts.source_modified_at }}（不等同首次披露）。{% endif %}</p></details>

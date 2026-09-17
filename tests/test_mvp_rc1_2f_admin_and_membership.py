@@ -9,8 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.main import app
 from app.models import Organization, Person
+from app.services.canonical_relationship_service import CanonicalRelationshipService
 from app.services.club_operations_service import ClubMembershipService, ClubOperationError
 from app.services.collection_service import (
     create_collection_source,
@@ -22,7 +24,9 @@ from app.services.collectors.playwright_adapter import DynamicFetchResult, Playw
 from app.services.data_quality import (
     check_organization_duplicates,
     check_person_duplicates,
+    organization_reference_details,
     organization_reference_reasons,
+    person_reference_details,
     person_reference_reasons,
 )
 from app.v05f_collection import _decode_source_import_file
@@ -30,6 +34,13 @@ from app.v05f_collection import _decode_source_import_file
 
 def _session(database: Path) -> Session:
     return Session(create_engine(f"sqlite:///{database.as_posix()}", connect_args={"check_same_thread": False}))
+
+
+def _override_app_database(database: Path):
+    def override():
+        with _session(database) as db:
+            yield db
+    return override
 
 
 def test_source_bulk_formats_and_run_history_retire_safely(
@@ -136,8 +147,138 @@ def test_master_data_duplicate_and_reference_protection(temp_database: Path) -> 
         person_duplicate = check_person_duplicates(db, "RC1.2F安全人物", "RC1.2F安全机构", "BD负责人")
         assert org_duplicate.blocks_save is True
         assert person_duplicate.blocks_save is True
-        assert any("关联人物" in reason for reason in organization_reference_reasons(db, org))
+        assert organization_reference_reasons(db, org) == []  # Exact current employer can detach.
         assert person_reference_reasons(db, person) == []
+
+
+def test_protected_person_can_inspect_archive_return_and_then_delete(
+    temp_database: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _session(temp_database) as db:
+        org = Organization(
+            external_id="ORG-RC12F-REFERENCE", standard_name="RC1.2F引用机构",
+            manually_confirmed=True, is_active=True,
+        )
+        person = Person(
+            external_id="PER-RC12F-REFERENCE", name="RC1.2F受保护人物",
+            manually_confirmed=True, is_active=True,
+        )
+        db.add_all([org, person])
+        db.commit()
+        person_id, person_external_id, org_external_id = person.id, person.external_id, org.external_id
+
+    relationship_service = CanonicalRelationshipService(temp_database)
+    candidate = relationship_service.create_candidate(
+        subject_type="person", subject_id=person_external_id, relationship_type="employed_by",
+        object_type="organization", object_id=org_external_id, actor="rc12f-test",
+    )
+    relationship = relationship_service.review_candidate(
+        candidate["id"], "approved", actor="rc12f-reviewer", permissions={"review_data"},
+    )["relationship"]
+
+    with _session(temp_database) as db:
+        person = db.get(Person, person_id)
+        details = person_reference_details(db, person)
+        relationship_detail = next(item for item in details if item["key"] == "relationships")
+        assert relationship_detail["count"] == 1
+        assert relationship_detail["items"][0]["url"] == f"/network/relationships/{relationship['id']}"
+        assert next(item for item in details if item["key"] == "follow_ups")["count"] == 0
+        assert next(item for item in details if item["key"] == "resources")["count"] == 0
+        assert next(item for item in details if item["key"] == "memberships")["count"] == 0
+
+    monkeypatch.setenv("APP_AUTH_DISABLED", "1")
+    app.dependency_overrides[get_db] = _override_app_database(temp_database)
+    try:
+        with TestClient(app) as client:
+            detail_page = client.get(f"/admin/people/{person_id}")
+            assert detail_page.status_code == 200
+            assert "无法直接删除该人物" in detail_page.text
+            assert "正式关系" in detail_page.text and "跟进事项" in detail_page.text
+            assert f'/network/relationships/{relationship["id"]}?return_to=' in detail_page.text
+
+            relationship_page = client.get(
+                f"/network/relationships/{relationship['id']}?return_to=/admin/people/{person_id}"
+            )
+            assert relationship_page.status_code == 200
+            assert "归档错误或测试关系" in relationship_page.text
+            assert f'value="/admin/people/{person_id}"' in relationship_page.text
+
+            deactivated = client.post(f"/admin/people/{person_id}/deactivate", follow_redirects=False)
+            assert deactivated.status_code == 303
+
+            archived = client.post(
+                f"/network/relationships/{relationship['id']}/archive",
+                data={"reason": "隔离测试关系", "return_to": f"/admin/people/{person_id}"},
+                follow_redirects=False,
+            )
+            assert archived.status_code == 303
+            assert archived.headers["location"].startswith(f"/admin/people/{person_id}?")
+
+            deleted = client.post(
+                f"/admin/people/{person_id}/delete", data={"confirm": "1"},
+                follow_redirects=False,
+            )
+            assert deleted.status_code == 303 and deleted.headers["location"].startswith("/admin/people")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    with _session(temp_database) as db:
+        assert db.get(Person, person_id) is None
+    assert relationship_service.detail(relationship["id"])["review_status"] == "archived"
+
+
+def test_organization_reference_panel_and_bulk_delete_partial_success(
+    temp_database: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _session(temp_database) as db:
+        org = Organization(
+            external_id="ORG-RC12F-BULK-PROTECTED", standard_name="RC1.2F批量受保护机构",
+            manually_confirmed=True, is_active=True,
+        )
+        safe = Organization(
+            external_id="ORG-RC12F-BULK-SAFE", standard_name="RC1.2F批量可删除机构",
+            manually_confirmed=True, is_active=True,
+        )
+        db.add_all([org, safe])
+        db.flush()
+        person = Person(
+            external_id="PER-RC12F-BULK-LINK", name="RC1.2F机构关联人物",
+            organization_network=org.standard_name + " / 未核实历史机构", manually_confirmed=True, is_active=True,
+        )
+        db.add(person)
+        db.commit()
+        org_id, safe_id = org.id, safe.id
+        details = organization_reference_details(db, org)
+        people_detail = next(item for item in details if item["key"] == "people")
+        assert people_detail["count"] == 1
+        assert people_detail["items"][0]["url"] == f"/admin/people/{person.id}"
+
+    monkeypatch.setenv("APP_AUTH_DISABLED", "1")
+    app.dependency_overrides[get_db] = _override_app_database(temp_database)
+    try:
+        with TestClient(app) as client:
+            result = client.post(
+                "/admin/organizations/bulk-delete",
+                data={"organization_ids": [str(safe_id), str(org_id)]},
+                follow_redirects=False,
+            )
+            assert result.status_code == 303 and "protected_ids=" in result.headers["location"]
+            page = client.get(result.headers["location"])
+            assert page.status_code == 200
+            assert "Partial Success" in page.text
+            assert "RC1.2F批量受保护机构" in page.text
+            assert "关联人物 1 条" in page.text
+            assert f'href="/admin/organizations/{org_id}"' in page.text
+
+            deactivated = client.post(f"/admin/organizations/{org_id}/deactivate", follow_redirects=False)
+            assert deactivated.status_code == 303
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    with _session(temp_database) as db:
+        assert db.get(Organization, safe_id) is None
+        protected = db.get(Organization, org_id)
+        assert protected is not None and protected.is_active is False
 
 
 def test_membership_application_canonical_review_and_activation(temp_database: Path) -> None:

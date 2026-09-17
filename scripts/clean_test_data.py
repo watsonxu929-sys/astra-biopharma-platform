@@ -1,23 +1,15 @@
-import sqlite3
+"""Disabled historical one-off utility. No database is opened, including on import."""
+import argparse
+from pathlib import Path
 
-conn = sqlite3.connect('data/app.db')
-conn.row_factory = sqlite3.Row
 
-test_items = conn.execute(
-    "SELECT id, title, direction FROM v06_market_resources WHERE title LIKE 'Test%' OR title='demand' OR title='supply'"
-).fetchall()
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", type=Path, required=True, help="Explicit target; this retired utility refuses all databases")
+    parser.parse_args(argv)
+    print("REFUSE: Retired: this historical cleanup cannot establish a safe complete test chain. Use isolated fixtures; no data changed.")
+    return 2
 
-print("找到测试数据:")
-for item in test_items:
-    print(f"  ID: {item['id']}, Title: {item['title']}, Direction: {item['direction']}")
 
-if test_items:
-    conn.execute(
-        "DELETE FROM v06_market_resources WHERE title LIKE 'Test%' OR title='demand' OR title='supply'"
-    )
-    conn.commit()
-    print(f"\n已删除 {len(test_items)} 条测试数据")
-else:
-    print("\n未找到测试数据")
-
-conn.close()
+if __name__ == "__main__":
+    raise SystemExit(main())
