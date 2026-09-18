@@ -1,11 +1,19 @@
 # 当前唯一可信基线（优先阅读）
 
+## 当前：2026-09-17 / ASTRA-K1
+
+PC V1基线已提交：`c21cb5d8c9fdbd30e6c44a54d662c7f0820e50cd`，注释Tag `pc-v1-baseline`准确指向该提交；人工验收仍待用户确认，不表示公开上线批准。
+K1状态：CODE_COMPLETE / MANUAL_ACCEPTANCE_PENDING；新增代码未提交、未打Tag。正式Web仍使用本唯一目录，正式自动采集保持已停止，未改变34个既有启用来源或各自频率。
+014加法迁移已应用，203表；原业务列内容不变。3份官方公开资料形成6个资料版本、269条待审结构候选，正式Knowledge仍34条，自动发布=NO。原Event #7唯一FK例外不变，integrity_check=ok。新增内容不是已经人工确认的政策结论。
+直接检查37项通过（K1 11、R3 15、活动主链7、既有知识/培训4）；真实Chromium资料提交、定时拆解、合并、草稿/明确发布、版本更新、笔记保留、权限和暂停重启已验证。未跑全量pytest，不宣称历史测试债务已复测。正式实例仍沿用开发免登录设置：K1私人材料/知识在该模式下拒绝上传、读取与列表暴露；内部资料须先启用真实登录认证，本轮未改全站认证配置。
+迁移恢复点、真实样本、限制与人工入口见 [ASTRA_K1_RESULT](audit/ASTRA_K1_RESULT.md)。本轮不提交K1、不移动基线Tag、不启动后续阶段。
+
 ## PC V1代码基线授权 / 2026-09-17
 
 ASTRA-K1明确授权按现有98项清单提交PC V1代码基线，建议Tag pc-v1-baseline；此授权不等于全部功能人工验收完成或公开上线批准。人工验收仍待确认，活动链自动浏览器验收结果与Event #7历史例外保持下文记录。
 对应SQLite Backup API恢复点：data/backups/PC_V1_BASELINE_20260917_151702.db；SHA256 7cea3e74d280b6a10299f3f1a8207da8c8259bf6f5ec66bca9d263329756e99e。同名JSON保留实际Schema、user_version和迁移记录，不进入Git。K1新增修改与此代码基线分开，不自动提交或移动Tag。
 
-## 当前：2026-09-17 / ASTRA-CLOSEOUT-03 CONTINUE
+## 历史时点：2026-09-17 / ASTRA-CLOSEOUT-03 CONTINUE
 
 CODE_COMPLETE / MANUAL_ACCEPTANCE_PENDING；TECHNICAL_FREEZE_BLOCKER_CLEARED=YES（本轮完整活动链）；PC_V1_BASELINE_COMMITTED=NO。
 - 正常有效普通会员与独立管理员，在同一活动连续完成报名→批准→参与→签到→查看，真实Chromium刷新/重启通过；18项定向检查通过。正常业务链FK OFF=0，孤儿保护、权限、重复动作、事务失败与迁移回滚均有直接隔离证据；未跑全量pytest/正式采集。

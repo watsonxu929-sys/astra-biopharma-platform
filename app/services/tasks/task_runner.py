@@ -11,16 +11,19 @@ from .task_registry import handler_for
 from .task_retry_service import next_retry_at
 
 
-def recover_stale_tasks(*, worker_id: str = "recovery", stale_seconds: int = 1800, db_path: str | Path | None = None) -> int:
+def recover_stale_tasks(*, worker_id: str = "recovery", stale_seconds: int = 1800, db_path: str | Path | None = None, task_type: str = "") -> int:
     with db_connection(db_path) as conn:
+        conn.execute('BEGIN IMMEDIATE')
         rows = conn.execute(
-            "SELECT id, attempts, max_attempts FROM task_queue WHERE status='running' AND (heartbeat_at IS NULL OR datetime(heartbeat_at) < datetime('now', ?))",
-            (f"-{int(stale_seconds)} seconds",),
+            "SELECT id, attempts, max_attempts FROM task_queue WHERE status='running' AND (heartbeat_at IS NULL OR datetime(heartbeat_at) < datetime('now','localtime', ?)) AND (?='' OR task_type=?) LIMIT 20",
+            (f"-{int(stale_seconds)} seconds", task_type, task_type),
         ).fetchall()
         count = 0
         for row in rows:
             status = "retrying" if int(row["attempts"]) < int(row["max_attempts"]) else "dead"
             conn.execute("UPDATE task_queue SET status=?, locked_by=NULL, locked_at=NULL, not_before=?, updated_at=? WHERE id=?", (status, next_retry_at(int(row["attempts"])), now(), row["id"]))
+            if task_type=='knowledge_material':
+                conn.execute("UPDATE task_queue SET payload_json=json_set(payload_json,'$.trigger_reason','restart_recovery') WHERE id=?",(row['id'],))
             count += 1
         return count
 
@@ -29,6 +32,7 @@ def claim_task(*, worker_id: str, queue_name: str = "default", task_type: str = 
     ts = now()
     with db_connection(db_path) as conn:
         clauses = ["queue_name=?", "status IN ('pending','retrying')", "(not_before IS NULL OR not_before<=?)"]
+        conn.execute('BEGIN IMMEDIATE')
         params: list[Any] = [queue_name, ts]
         if task_type:
             clauses.append("task_type=?")
@@ -54,6 +58,8 @@ def run_once(*, worker_id: str | None = None, queue_name: str = "default", task_
     try:
         payload = loads(task.get("payload_json"), {})
         result = handler_for(str(task["task_type"]))(payload, str(db_path) if db_path else None)
+        if task['task_type']=='knowledge_material':
+            result={**result,'trigger_reason':payload.get('trigger_reason') or ('failure_retry' if int(task['attempts'])>1 else 'scheduled' if task.get('created_by')=='scheduler' else 'manual')}
         duration = int((time.perf_counter() - started) * 1000)
         with db_connection(db_path) as conn:
             conn.execute("UPDATE task_queue SET status='success', result_json=?, finished_at=?, updated_at=?, locked_by=NULL WHERE id=?", (dumps(result), now(), now(), task["id"]))

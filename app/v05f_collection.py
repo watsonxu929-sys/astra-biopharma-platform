@@ -96,7 +96,20 @@ def collection_home(request: Request):
     data["scheduler_info"] = get_scheduler_info()
     data["scheduler_running"] = is_scheduler_running()
     data["sources_with_next_run"] = get_sources_with_next_run()
+    from app.services.collection_scheduler import runtime_status
+    data['runtime_status'] = runtime_status()
     return templates.TemplateResponse(request, "v05f_collection.html", {"mode": "home", **data})
+
+
+@router.post('/collection/automatic')
+def collection_automatic(request:Request, enabled:str=Form(...)):
+    sec=request.scope.get('security_context',{})
+    if not (sec.get('can_manage_users') or 'manage_monitoring' in sec.get('permissions',[])):
+        raise HTTPException(403,'需要采集管理权限')
+    if enabled not in {'1','0'}:raise HTTPException(422,'启停选择无效')
+    from app.services.collection_scheduler import set_automatic_collection
+    set_automatic_collection(enabled=='1')
+    return RedirectResponse('/collection',303)
 
 
 @router.get("/collection/sources", response_class=HTMLResponse)

@@ -58,6 +58,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration("011", "feedback_outcome_loop", "scripts.migrations.011_feedback_outcome_loop"),
     Migration("012", "industry_knowledge", "scripts.migrations.012_industry_knowledge"),
     Migration("013", "knowledge_training_and_rooms", "scripts.migrations.013_knowledge_training_and_rooms"),
+    Migration("014", "knowledge_materials", "scripts.migrations.014_knowledge_materials"),
 )
 
 

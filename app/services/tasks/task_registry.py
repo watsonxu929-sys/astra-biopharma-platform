@@ -5,6 +5,11 @@ from typing import Any, Callable
 TaskHandler = Callable[[dict[str, Any], str | None], dict[str, Any]]
 
 
+def _knowledge_material(payload, db_path=None):
+    from app.services.knowledge_service import process_material_task
+    return process_material_task(payload, db_path)
+
+
 def _collection(payload: dict[str, Any], db_path: str | None = None) -> dict[str, Any]:
     from app.services.collection_scheduler import run_collection_cycle
     from app.services.collection_service import create_job
@@ -67,6 +72,7 @@ def _source_health(payload: dict[str, Any], db_path: str | None = None) -> dict[
 
 
 TASK_HANDLERS: dict[str, TaskHandler] = {
+    "knowledge_material": _knowledge_material,
     "collection": _collection,
     "processing": _processing,
     "pipeline": _pipeline,

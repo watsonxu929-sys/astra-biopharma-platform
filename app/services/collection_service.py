@@ -582,6 +582,7 @@ def _http_get(
     timeout: int = 15,
     conditional_headers: dict[str, str] | None = None,
     retries: int = 2,
+    binary: bool = False,
 ) -> tuple[str, int, str, dict[str, str]]:
     payload = _inline_payload(url)
     if payload is not None:
@@ -600,7 +601,16 @@ def _http_get(
             try:
                 current = validate_public_url(url)
                 for redirect in range(6):
-                    response = client.get(current)
+                    if binary:
+                        with client.stream('GET', current) as streamed:
+                            data = bytearray()
+                            for chunk in streamed.iter_bytes():
+                                data.extend(chunk)
+                                if len(data) > 8 * 1024 * 1024:
+                                    raise ValueError('material_size_limit')
+                            response = httpx.Response(streamed.status_code, headers=streamed.headers, content=bytes(data), request=streamed.request)
+                    else:
+                        response = client.get(current)
                     if response.status_code not in {301, 302, 303, 307, 308}:
                         break
                     current = validate_public_url(urljoin(current, response.headers.get("location", "")))
@@ -610,7 +620,7 @@ def _http_get(
                 if response.status_code == 304:
                     return "", 304, response.headers.get("content-type", ""), dict(response.headers)
                 response.raise_for_status()
-                return response.text, response.status_code, response.headers.get("content-type", ""), dict(response.headers)
+                return response.content if binary else response.text, response.status_code, response.headers.get("content-type", ""), dict(response.headers)
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                 retryable = not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code in {408, 429, 500, 502, 503, 504}
                 if attempt >= min(retries, 2) or not retryable:

@@ -54,7 +54,7 @@ def schedule_due_collection_jobs(*, limit: int = 20, db_path: str | Path | None 
         if len(created) >= max(1,min(int(limit or 20),200)):
             break
         try:
-            created.append(create_collection_job(int(row["id"]), trigger_type="scheduler", operator=operator, db_path=db_path))
+            created.append(create_collection_job(int(row["id"]), trigger_type="scheduler" if operator == "scheduler" else "manual", operator=operator, db_path=db_path))
         except RuntimeError:
             skipped += 1
     return {"created": len(created), "skipped": skipped, "jobs": created}

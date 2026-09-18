@@ -48,4 +48,6 @@ desktop.ini
 .idea/
 dist/
 reports/
-
+# Generated repository packs
+repopack-output*
+repo-pack-output*
