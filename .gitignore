@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿.venv/
+﻿﻿﻿﻿﻿﻿.venv/
 venv/
 __pycache__/
 **/__pycache__/
@@ -48,6 +48,9 @@ desktop.ini
 .idea/
 dist/
 reports/
+# Generated repository packs
+repopack-output*
+repo-pack-output*
 # Generated repository packs
 repopack-output*
 repo-pack-output*
